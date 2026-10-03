@@ -1,0 +1,1 @@
+"""Local manufacturing schedule manager."""

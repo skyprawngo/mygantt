@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6fa">
+  <title>MyGantt · 생산 일정</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="MyGantt 홈">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span><strong>MyGantt</strong><small>생산 일정 관리</small></span>
+      </a>
+      <div class="workspace-label">워크스페이스 <span class="tiny-dot"></span></div>
+      <nav class="primary-nav" aria-label="주 메뉴">
+        <button class="nav-item active" data-view="timeline"><span class="nav-icon">▤</span> 전체 일정 <span class="nav-count" id="project-count">0</span></button>
+        <button class="nav-item" data-view="templates"><span class="nav-icon">▦</span> 공정 템플릿</button>
+      </nav>
+      <div class="sidebar-section-head"><span>생산 배치</span><button id="new-project-side" class="icon-button" title="새 프로젝트">＋</button></div>
+      <div id="sidebar-projects" class="sidebar-projects"></div>
+      <div class="sidebar-bottom">
+        <div class="local-card"><span class="local-lock">▣</span><span><b>이 Mac에 저장</b><small>로컬 SQLite 데이터베이스</small></span><i></i></div>
+        <div class="sidebar-foot">MyGantt <span>로컬 생산 일정</span></div>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>생산 관리</span><b>›</b><strong id="breadcrumb-title">전체 일정</strong></div>
+        <div class="topbar-actions">
+          <span class="saved-indicator"><i></i> 로컬 저장</span>
+          <button id="export-calendar" class="button button-quiet"><span>↗</span> .ics 내보내기</button>
+          <button id="new-project" class="button button-primary"><span>＋</span> 배치 추가</button>
+        </div>
+      </header>
+
+      <section class="view-panel" id="timeline-view">
+        <div class="page-heading timeline-heading">
+          <div><div class="eyebrow">PRODUCTION CONTROL</div><h1>전체 일정</h1><p>프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.</p></div>
+          <div class="range-chip"><span class="calendar-glyph">▦</span><span id="range-label">불러오는 중</span></div>
+        </div>
+        <div class="timeline-layout">
+          <div class="timeline-main">
+            <div class="schedule-card">
+              <div class="toolbar">
+                <div class="toolbar-left">
+                  <div class="segmented" aria-label="일정 보기"><button class="selected" data-layout="gantt">간트</button><button data-layout="list">목록</button></div>
+                  <label class="search-box"><span>⌕</span><input id="search-filter" type="search" placeholder="배치, 작업, 담당, 태그 검색"></label>
+                  <select id="status-filter" class="select-control"><option value="all">모든 상태</option><option value="doing">진행 중</option><option value="blocked">막힘</option><option value="todo">예정</option><option value="done">완료</option></select>
+                  <select id="sort-select" class="select-control"><option value="start">시작일순</option><option value="name">이름순</option><option value="progress">진행률순</option></select>
+                  <select id="group-select" class="select-control" aria-label="프로젝트 그룹"><option value="none">그룹 없이 보기</option><option value="group">그룹별 보기</option></select>
+                </div>
+                <div class="toolbar-right">
+                  <span class="zoom-label">축척</span>
+                  <div class="segmented zoom-control"><button data-zoom="day">확대</button><button class="selected" data-zoom="week">기본</button><button data-zoom="month">축소</button></div>
+                  <button id="today-button" class="button button-small">오늘</button>
+                  <button id="refresh-button" class="icon-button subtle" title="새로고침">↻</button>
+                </div>
+              </div>
+              <div class="schedule-legend"><span><i class="legend-swatch saturday-swatch"></i>토요일</span><span><i class="legend-swatch sunday-swatch"></i>일요일</span><span><i class="legend-swatch holiday-swatch"></i>공휴일</span><span><i class="legend-swatch project-swatch"></i>프로젝트 요약</span><span class="legend-note holiday-status" id="calendar-coverage">한국 공휴일 자료 확인 중</span></div>
+              <div id="gantt-wrap" class="gantt-wrap"><div id="gantt" class="gantt"></div></div>
+              <div id="list-wrap" class="list-wrap hidden"></div>
+              <div id="empty-state" class="empty-state hidden"><div class="empty-icon">▤</div><strong>조건에 맞는 일정이 없습니다</strong><span>검색어나 상태 필터를 바꿔보세요.</span></div>
+            </div>
+            <div class="schedule-note"><span>ⓘ</span><span><b>일정 기준</b> 주 5일은 월–금 기준이며 토·일만 제외합니다. 공휴일 표시는 달력 배경용이며 일정 계산에는 반영하지 않습니다. 기간은 완료일을 포함합니다.</span></div>
+          </div>
+
+          <aside class="inspector" aria-label="선택 항목 속성">
+            <div class="inspector-title"><div><span class="eyebrow">INSPECTOR</span><h2>속성</h2></div><span class="inspector-state" id="inspector-save-state">선택 항목</span></div>
+            <section class="inspector-section" id="project-inspector-section">
+              <button class="inspector-accordion" id="project-accordion" type="button" aria-expanded="true"><span class="accordion-chevron">⌄</span><span>프로젝트 속성</span><small id="project-context-label">선택 필요</small></button>
+              <div class="inspector-content" id="project-inspector"></div>
+            </section>
+            <section class="inspector-section" id="task-inspector-section">
+              <button class="inspector-accordion" id="task-accordion" type="button" aria-expanded="false"><span class="accordion-chevron">⌄</span><span>작업 속성</span><small id="task-context-label">선택 필요</small></button>
+              <div class="inspector-content hidden" id="task-inspector"></div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view-panel hidden" id="templates-view">
+        <div class="page-heading template-heading">
+          <div><div class="eyebrow">REUSABLE PROCESSES</div><h1>공정 템플릿</h1><p>업무 흐름을 한 번 구성하고, 각 배치에 전체 작업과 일정을 함께 적용합니다.</p></div>
+          <button id="create-template" class="button button-primary"><span>＋</span> 템플릿 만들기</button>
+        </div>
+        <div class="template-layout">
+          <aside class="template-sidebar"><div class="template-list-title">내 템플릿 <span id="template-count">0</span></div><div id="template-list"></div><div class="template-tip"><b>템플릿 스냅샷</b><p>템플릿을 수정해도 이미 만든 프로젝트 일정은 그대로 유지됩니다.</p></div></aside>
+          <div id="template-editor" class="template-editor"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

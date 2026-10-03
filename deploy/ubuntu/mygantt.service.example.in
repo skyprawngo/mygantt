@@ -1,0 +1,28 @@
+[Unit]
+Description=MyGantt local production schedule manager
+After=network.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+WorkingDirectory=@CURRENT_RELEASE@
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=@PYTHON_BIN@ -m mygantt.server --host 127.0.0.1 --port @PORT@ --db @DATA_DIR@/mygantt.sqlite3
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+UMask=0027
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+ReadWritePaths=@DATA_DIR@
+
+[Install]
+WantedBy=multi-user.target
