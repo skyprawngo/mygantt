@@ -29,33 +29,6 @@ class DatabaseTests(unittest.TestCase):
       ],
     }
 
-  def test_empty_production_database_stays_empty_after_restart(self):
-    path = Path(self.temp.name) / "production.sqlite3"
-    production = Database(path, seed_samples=False)
-    self.assertEqual(production.state()["templates"], [])
-    self.assertEqual(production.state()["projects"], [])
-    with production.connection() as db:
-      self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
-      self.assertEqual(db.execute("SELECT COUNT(*) FROM holiday_cache").fetchone()[0], 1)
-    reopened = Database(path, seed_samples=False)
-    self.assertEqual(reopened.state()["templates"], [])
-    self.assertEqual(reopened.state()["projects"], [])
-
-  def test_no_seed_preserves_user_created_production_records(self):
-    path = Path(self.temp.name) / "production.sqlite3"
-    production = Database(path, seed_samples=False)
-    template = production.save_template(self.custom_template())
-    project = production.instantiate({"request_id": "production-submit", "template_id": template["id"], "name": "Release verification", "start_date": "2026-10-05", "calendar_type": "working"})
-    production.update_task(project["tasks"][0]["id"], {"status": "done", "actual_finish": "2026-10-09"})
-    reopened = Database(path, seed_samples=False)
-    self.assertEqual(len(reopened.state()["templates"]), 1)
-    self.assertEqual(len(reopened.state()["projects"]), 1)
-    self.assertEqual(reopened.get_project(project["id"])["tasks"][0]["actual_finish"], "2026-10-09")
-
-  def test_no_seed_does_not_delete_existing_records(self):
-    before = self.db.state()
-    self.assertEqual(Database(self.path, seed_samples=False).state(), before)
-
   def test_board_workflow_is_only_a_generic_seed_template(self):
     state = self.db.state()
     template = next(item for item in state["templates"] if item["name"] == SAMPLE_TEMPLATE["name"])
@@ -64,6 +37,20 @@ class DatabaseTests(unittest.TestCase):
     self.assertEqual(by_name["소자발주"]["dependencies"], [])
     self.assertEqual(set(by_name["자삽"]["dependencies"]), {by_name["PCB입고검사"]["id"], by_name["소자발주"]["id"]})
     self.assertEqual(len([p for p in state["projects"] if p["name"] in SAMPLE_BATCHES]), len(SAMPLE_BATCHES))
+
+  def test_new_instance_rows_store_date_ranges_without_duration_columns(self):
+    template = self.db.save_template({"name": "날짜 속성", "tasks": [
+      {"key": "work", "name": "실제 작업", "duration_value": 2, "duration_unit": "days", "dependencies": []},
+    ]})
+    project = self.db.instantiate({"template_id": template["id"], "name": "날짜 배치", "start_date": "2026-10-05"})
+    task = project["tasks"][0]
+    self.assertEqual((task["planned_start"], task["planned_finish"]), ("2026-10-05", "2026-10-06"))
+    self.assertNotIn("duration_value", task)
+    self.assertNotIn("duration_unit", task)
+    with self.db.connection() as db:
+      columns = {row[1] for row in db.execute("PRAGMA table_info(project_tasks)")}
+    self.assertNotIn("duration_value", columns)
+    self.assertNotIn("duration_unit", columns)
 
   def test_custom_branching_template_two_instances_snapshot_and_persistence(self):
     template = self.db.save_template(self.custom_template())
@@ -76,13 +63,15 @@ class DatabaseTests(unittest.TestCase):
     self.assertNotEqual(first["id"], second["id"])
     self.assertNotEqual(first["tasks"][0]["id"], second["tasks"][0]["id"])
     self.assertEqual(len(first["tasks"]), 5)
+    self.assertNotIn("duration_value", first["tasks"][0])
+    self.assertNotIn("duration_unit", first["tasks"][0])
     b = {task["template_task_key"]: task for task in second["tasks"]}
     self.assertEqual(len(b["bench"]["dependencies"]), 2)
     self.assertEqual(len(b["release"]["dependencies"]), 2)
 
     original_second_release = b["release"]["planned_start"]
     first_bench = next(task for task in first["tasks"] if task["template_task_key"] == "bench")
-    self.db.update_task(first_bench["id"], {"duration_value": 4, "duration_unit": "days", "status": "doing"})
+    self.db.update_task(first_bench["id"], {"planned_start": "2026-10-20", "planned_finish": "2026-10-23", "status": "doing"})
     second_after_edit = self.db.get_project(second["id"])
     self.assertEqual(next(task for task in second_after_edit["tasks"] if task["template_task_key"] == "release")["planned_start"], original_second_release)
 
@@ -110,14 +99,14 @@ class DatabaseTests(unittest.TestCase):
     project = self.db.instantiate({"template_id": template["id"], "name": "실제일 확인", "start_date": "2026-10-05"})
     vendor = next(task for task in project["tasks"] if task["template_task_key"] == "vendor")
     inspection = next(task for task in project["tasks"] if task["template_task_key"] == "inspection")
-    after = self.db.update_task(vendor["id"], {"status": "done", "actual_start": "2026-10-05", "actual_finish": "2026-10-09"})
+    after = self.db.update_task(vendor["id"], {"status": "done", "actual_start": "2026-10-05", "actual_finish": "2026-10-09", "cascade_dependents": True})
     updated_inspection = next(task for task in after["tasks"] if task["id"] == inspection["id"])
     updated_vendor = next(task for task in after["tasks"] if task["id"] == vendor["id"])
     self.assertEqual(updated_vendor["planned_finish"], vendor["planned_finish"])
     self.assertEqual(updated_vendor["actual_finish"], "2026-10-09")
-    self.assertEqual(updated_inspection["planned_start"], "2026-10-12")
+    self.assertEqual(updated_inspection["planned_start"], "2026-10-10")
 
-  def test_adding_dependency_edge_propagates_only_within_target_project(self):
+  def test_dependency_edits_do_not_recalculate_dates_without_explicit_date_change(self):
     template = self.db.save_template({"name": "분기 조정", "tasks": [
       {"key": "build", "name": "조립", "duration_value": 1, "duration_unit": "days", "dependencies": []},
       {"key": "vendor", "name": "외주 준비", "duration_value": 4, "duration_unit": "days", "dependencies": []},
@@ -134,9 +123,44 @@ class DatabaseTests(unittest.TestCase):
     updated_tasks = {task["template_task_key"]: task for task in updated["tasks"]}
     untouched_second = self.db.get_project(second["id"])
     untouched_tasks = {task["template_task_key"]: task for task in untouched_second["tasks"]}
-    self.assertEqual(updated_tasks["join"]["planned_start"], "2026-10-09")
+    self.assertEqual(updated_tasks["join"]["planned_start"], "2026-10-06")
     self.assertEqual(len(updated_tasks["join"]["dependencies"]), 2)
     self.assertEqual(untouched_tasks["join"]["planned_start"], "2026-10-06")
+
+  def test_successor_edits_preserve_other_predecessors_and_are_atomic(self):
+    template = self.db.save_template(self.custom_template())
+    project = self.db.instantiate({"template_id": template["id"], "name": "연결 편집", "start_date": "2026-10-05"})
+    tasks = {t["template_task_key"]: t for t in project["tasks"]}
+    design, buy, bench, compliance = [tasks[k]["id"] for k in ["design", "buy", "bench", "compliance"]]
+    after = self.db.update_task(design, {"successors": [bench, compliance, compliance], "cascade_dependents": True})
+    indexed = {t["id"]: t for t in after["tasks"]}
+    self.assertEqual(set(indexed[bench]["dependencies"]), {design, buy})
+    self.assertEqual(set(indexed[compliance]["dependencies"]), {design, buy})
+    self.assertEqual([(t["planned_start"], t["planned_finish"]) for t in project["tasks"]], [(t["planned_start"], t["planned_finish"]) for t in after["tasks"]])
+    for invalid in [{"dependencies": [bench], "successors": [bench]}, {"successors": [design]}, {"successors": ["other-project-id"]}, {"successors": "bad"}]:
+      with self.subTest(invalid=invalid):
+        with self.assertRaises(ScheduleError):
+          self.db.update_task(design, {"name": "must rollback", **invalid})
+        self.assertEqual(self.db.get_project(project["id"]), after)
+    # Reverse an existing edge in one request, validating only the final graph.
+    reversed_graph = self.db.update_task(design, {"dependencies": [bench], "successors": []})
+    indexed = {t["id"]: t for t in reversed_graph["tasks"]}
+    self.assertEqual(indexed[design]["dependencies"], [bench])
+    self.assertEqual(indexed[bench]["dependencies"], [buy])
+    self.assertEqual(indexed[compliance]["dependencies"], [buy])
+    self.assertEqual(Database(self.path).get_project(project["id"]), reversed_graph)
+
+  def test_successor_edit_and_finish_offset_use_final_graph_once(self):
+    template = self.db.save_template(self.custom_template())
+    project = self.db.instantiate({"template_id": template["id"], "name": "연결 이동", "start_date": "2026-10-05"})
+    tasks = {t["template_task_key"]: t for t in project["tasks"]}
+    after = self.db.update_task(tasks["design"]["id"], {"successors": [tasks["bench"]["id"], tasks["compliance"]["id"]], "planned_finish": "2026-10-14", "cascade_dependents": True})
+    from datetime import date
+    for task in after["tasks"]:
+      key = task["template_task_key"]
+      if key in {"bench", "compliance", "release"}:
+        for field in ["planned_start", "planned_finish"]:
+          self.assertEqual((date.fromisoformat(task[field]) - date.fromisoformat(tasks[key][field])).days, 3)
 
   def test_inspector_properties_are_persisted_and_recompute_dependencies(self):
     template = self.db.save_template({"name": "속성 저장", "tasks": [
@@ -149,17 +173,21 @@ class DatabaseTests(unittest.TestCase):
     self.assertEqual(project["tags"], ["긴급", "외주"])
     vendor, inspection = project["tasks"]
     before_finish = inspection["planned_start"]
-    updated = self.db.update_task(vendor["id"], {"duration_value": 4, "duration_unit": "days", "color": "#12abef", "group_name": "업체 작업", "tags": ["대기", "외주"]})
+    updated = self.db.update_task(vendor["id"], {"planned_start": "2026-10-05", "planned_finish": "2026-10-08", "cascade_dependents": True, "color": "#12abef", "group_name": "업체 작업", "tags": ["대기", "외주"]})
     updated_vendor = next(task for task in updated["tasks"] if task["id"] == vendor["id"])
     updated_inspection = next(task for task in updated["tasks"] if task["id"] == inspection["id"])
     self.assertEqual(updated_vendor["color"], "#12abef")
     self.assertEqual(updated_vendor["group_name"], "업체 작업")
     self.assertEqual(updated_vendor["tags"], ["대기", "외주"])
     self.assertNotEqual(updated_inspection["planned_start"], before_finish)
+    before_project_edit = (updated_vendor["planned_start"], updated_vendor["planned_finish"], updated_inspection["planned_start"])
     edited_project = self.db.update_project(project["id"], {"name": "색상 테스트 A 수정", "start_date": "2026-10-12", "color": "#abcdef", "group_name": "마르코스", "tags": ["MAIN", "시제품"]})
     self.assertEqual(edited_project["name"], "색상 테스트 A 수정")
     self.assertEqual(edited_project["color"], "#abcdef")
     self.assertEqual(edited_project["group_name"], "마르코스")
+    edited_dates = {task["id"]: (task["planned_start"], task["planned_finish"]) for task in edited_project["tasks"]}
+    self.assertEqual(edited_dates[vendor["id"]], before_project_edit[:2])
+    self.assertEqual(edited_dates[inspection["id"]][0], before_project_edit[2])
     reopened = Database(self.path).get_project(project["id"])
     self.assertEqual(reopened["tags"], ["MAIN", "시제품"])
     self.assertEqual(next(task for task in reopened["tasks"] if task["id"] == vendor["id"])["color"], "#12abef")
@@ -210,9 +238,20 @@ class DatabaseTests(unittest.TestCase):
     self.assertEqual(project["name"], "기존 배치")
     self.assertEqual(project["tasks"][0]["owner"], "품질팀")
     self.assertEqual(project["tasks"][0]["actual_finish"], "2026-10-06")
+    self.assertEqual((project["tasks"][0]["planned_start"], project["tasks"][0]["planned_finish"]), ("2026-10-05", "2026-10-05"))
+    self.assertNotIn("duration_value", project["tasks"][0])
     self.assertTrue(project["color"].startswith("#"))
     self.assertTrue(project["tasks"][0]["color"].startswith("#"))
     self.assertEqual(project["tasks"][0]["tags"], [])
+    backups = list(legacy_path.parent.glob("legacy.sqlite3.before-date-authority-*.bak"))
+    self.assertEqual(len(backups), 1)
+    with sqlite3.connect(legacy_path) as raw:
+      columns = {row[1] for row in raw.execute("PRAGMA table_info(project_tasks)")}
+      legacy_task = raw.execute("SELECT duration_value, duration_unit, planned_start, planned_finish, actual_start, actual_finish FROM project_tasks WHERE id='pt'").fetchone()
+    self.assertTrue({"duration_value", "duration_unit"} <= columns, "legacy fields are retained without being used")
+    self.assertEqual(legacy_task, (1, "days", "2026-10-05", "2026-10-05", "2026-10-05", "2026-10-06"))
+    Database(legacy_path)
+    self.assertEqual(len(list(legacy_path.parent.glob("legacy.sqlite3.before-date-authority-*.bak"))), 1, "migration is idempotent")
     self.assertEqual(migrated.instantiate({"request_id": "request", "template_id": "t", "name": "무시될 반복 요청", "start_date": "2026-10-05"})["id"], "p")
 
   def test_calendar_export_includes_scheduled_task_events(self):

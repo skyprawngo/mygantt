@@ -46,6 +46,22 @@ class HttpApiTests(unittest.TestCase):
       content_type = response.headers.get("Content-Type", "")
       return raw.decode("utf-8") if "text/calendar" in content_type else json.loads(raw)
 
+  def test_successor_checkboxes_and_actual_finish_offset_roundtrip(self):
+    project = self.call("/api/state")["projects"][0]
+    a, b, c = project["tasks"][:3]
+    updated = self.call(f"/api/tasks/{a['id']}", "PATCH", {"successors": [b["id"], c["id"]]})
+    by_id = {t["id"]: t for t in updated["tasks"]}
+    self.assertIn(a["id"], by_id[c["id"]]["dependencies"])
+    from datetime import date, timedelta
+    finish = (date.fromisoformat(a["planned_finish"]) + timedelta(days=2)).isoformat()
+    shifted = self.call(f"/api/tasks/{a['id']}", "PATCH", {"actual_finish": finish, "cascade_dependents": True})
+    for task in shifted["tasks"]:
+      if task["id"] in {b["id"], c["id"]}:
+        for field in ["planned_start", "planned_finish"]:
+          self.assertEqual((date.fromisoformat(task[field]) - date.fromisoformat(by_id[task["id"]][field])).days, 2)
+    removed = self.call(f"/api/tasks/{a['id']}", "PATCH", {"successors": []})
+    self.assertFalse(any(a["id"] in task["dependencies"] for task in removed["tasks"]))
+
   def test_template_preview_instantiate_repeat_task_update_and_restart(self):
     before = self.call("/api/state")
     template = self.call("/api/templates", "POST", {"name": "소프트웨어 릴리스", "project_color": "#123456", "tasks": [
@@ -67,6 +83,8 @@ class HttpApiTests(unittest.TestCase):
     self.assertEqual(project["color"], "#123456")
     self.assertEqual(project["tasks"][0]["color"], "#aabbcc")
     self.assertEqual(len(project["tasks"]), 4)
+    self.assertNotIn("duration_value", project["tasks"][0])
+    self.assertNotIn("duration_unit", project["tasks"][0])
     second_payload = {**payload, "request_id": "submit-two", "name": "릴리스 02", "color": "#654321"}
     second = self.call("/api/instantiate", "POST", second_payload)
     self.assertNotEqual(project["id"], second["id"])
@@ -76,10 +94,10 @@ class HttpApiTests(unittest.TestCase):
     docs = next(task for task in project["tasks"] if task["template_task_key"] == "docs")
     release = next(task for task in project["tasks"] if task["template_task_key"] == "release")
     test = next(task for task in project["tasks"] if task["template_task_key"] == "test")
-    expanded = self.call(f"/api/tasks/{docs['id']}", "PATCH", {"duration_value": 4, "duration_unit": "days"})
-    self.assertEqual(next(task for task in expanded["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-09")
+    expanded = self.call(f"/api/tasks/{docs['id']}", "PATCH", {"planned_start": "2026-10-05", "planned_finish": "2026-10-08", "cascade_dependents": True})
+    self.assertEqual(next(task for task in expanded["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-11")
     rewired = self.call(f"/api/tasks/{release['id']}", "PATCH", {"dependencies": [test["id"]]})
-    self.assertEqual(next(task for task in rewired["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-08")
+    self.assertEqual(next(task for task in rewired["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-11")
     updated = self.call(f"/api/tasks/{project['tasks'][0]['id']}", "PATCH", {"status": "doing", "owner": "빌드팀", "blocker": "CI 대기"})
     self.assertEqual(updated["tasks"][0]["status"], "doing")
     self.assertEqual(updated["tasks"][0]["owner"], "빌드팀")
@@ -95,7 +113,7 @@ class HttpApiTests(unittest.TestCase):
     reopened = self.call(f"/api/projects/{project['id']}")
     self.assertEqual(reopened["tasks"][0]["owner"], "빌드팀")
     reopened_release = next(task for task in reopened["tasks"] if task["template_task_key"] == "release")
-    self.assertEqual(reopened_release["planned_start"], "2026-10-08")
+    self.assertEqual(reopened_release["planned_start"], "2026-10-11")
     self.assertEqual(reopened_release["dependencies"], [test["id"]])
     reopened_second = self.call(f"/api/projects/{second['id']}")
     self.assertEqual(reopened_second["color"], "#654321")

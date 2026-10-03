@@ -21,7 +21,7 @@
 .holiday-swatch{background:#fff0ef;border-color:#e6aaa6}
 .project-swatch{background:#7183df;border-color:#7183df}
 .legend-note{margin-left:auto;color:#9aa4b2;white-space:nowrap}
-.gantt-wrap{height:calc(100vh - 244px);min-height:370px;max-height:none;overflow:auto;position:relative}
+.gantt-wrap{height:calc(100vh - 244px);min-height:370px;max-height:none;overflow:auto;position:relative;overscroll-behavior-x:contain}
 .gantt{min-width:100%;display:block;width:max-content;align-items:initial}
 .gantt-head{height:58px;display:flex;position:sticky;top:0;z-index:7;background:#fbfcfe;border-bottom:1px solid #e5eaf0}
 .gantt-head .gantt-left,.gantt-head .gantt-right{height:58px;flex:none}
@@ -48,16 +48,14 @@
 .gantt-row.project-row{height:38px;background:rgba(250,251,253,.84)}
 .gantt-left{position:sticky;left:0;z-index:3;flex:0 0 254px;width:254px;border-right:1px solid #e5eaf0;background:rgba(255,255,255,.96)}
 .project-left{display:flex;align-items:center;background:#fafbfd}
-.collapse-toggle{height:25px;width:22px;flex:0 0 22px;border:0;background:transparent;color:#818da0;font-size:14px;border-radius:4px}
-.collapse-toggle:hover{background:#edf0f5;color:#35435a}
-.project-select{min-width:0;flex:1;height:100%;display:flex;align-items:center;gap:7px;padding:0 8px 0 1px;border:0;background:transparent;text-align:left;color:#2c394b}
+.project-select{min-width:0;flex:1;height:100%;display:flex;align-items:center;gap:7px;padding:0 8px 0 12px;border:0;background:transparent;text-align:left;color:#2c394b}
 .project-select:hover .project-name{color:#4056c5}
 .group-dot{width:8px;height:8px;flex:0 0 8px;border-radius:2px}
 .project-name{font-size:10px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .project-meta{margin-left:auto;font-size:9px;color:#8c97a5;flex:0 0 auto}
 .gantt-right{position:relative;flex:0 0 auto;height:100%;border-bottom:0;background:transparent}
 .task-left{display:flex;align-items:center}
-.task-label{display:flex;align-items:center;width:100%;height:100%;padding:0 7px 0 17px;gap:7px;border:0;background:transparent;text-align:left;cursor:pointer}
+.task-label{display:flex;align-items:center;width:100%;height:100%;padding:0 7px 0 29px;gap:7px;border:0;background:transparent;text-align:left;cursor:pointer}
 .task-label:hover{background:#f8faff}
 .task-state{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
 .task-name{font-size:9px;color:#596679;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -118,6 +116,10 @@
 .inspector-dependencies label{display:flex;align-items:center;gap:5px;padding:3px;font-size:8px;color:#687588}
 .inspector-dependencies input{accent-color:#6376dd}
 .inspector-dependencies>small{padding:4px;color:#9aa4b1;font-size:8px}
+.inspector-successors ul{list-style:none;margin:0;padding:0}
+.inspector-successors li{display:flex;align-items:baseline;gap:6px;padding:4px;font-size:8px;color:#687588;overflow-wrap:anywhere}
+.successor-arrow{flex:none;color:#6376dd}
+.successor-help{font-size:8px;line-height:1.5;color:#9aa4b1}
 .inspector-save,.inspector-complete{width:100%;justify-content:center;padding:8px 9px;font-size:9px;margin-top:2px}
 .inspector-save:disabled{opacity:.55}
 .schedule-note{font-size:8px;align-items:flex-start;line-height:1.5;margin-top:9px}
@@ -170,3 +172,211 @@
 @media(max-width:1280px){.task-editor-heading,.task-editor-row{grid-template-columns:23px minmax(78px,1.2fr) 86px 38px 72px minmax(98px,1fr) 22px;gap:4px}.editor-fields{grid-template-columns:minmax(130px,1fr) minmax(155px,1.1fr) 130px}}
 @media(max-width:1100px){.editor-fields{grid-template-columns:1fr 1fr}.editor-fields>label:last-child{grid-column:1/-1}}
 @media(max-width:1050px){.holiday-status{max-width:38%}.schedule-legend{gap:7px}}
+
+.cascade-toggle{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border:1px solid #dfe5ef;border-radius:6px;background:#f8f9fd;color:#667286;font-size:9px;white-space:nowrap}
+.cascade-toggle input{margin:0;accent-color:#586bdc}
+.cascade-inline{display:flex;align-items:center;gap:7px;padding:6px 8px;border:1px solid #e4e8f1;border-radius:6px;background:#f8f9fd;color:#657186;font-size:9px}
+.cascade-inline input{margin:0;accent-color:#586bdc}
+.gantt-head{z-index:20}
+.gantt-head-left{z-index:22}
+.gantt-head-right{z-index:21}
+.gantt-body{isolation:isolate}
+.gantt-row.project-row,.gantt-row.task-row{background:transparent}
+.gantt-row.project-row .gantt-left,.gantt-row.task-row .gantt-left{z-index:6}
+.gantt-row.project-row .project-left{z-index:6}
+.gantt-right.project-timeline{background-color:transparent}
+.project-duration-band{position:absolute;z-index:0;overflow:hidden;pointer-events:none;border:1px solid color-mix(in srgb,var(--bar-color) 28%,transparent);border-radius:5px;background:color-mix(in srgb,var(--bar-color) 13%,transparent)}
+.project-duration-band:before{content:'';position:absolute;inset:0 auto 0 0;width:var(--progress);background:color-mix(in srgb,var(--bar-color) 8%,transparent)}
+.project-summary-bar.expanded-project-label{background:transparent!important;color:color-mix(in srgb,var(--bar-color) 78%,#253044);box-shadow:none;border-left:3px solid var(--bar-color);border-radius:0;padding-left:6px;overflow:visible}
+.project-summary-bar.expanded-project-label>i{display:none}
+.project-summary-bar.expanded-project-label>span{color:inherit;text-shadow:0 1px #fff}
+.task-bar{touch-action:none}
+.resize-handle{position:absolute;top:0;bottom:0;width:9px;z-index:5;cursor:ew-resize;touch-action:none;opacity:.45}
+.resize-handle:after{content:'';position:absolute;top:5px;bottom:5px;width:2px;border-radius:2px;background:#fff;box-shadow:0 0 1px rgba(22,34,51,.4)}
+.resize-start{left:0}
+.resize-start:after{left:2px}
+.resize-end{right:0}
+.resize-end:after{right:2px}
+.task-bar:hover .resize-handle,.resize-handle:focus{opacity:1}
+.resize-handle.resize-invalid:after{background:#ff7777}
+.task-bar.is-resizing{filter:brightness(.92);box-shadow:0 0 0 2px rgba(36,53,88,.2)}
+
+/* Edges share the body scroll space; sticky labels and bar handles stay above them. */
+.gantt-body .gantt-row{z-index:auto}
+.gantt-body .group-header-row .gantt-left{z-index:6}
+.dependency-layer{position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none}
+.project-timeline .task-bar.has-dependency:not(.is-resizing){box-shadow:none}
+.dependency-link{stroke:none;pointer-events:fill;cursor:pointer}
+.dependency-link:focus-visible{outline:none;stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3}
+.dependency-legend{flex:none;fill:#8891bb;stroke:none}
+
+.dependency-legend-label{flex-shrink:0;white-space:nowrap}
+
+/* Planned and actual periods form two touching tiers in one task row. */
+.gantt-row.task-row.has-actual{height:54px}
+.has-actual .task-label{height:53px}
+.project-timeline .actual-task-bar{position:absolute;top:26px;height:20px;z-index:4;display:flex;align-items:center;border:0;border-radius:4px;background:var(--bar-color);color:#fff;padding:0 6px;overflow:hidden;white-space:nowrap;font-size:8px;text-align:left;cursor:pointer}
+.actual-task-bar span{overflow:hidden;text-overflow:ellipsis}
+.actual-task-bar:hover{filter:brightness(1.08)}
+.actual-task-bar:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.project-timeline .partial-actual{border:1px dashed rgba(255,255,255,.85)}
+.period-legend{flex-shrink:0;white-space:nowrap}
+.actual-swatch{background:#526079;border-color:#526079}
+
+.actual-task-bar{touch-action:none}
+.actual-task-bar:hover .resize-handle{opacity:1}
+.actual-task-bar.is-resizing{filter:brightness(.92);box-shadow:0 0 0 2px rgba(36,53,88,.2)}
+
+/* Exact edge joins: keep square silhouettes and matching colors at rest/hover. */
+.project-timeline .dependency-join-left{border-top-left-radius:0;border-bottom-left-radius:0}
+.project-timeline .dependency-join-right{border-top-right-radius:0;border-bottom-right-radius:0}
+.project-timeline .actual-task-bar.has-dependency:not(.is-resizing){box-shadow:none}
+.project-timeline .has-dependency:hover:not(.is-resizing){filter:none}
+
+/* Both tiers retain the task color; their labels and vertical position identify them. */
+.has-actual .task-bar:not(.is-resizing),.has-actual .actual-task-bar:not(.is-resizing){opacity:1;filter:none}
+.has-actual .bar-progress{display:none}
+
+/* One task row with independent incoming/outgoing relation choices. */
+.inspector-relations{max-height:220px;overflow:auto;border:1px solid #e7ebf0;border-radius:5px;background:#fcfcfd}
+.inspector-relations table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px;color:#687588}
+.inspector-relations th,.inspector-relations td{padding:6px 4px;border-bottom:1px solid #edf0f4}
+.inspector-relations thead th{position:sticky;top:0;background:#f3f5fa;font-weight:600;z-index:1}
+.inspector-relations th:first-child{width:50%;text-align:left;overflow-wrap:anywhere}
+.inspector-relations tbody th{font-weight:400}
+.inspector-relations td{text-align:center}
+.inspector-relations input{accent-color:#6376dd;margin:0;vertical-align:middle;cursor:pointer}
+.inspector-relations tr:last-child>*{border-bottom:0}
+
+/* Relative-day template editor uses the production Gantt bars and row layout. */
+.template-layout{grid-template-columns:minmax(0,1fr)}
+#sidebar-template-section #template-list{overflow:auto;max-height:calc(100vh - 450px)}
+#sidebar-template-section .template-card{overflow-wrap:anywhere}
+#sidebar-template-section #template-count{margin-left:4px;color:#adb5c0}
+.template-editor{min-width:0;overflow-anchor:none}
+.template-chart-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;color:var(--muted);font-size:10px}
+.template-chart-toolbar select{border:1px solid var(--line);border-radius:5px;padding:5px;background:white}
+.template-gantt{max-height:420px;overflow:auto;overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:8px}
+.template-gantt .gantt-left{width:210px;flex-basis:210px}
+.template-gantt .gantt-head{height:36px;position:sticky;top:0;z-index:8;background:#f8faff}
+.template-gantt .gantt-head>.gantt-left{padding:10px 16px}
+.template-day{width:46px;flex:0 0 46px;text-align:center;padding:10px 0;border-right:1px solid var(--line);font-size:10px;color:var(--muted)}
+.template-bar{touch-action:none;cursor:grab}
+.template-bar:active{cursor:grabbing}
+.template-bar .bar-text{pointer-events:none}
+.template-bar.template-selected{outline:2px solid #9aa7f4;outline-offset:1px}
+.template-task-inspector{border-top:1px solid var(--line);padding-top:10px}
+.template-task-inspector h3{font-size:12px;margin:0 0 10px}
+.template-day-fields{display:flex;align-items:end;gap:12px;margin-bottom:12px;color:var(--muted);font-size:10px}
+.template-day-fields input{display:block;width:95px;margin-top:5px}
+.template-task-inspector .task-editor-row{display:flex;flex-wrap:wrap;gap:10px}
+.template-task-inspector .template-task-name{width:180px}
+.template-task-inspector .template-task-owner{width:140px}
+.template-gantt .gantt-head>.gantt-left,.template-gantt .gantt-head>.gantt-right{height:36px}
+.template-gantt{min-height:0;height:auto}
+.template-properties-card{padding:12px 0;border-bottom:1px solid var(--line)}
+.template-properties-card:last-child{border-bottom:0}
+.template-properties-card h4{margin:0 0 10px;font-size:11px;color:var(--ink)}
+.template-gantt .project-select[aria-pressed="true"]{background:#edf0ff}
+
+/* Compact CAD-style property rows: label at left, editable value at right. */
+.property-grid{border:1px solid #dfe5ed;border-radius:4px;background:#fff;min-width:0}
+.property-grid .inspector-row{display:contents}
+.property-grid .inspector-field{display:grid;grid-template-columns:92px minmax(0,1fr);gap:0;border-bottom:1px solid #e5e9ef;min-height:30px}
+.property-grid>.inspector-field:last-child{border-bottom:0}
+.property-grid .inspector-field>span{display:flex;flex-wrap:wrap;align-content:center;align-items:center;gap:2px;padding:7px 8px;background:#f4f6f9;border-right:1px solid #e5e9ef;color:#657184;font-size:9px;font-weight:500;line-height:1.4}
+.property-grid .inspector-field>span small{display:block;width:100%;margin:0;font-size:7px}
+.property-grid .inspector-field>.text-input,.property-grid .inspector-field>.select-input,.property-grid .inspector-field>.text-area{width:100%;min-width:0;height:100%;min-height:30px;border:0;border-radius:0;box-shadow:none;background:#fff;font-size:9px;padding:6px 8px;outline-offset:-2px}
+.property-grid .inspector-field>.text-area{min-height:60px;resize:vertical}
+.property-grid .inspector-field>input:focus,.property-grid .inspector-field>select:focus,.property-grid .inspector-field>textarea:focus{outline:2px solid #8c9bec;background:#fafbff}
+.property-grid .color-field{padding:4px 8px;min-width:0;gap:7px}
+.property-grid .color-field input{width:27px;height:22px;padding:1px}
+.property-grid .derived-date{border:0;border-radius:0;background:white;padding:7px 8px}
+.property-grid .derived-date b{font-size:8px;overflow-wrap:anywhere}
+.property-grid .property-relations{display:block}
+.property-grid .property-relations>span{border-right:0;border-bottom:1px solid #e5e9ef}
+.property-grid .property-relations>span small{display:inline;width:auto;margin-left:4px}
+.property-grid .inspector-relations{border:0;border-radius:0;max-height:220px}
+.property-grid .inspector-relations th,.property-grid .inspector-relations td{border-right:1px solid #e5e9ef}
+.property-grid .inspector-relations tr>:last-child{border-right:0}
+.property-grid .successor-help{display:block;padding:5px 8px;border-top:1px solid #edf0f4}
+.property-cascade{position:relative;display:flex;align-items:center;gap:6px;padding:8px;border-bottom:1px solid #e5e9ef;background:#f8f9fc;color:#657186;font-size:9px}
+.property-cascade>label{display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0}
+.property-cascade input{margin:0;accent-color:#586bdc}
+.info-tip{position:static;display:inline-flex;flex:none}
+.info-tip-button{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;padding:0;border:1px solid #8d99ab;border-radius:50%;background:transparent;color:#718099;font-family:Georgia,serif;font-size:10px;font-weight:700;line-height:1;cursor:help}
+.info-tip-button:focus-visible{outline:2px solid #7385e4;outline-offset:2px}
+.info-tip-text{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);right:8px;width:240px;max-width:calc(100% - 16px);padding:9px 11px;background:#273347;color:#fff;border-radius:5px;box-shadow:0 3px 12px #18223026;font-size:10px;font-weight:400;line-height:1.6;z-index:30;pointer-events:none}
+.info-tip:hover .info-tip-text,.info-tip:focus-within .info-tip-text{visibility:visible;opacity:1}
+
+.project-autosave-state{display:block;padding:3px 1px;color:#8290a1;font-size:8px;line-height:1.5}
+.project-autosave-state.save-error{color:#bd535e}
+.property-grid [aria-invalid="true"]{box-shadow:inset 0 0 0 1px #ce737a!important}
+
+/* Workspace settings reuse the schedule's paper cards and muted labels. */
+.settings-sections{max-width:820px;display:grid;gap:18px}
+.settings-card{background:var(--paper);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:22px 24px}
+.settings-card h2{font-size:14px;margin:0 0 18px;color:var(--ink)}
+.settings-description{font-size:12px;color:var(--muted);line-height:1.7;margin:-7px 0 18px}
+.settings-details{margin:0}
+.settings-details>div{display:grid;grid-template-columns:110px minmax(0,1fr);gap:16px;padding:13px 0;border-top:1px solid var(--line);font-size:12px;line-height:1.7}
+.settings-details dt{color:var(--muted)}
+.settings-details dd{margin:0;overflow-wrap:anywhere}
+.settings-note{font-size:11px;color:var(--muted);line-height:1.7;margin:18px 0 0;padding-top:15px;border-top:1px solid var(--line)}
+.holiday-freshness{display:inline-block;padding:2px 9px;border-radius:5px;background:#f1f3f7;color:#566274;font-size:11px}
+[data-status="fresh"] .holiday-freshness{background:#eaf8f0;color:#267a55}
+[data-status="stale"] .holiday-freshness{background:#fff4e5;color:#946018}
+.settings-warning{font-size:11px;line-height:1.7;color:#946018;background:#fff7e9;border-radius:6px;padding:12px;margin:12px 0 0}
+
+/* SVG owns connected bar fills; HTML retains text, focus and resize hit areas. */
+.project-timeline .svg-backed{background:transparent!important;box-shadow:none!important;filter:none!important}
+.dependency-paint{stroke:none;pointer-events:none}
+
+.property-readonly{position:relative}
+
+.zoom-slider-control{display:flex;align-items:center;gap:6px;color:#8c97a6;flex-shrink:0}
+.zoom-slider-control input{width:104px;margin:0;accent-color:var(--blue);cursor:pointer}
+.zoom-slider-control input:focus-visible{outline:2px solid #8c9bec;outline-offset:3px;border-radius:3px}
+.zoom-slider-control output{min-width:34px;text-align:right;font-size:9px;font-variant-numeric:tabular-nums}
+
+.schedule-legend{position:relative}
+.schedule-legend .legend-date-range{margin-left:auto;white-space:nowrap;flex-shrink:0}
+.schedule-legend .schedule-info{margin-left:0}
+.schedule-info .info-tip-text{top:calc(100% + 6px);bottom:auto;right:8px;width:300px;white-space:normal}
+
+.page-info{position:relative}
+.page-info .info-tip-text{top:calc(100% + 10px);bottom:auto;left:0;right:auto;width:300px;max-width:calc(100vw - 350px);white-space:normal}
+
+/* Fill the viewport remainder; toolbar wrapping reduces the scroll area naturally. */
+:is(#timeline-view,#templates-view){height:calc(100vh - 62px);height:calc(100dvh - 62px);min-height:0;padding-bottom:20px}
+:is(#timeline-view,#templates-view) .timeline-layout{height:100%;min-height:0;grid-template-rows:minmax(0,1fr)}
+:is(#timeline-view,#templates-view) .timeline-main{height:100%;min-height:0}
+:is(#timeline-view,#templates-view) .schedule-card{height:100%;min-height:0;display:flex;flex-direction:column}
+:is(#timeline-view,#templates-view) .schedule-card>.toolbar,:is(#timeline-view,#templates-view) .schedule-legend{flex-shrink:0}
+:is(#timeline-view,#templates-view) .gantt-wrap,:is(#timeline-view,#templates-view) .list-wrap{flex:1;min-height:0;height:auto;max-height:none;overflow:auto}
+:is(#timeline-view,#templates-view) .empty-state{flex:1;min-height:0;overflow:auto}
+:is(#timeline-view,#templates-view) .inspector{max-height:100%;min-height:0}
+
+/* Keep the row divider inside the sticky cell's opaque stacking layer. */
+:is(#gantt,#template-gantt) .gantt-body>.gantt-row{border-bottom:0}
+:is(#gantt,#template-gantt) .gantt-body>.gantt-row>.gantt-left,
+:is(#gantt,#template-gantt) .gantt-body>.gantt-row>.gantt-right{border-bottom:1px solid #e9edf2}
+
+/* Both editors use the same viewport, schedule card, and inspector grid. */
+#templates-view{max-width:none;padding:20px 26px}
+#templates-view>.template-layout,#template-editor{height:100%;min-height:0}
+#template-editor{padding:0;border:0;background:transparent;box-shadow:none}
+#template-gantt{border:0;border-radius:0}
+#template-gantt .gantt-left{width:254px;flex-basis:254px}
+#template-gantt .gantt-row>.gantt-left{z-index:6}
+#template-gantt .gantt-head,#template-gantt .gantt-head>.gantt-left,#template-gantt .gantt-head>.gantt-right{height:58px}
+#template-gantt .gantt-head{z-index:20}
+#template-gantt .template-day{width:var(--day-width);flex-basis:var(--day-width);height:58px;display:flex;align-items:center;justify-content:center;background:#fbfcfe}
+#templates-view .template-properties-card{padding:0;border:0}
+#templates-view .template-day-fields{display:block;margin:0}
+#templates-view .template-day-fields input{margin:0;width:100%}
+#templates-view .template-auto-days{margin:8px}
+#templates-view .remove-task{width:auto;height:auto;margin:10px 8px;font-size:10px;color:#b85962}
+#templates-view .template-calendar-label{display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:9px;color:var(--muted)}
+.template-chart-title{font-size:11px;font-weight:600}
+@media(max-width:1280px){#templates-view{padding-left:17px;padding-right:17px}}
