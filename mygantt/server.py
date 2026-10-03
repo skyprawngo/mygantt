@@ -5,9 +5,14 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
+import socket
+import stat
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import ThreadingUnixStreamServer
 from typing import Any
 
 from .database import Database
@@ -16,6 +21,34 @@ from .scheduler import ScheduleError, schedule_tasks
 
 APP_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = APP_DIR / "data" / "mygantt.sqlite3"
+
+
+class UnixHTTPServer(ThreadingUnixStreamServer):
+  daemon_threads = True
+
+
+def unix_server(path: Path, handler):
+  """Bind a private HTTP socket, refusing to replace live or unrelated files."""
+  path.parent.mkdir(parents=True, exist_ok=True)
+  if path.exists() or path.is_symlink():
+    existing = path.lstat()
+    if not stat.S_ISSOCK(existing.st_mode) or existing.st_uid != os.getuid():
+      raise FileExistsError(f"Refusing to replace socket path: {path}")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+      probe.settimeout(1)
+      try:
+        probe.connect(str(path))
+      except ConnectionRefusedError:
+        path.unlink()
+      else:
+        raise FileExistsError(f"Another server is listening on socket: {path}")
+  mask = os.umask(0o077)
+  try:
+    server = UnixHTTPServer(str(path), handler)
+  finally:
+    os.umask(mask)
+  os.chmod(path, 0o600)
+  return server
 
 
 def make_handler(database: Database):
@@ -169,17 +202,30 @@ def main() -> None:
   parser.add_argument("--port", type=int, default=8765)
   parser.add_argument("--db", default=str(DB_PATH))
   parser.add_argument("--no-seed", action="store_true", help="Create an empty production database without example templates or projects")
+  parser.add_argument("--unix-socket", type=Path, help="Also serve HTTP on a private Unix socket for an internal reverse proxy")
   args = parser.parse_args()
   database = Database(args.db, seed_samples=not args.no_seed)
   server = ThreadingHTTPServer((args.host, args.port), make_handler(database))
-  print(f"MyGantt is running at http://{args.host}:{args.port}")
-  print(f"SQLite database: {args.db}")
+  local_socket = None
+  socket_thread = None
   try:
+    if args.unix_socket:
+      local_socket = unix_server(args.unix_socket, make_handler(database))
+      socket_thread = threading.Thread(target=local_socket.serve_forever, daemon=True)
+      socket_thread.start()
+      print(f"Private HTTP socket: {args.unix_socket}")
+    print(f"MyGantt is running at http://{args.host}:{args.port}")
+    print(f"SQLite database: {args.db}")
     server.serve_forever()
   except KeyboardInterrupt:
     print("Stopping MyGantt")
   finally:
     server.server_close()
+    if local_socket:
+      local_socket.shutdown()
+      local_socket.server_close()
+      socket_thread.join(timeout=2)
+      args.unix_socket.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

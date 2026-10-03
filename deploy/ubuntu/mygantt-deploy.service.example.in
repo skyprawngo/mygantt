@@ -1,21 +1,18 @@
 [Unit]
-Description=MyGantt production supervisor (unprivileged)
-After=network.target
+Description=MyGantt credential-free CI-gated delivery (unprivileged)
+Wants=network-online.target
+After=network-online.target mygantt.service
 
 [Service]
-Type=simple
+Type=oneshot
 User=@SERVICE_USER@
 Group=@SERVICE_USER@
 WorkingDirectory=/srv/mygantt
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/usr/bin/python3 /usr/local/libexec/mygantt/supervisor.py --verify-isolation
-Restart=on-failure
-RestartSec=3
-TimeoutStopSec=20
+ExecStart=/usr/bin/python3 /usr/local/libexec/mygantt/poll-deploy.py --verify-isolation
+TimeoutStartSec=600
 UMask=0077
-StateDirectory=mygantt mygantt-delivery mygantt-socket
-StateDirectoryMode=0700
 NoNewPrivileges=yes
 PrivateTmp=yes
 PrivateDevices=yes
@@ -36,8 +33,6 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 AmbientCapabilities=
 InaccessiblePaths=/proc -/run/docker.sock -/run/containerd -/run/libvirt -/run/dbus/system_bus_socket -/run/lxd -/var/lib/lxd -/var/snap/lxd
-ReadOnlyPaths=/srv/mygantt
-ReadWritePaths=/var/lib/mygantt /var/lib/mygantt-delivery /var/lib/mygantt-socket
-
-[Install]
-WantedBy=multi-user.target
+InaccessiblePaths=/var/lib/mygantt /var/lib/mygantt-socket
+ReadWritePaths=/srv/mygantt
+ReadOnlyPaths=/var/lib/mygantt-delivery

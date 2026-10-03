@@ -1,0 +1,11 @@
+[Unit]
+Description=Check public main and successful GitHub CI every two minutes
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=2min
+AccuracySec=10s
+Unit=mygantt-deploy.service
+
+[Install]
+WantedBy=timers.target

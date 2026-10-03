@@ -58,7 +58,7 @@ On first startup against an older SQLite file, MyGantt adds template/project/tas
 
 ## CI and deployment
 
-`.github/workflows/ci.yml` runs the standard-library test suite, Python compilation, and JavaScript syntax check on GitHub-hosted Ubuntu workers. Pull request jobs do not have deployment credentials and never run on the production host. `deploy/ubuntu/` contains a systemd unit example and a host-side activation helper; these do not upload code or configure credentials. A production workflow should be added only after its host route and identity are confirmed; keep the SQLite file outside the replaceable source checkout, and limit deployment triggers to trusted `main` pushes and manual dispatch.
+.github/workflows/ci.yml runs the standard-library test suite, Python compilation and JavaScript syntax check on GitHub-hosted Ubuntu workers, with pinned official actions and read-only repository permissions. PR jobs have no deployment credentials and never run on the production host. deploy/ubuntu supplies a credential-free host timer that accepts successful CI only for the exact current main SHA from a push or main dispatch, reruns local tests and switches releases. An unprivileged supervisor backs up SQLite before migration, checks startup and restores previous code on failure. Hardened units and private Docker/Unix-socket origin examples require reviewed host installation and a verified Cloudflare Access gate before public routing. See [Ubuntu deployment](deploy/ubuntu/README.md) for paths, boundaries and limitations.
 
 ## MVP limitations
 
