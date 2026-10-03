@@ -1,0 +1,9 @@
+[Unit]
+Description=Accept a local unprivileged MyGantt deployment request
+
+[Path]
+PathChanged=/srv/mygantt/manual-deploy.request
+Unit=mygantt-deploy.service
+
+[Install]
+WantedBy=multi-user.target

@@ -77,18 +77,18 @@ def deliver(settings):
     status = read_status(Path(settings["status"]))
     if status.get("active_sha") == sha and status.get("state") == "healthy":
       print(f"Current main {sha} is already healthy.")
-      return
+      return {"result": "unchanged", "sha": sha}
     if status.get("failed_sha") == sha:
       print(f"Main {sha} already failed activation; waiting for a new main commit or operator repair.")
-      return
+      return {"result": "blocked_failed_release", "sha": sha}
     run = successful_ci(sha)
     if run is None:
       print(f"Main {sha} has no completed successful push/main-dispatch CI run; keeping the active release.")
-      return
+      return {"result": "waiting_for_ci", "sha": sha}
     release = prepare(settings, sha, run)
     if main_sha(settings) != sha:
       print("Main changed after local tests; keeping the active release until the next poll.")
-      return
+      return {"result": "superseded", "sha": sha}
     try:
       previous, _ = current_release(root)
     except (OSError, ValueError):
@@ -100,13 +100,30 @@ def deliver(settings):
       if status.get("requested_sha") == sha:
         if status.get("active_sha") == sha and status.get("state") == "healthy":
           print(f"Delivered tested main {sha}; GitHub CI run {run['id']}; app health verified.")
-          return
+          return {"result": "deployed", "sha": sha, "ci_run_id": run["id"]}
         if status.get("state") in {"failed", "rollback"}:
           break
       time.sleep(0.5)
     if previous:
       switch_release(root, previous)
     raise RuntimeError("Activation did not become healthy; previous current symlink restored when available")
+
+
+def run_delivery(settings):
+  root = Path(settings["root"])
+  request = read_status(root / "manual-deploy.request")
+  receipt_path = root / "manual-deploy.result.json"
+  request_id = request.get("request_id")
+  pending = bool(request_id and request_id != read_status(receipt_path).get("request_id"))
+  try:
+    outcome = deliver(settings)
+  except Exception as exc:
+    if pending:
+      atomic_json(receipt_path, {"request_id": request_id, "result": "failed", "error": str(exc), "finished_at": time.time()})
+    raise
+  if pending:
+    atomic_json(receipt_path, {"request_id": request_id, **outcome, "finished_at": time.time()})
+  return outcome
 
 
 def main():
@@ -117,7 +134,7 @@ def main():
   settings = config(args.config)
   if args.verify_isolation:
     isolation_probe(settings, writer=True)
-  deliver(settings)
+  run_delivery(settings)
 
 
 if __name__ == "__main__":

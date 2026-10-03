@@ -1,4 +1,5 @@
 import io
+import importlib.util
 import json
 import os
 import shutil
@@ -8,6 +9,8 @@ import sys
 import tarfile
 import tempfile
 import unittest
+import threading
+from unittest.mock import patch
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -16,6 +19,57 @@ from delivery import REPOSITORY, WORKFLOW_ID, atomic_json, extract_source, quali
 from supervisor import Supervisor
 from mygantt.server import make_handler, unix_server
 from mygantt.database import Database
+
+
+def host_module(name, filename):
+  path = Path(__file__).resolve().parent.parent / "deploy/ubuntu" / filename
+  spec = importlib.util.spec_from_file_location(name, path)
+  module = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(module)
+  return module
+
+
+manual = host_module("request_deploy", "request-deploy.py")
+poller = host_module("poll_deploy", "poll-deploy.py")
+
+
+class ManualDeliveryTests(unittest.TestCase):
+  def test_request_is_local_private_and_result_must_match_request(self):
+    with tempfile.TemporaryDirectory() as name:
+      root = Path(name)
+      request_id = manual.request_deploy(root)
+      marker = root / "manual-deploy.request"
+      self.assertEqual(read_status(marker)["request_id"], request_id)
+      self.assertEqual(marker.stat().st_mode & 0o777, 0o600)
+      atomic_json(root / "manual-deploy.result.json", {"request_id": "other", "result": "deployed"})
+      result = {"request_id": request_id, "result": "waiting_for_ci", "sha": "a" * 40}
+      worker = threading.Timer(0.05, atomic_json, args=(root / "manual-deploy.result.json", result))
+      worker.start()
+      self.assertEqual(manual.wait_for_result(root, request_id, 2), result)
+      worker.join()
+
+  def test_manual_receipt_does_not_claim_pending_ci_was_deployed(self):
+    with tempfile.TemporaryDirectory() as name:
+      root = Path(name)
+      request_id = manual.request_deploy(root)
+      expected = {"result": "waiting_for_ci", "sha": "a" * 40}
+      with patch.object(poller, "deliver", return_value=expected) as delivery:
+        self.assertEqual(poller.run_delivery({"root": str(root)}), expected)
+        delivery.assert_called_once()
+      receipt = read_status(root / "manual-deploy.result.json")
+      self.assertEqual(receipt["request_id"], request_id)
+      self.assertEqual(receipt["result"], "waiting_for_ci")
+
+  def test_manual_failure_receipt_is_written_and_exception_preserved(self):
+    with tempfile.TemporaryDirectory() as name:
+      root = Path(name)
+      request_id = manual.request_deploy(root)
+      with patch.object(poller, "deliver", side_effect=RuntimeError("Temporary health failure")):
+        with self.assertRaises(RuntimeError):
+          poller.run_delivery({"root": str(root)})
+      receipt = read_status(root / "manual-deploy.result.json")
+      self.assertEqual(receipt["request_id"], request_id)
+      self.assertEqual(receipt["result"], "failed")
 
 
 class DeliverySafetyTests(unittest.TestCase):
