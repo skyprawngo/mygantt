@@ -6,7 +6,7 @@ This folder prepares a host-side systemd setup without assuming the Ubuntu host'
 
 Choose the service account, release directory, stable data directory, Python path, and port only after confirming the target's existing layout. Use absolute paths without spaces unless you escape them for systemd. Keep the data directory outside every release directory. The service example binds only to `127.0.0.1`; do not expose the app port on a public interface.
 
-Copy a database-free release to a unique path such as `<release-root>/<commit-sha>`. Before the first launch against any existing SQLite database, stop its current writer and take a verified backup. The app can apply schema migrations at startup; release rollback does not roll back database changes.
+Copy a database-free release to a unique path such as `<release-root>/<commit-sha>`. The service example uses `--no-seed` so production starts with no example templates or batches. Keep this flag on every production start; it does not remove existing data. Before the first launch against any existing SQLite database, stop its current writer and take a verified backup. The app can apply schema migrations at startup; release rollback does not roll back database changes.
 
 Copy `mygantt.service.example.in` to the host and replace every `@...@` token with the confirmed service user, current-release symlink, Python executable, port, and persistent data directory. Review the rendered unit before installing it under `/etc/systemd/system/`. Give the service account read-only access to the release and write access only to the persistent data directory. Then reload systemd and start the service as a separately reviewed host action.
 

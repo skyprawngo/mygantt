@@ -57,8 +57,9 @@ def json_load(value: str | None, fallback: Any) -> Any:
 
 
 class Database:
-  def __init__(self, path: str | Path, holiday_fetcher=None):
+  def __init__(self, path: str | Path, holiday_fetcher=None, *, seed_samples: bool = True):
     self.path = str(path)
+    self.seed_samples = seed_samples
     from .holiday_calendar import fetch_public_holidays
     self.holiday_fetcher = holiday_fetcher or fetch_public_holidays
     self.holiday_lock = threading.Lock()
@@ -161,7 +162,7 @@ class Database:
       self._migrate(db)
       self._seed_holiday_fallback(db)
       count = db.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
-      if count == 0:
+      if count == 0 and self.seed_samples:
         self._seed(db)
 
   def _seed(self, db: sqlite3.Connection) -> None:

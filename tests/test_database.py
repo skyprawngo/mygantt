@@ -29,6 +29,33 @@ class DatabaseTests(unittest.TestCase):
       ],
     }
 
+  def test_empty_production_database_stays_empty_after_restart(self):
+    path = Path(self.temp.name) / "production.sqlite3"
+    production = Database(path, seed_samples=False)
+    self.assertEqual(production.state()["templates"], [])
+    self.assertEqual(production.state()["projects"], [])
+    with production.connection() as db:
+      self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+      self.assertEqual(db.execute("SELECT COUNT(*) FROM holiday_cache").fetchone()[0], 1)
+    reopened = Database(path, seed_samples=False)
+    self.assertEqual(reopened.state()["templates"], [])
+    self.assertEqual(reopened.state()["projects"], [])
+
+  def test_no_seed_preserves_user_created_production_records(self):
+    path = Path(self.temp.name) / "production.sqlite3"
+    production = Database(path, seed_samples=False)
+    template = production.save_template(self.custom_template())
+    project = production.instantiate({"request_id": "production-submit", "template_id": template["id"], "name": "Release verification", "start_date": "2026-10-05", "calendar_type": "working"})
+    production.update_task(project["tasks"][0]["id"], {"status": "done", "actual_finish": "2026-10-09"})
+    reopened = Database(path, seed_samples=False)
+    self.assertEqual(len(reopened.state()["templates"]), 1)
+    self.assertEqual(len(reopened.state()["projects"]), 1)
+    self.assertEqual(reopened.get_project(project["id"])["tasks"][0]["actual_finish"], "2026-10-09")
+
+  def test_no_seed_does_not_delete_existing_records(self):
+    before = self.db.state()
+    self.assertEqual(Database(self.path, seed_samples=False).state(), before)
+
   def test_board_workflow_is_only_a_generic_seed_template(self):
     state = self.db.state()
     template = next(item for item in state["templates"] if item["name"] == SAMPLE_TEMPLATE["name"])

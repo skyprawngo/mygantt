@@ -8,7 +8,7 @@ User=@SERVICE_USER@
 Group=@SERVICE_USER@
 WorkingDirectory=@CURRENT_RELEASE@
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=@PYTHON_BIN@ -m mygantt.server --host 127.0.0.1 --port @PORT@ --db @DATA_DIR@/mygantt.sqlite3
+ExecStart=@PYTHON_BIN@ -m mygantt.server --host 127.0.0.1 --port @PORT@ --db @DATA_DIR@/mygantt.sqlite3 --no-seed
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=10

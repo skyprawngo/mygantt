@@ -14,6 +14,8 @@ Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Stop the server with `Ctrl+
 
 The first launch creates the editable **보드 제작 기본 공정** template and six example batches: MARKOS MAIN보드 50EA, MARKOS MAIN보드 200EA, MARKOS DIB보드 50EA, VIDEO, OUTPUT, and ICE640N 메인보드. Initial durations are clearly editable sample estimates, not supplied production commitments. Seed data is inserted only when the database has no templates.
 
+For an empty production database, add `--no-seed` and set `--db` to a persistent path outside the source checkout. Keep `--no-seed` on every production start. It suppresses example templates and batches while preserving the schema, holiday fallback, and existing records. It does not remove data from an existing database.
+
 ## Templates and schedules
 
 In **공정 템플릿**, add, remove, and rename arbitrary tasks; edit each task's duration in days or weeks, color and responsible team/vendor; set the default project tint; and check any number of predecessor tasks. A task with no predecessor is a parallel branch. A task with multiple predecessors waits for all of them. Use **일정 미리보기** to inspect the computed dates and catch cycles before saving. The board workflow is regular seed data in this same editor and scheduler.
