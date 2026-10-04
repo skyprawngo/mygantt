@@ -116,11 +116,15 @@ def make_handler(database: Database):
       path = parsed.path
       try:
         if path == "/api/state":
-          self._json({**database.state(), "storage": storage_location(database)})
+          self._json({**database.state(), "storage": storage_location(database), "holiday_country": database.holiday_country()})
+          return
+        if path == "/api/holiday-calendars":
+          from .holiday_calendar import CALENDARS
+          self._json({"calendars": CALENDARS, "holiday_country": database.holiday_country()})
           return
         if path == "/api/holidays":
           query = urllib.parse.parse_qs(parsed.query)
-          self._json(database.holidays(query.get("start", [None])[0], query.get("end", [None])[0]))
+          self._json(database.holidays(query.get("start", [None])[0], query.get("end", [None])[0], country=query.get("country", [None])[0]))
           return
         if path == "/api/templates":
           self._json(database.state()["templates"])
@@ -201,13 +205,13 @@ def make_handler(database: Database):
     def do_DELETE(self) -> None:
       parts = urllib.parse.urlparse(self.path).path.strip("/").split("/")
       try:
-        if len(parts) == 3 and parts[0] == "api" and parts[1] in ("projects", "tasks"):
-          delete = database.delete_project if parts[1] == "projects" else database.delete_task
+        if len(parts) == 3 and parts[0] == "api" and parts[1] in ("projects", "tasks", "templates"):
+          delete = {"projects": database.delete_project, "tasks": database.delete_task, "templates": database.delete_template}[parts[1]]
           removed = delete(urllib.parse.unquote(parts[2]))
           if removed:
             self._json({"deleted": True})
           else:
-            self._error("프로젝트를 찾을 수 없습니다." if parts[1] == "projects" else "작업을 찾을 수 없습니다.", 404)
+            self._error({"projects": "프로젝트를 찾을 수 없습니다.", "tasks": "작업을 찾을 수 없습니다.", "templates": "템플릿을 찾을 수 없습니다."}[parts[1]], 404)
           return
         self._error("경로를 찾을 수 없습니다.", 404)
       except (ScheduleError, ValueError) as exc:
@@ -217,6 +221,9 @@ def make_handler(database: Database):
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        if path == "/api/settings/holiday-calendar":
+          self._json(database.set_holiday_country(payload["holiday_country"]))
+          return
         if path.startswith("/api/tasks/") and path.endswith("/placement"):
           if "directory_id" not in payload or set(payload) - {"directory_id", "anchor_id", "after"}:
             raise ScheduleError("이동할 프로젝트를 지정하세요.")

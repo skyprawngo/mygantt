@@ -15,20 +15,7 @@ from typing import Any
 from .scheduler import ScheduleError, schedule_tasks, topological_order, update_schedule_dates, validate_date_range, template_start_day, duration_days
 
 
-SAMPLE_TEMPLATE = {
-  "name": "보드 제작 기본 공정",
-  "description": "PCB·소자 발주부터 코팅 입고검사까지. 기간은 편집 가능한 샘플 기본값입니다.",
-  "tasks": [
-    {"key": "pcb_order", "name": "PCB발주", "duration_value": 1, "duration_unit": "weeks", "dependencies": [], "owner": "구매팀", "handoff": "PCB 입고검사 담당자에게 PCB 전달"},
-    {"key": "pcb_inspection", "name": "PCB입고검사", "duration_value": 2, "duration_unit": "days", "dependencies": ["pcb_order"], "owner": "품질팀", "handoff": "자삽 담당자에게 합격 PCB 전달"},
-    {"key": "parts_order", "name": "소자발주", "duration_value": 1, "duration_unit": "weeks", "dependencies": [], "owner": "구매팀", "handoff": "자삽 담당자에게 소자 전달"},
-    {"key": "assembly", "name": "자삽", "duration_value": 3, "duration_unit": "days", "dependencies": ["pcb_inspection", "parts_order"], "owner": "외주 자삽 업체", "handoff": "PBA입고검사 담당자에게 조립품 전달"},
-    {"key": "pba_inspection", "name": "PBA입고검사", "duration_value": 2, "duration_unit": "days", "dependencies": ["assembly"], "owner": "품질팀", "handoff": "PBA기능검사 담당자에게 합격품 전달"},
-    {"key": "pba_function", "name": "PBA기능검사", "duration_value": 3, "duration_unit": "days", "dependencies": ["pba_inspection"], "owner": "개발팀", "handoff": "코팅 담당자에게 검사 완료품 전달"},
-    {"key": "coating", "name": "코팅", "duration_value": 2, "duration_unit": "days", "dependencies": ["pba_function"], "owner": "외주 코팅 업체", "handoff": "코팅 입고검사 담당자에게 회수품 전달"},
-    {"key": "coating_inspection", "name": "코팅 입고검사", "duration_value": 1, "duration_unit": "days", "dependencies": ["coating"], "owner": "품질팀", "handoff": "후속 조립 또는 출하 담당자에게 인계"},
-  ],
-}
+SAMPLE_TEMPLATE = json.loads(Path(__file__).with_name('seed_template.json').read_text(encoding='utf-8'))
 
 SAMPLE_BATCHES = [
   "MARKOS MAIN보드 50EA",
@@ -164,21 +151,36 @@ class Database:
       """)
       self._migrate(db)
       migrate(db, now_iso())
+      # Retain existing Korean cache rows while introducing country/year keys.
+      if "country" not in {row[1] for row in db.execute("PRAGMA table_info(holiday_cache)")}:
+        db.execute("ALTER TABLE holiday_cache RENAME TO holiday_cache_legacy")
+        db.execute("""CREATE TABLE holiday_cache (
+          country TEXT NOT NULL DEFAULT 'KR', year INTEGER NOT NULL,
+          source TEXT NOT NULL, source_url TEXT NOT NULL DEFAULT '',
+          attempted_at TEXT NOT NULL DEFAULT '', last_success_at TEXT NOT NULL DEFAULT '',
+          last_error TEXT NOT NULL DEFAULT '', holidays_json TEXT NOT NULL DEFAULT '[]',
+          PRIMARY KEY(country, year))""")
+        db.execute("INSERT INTO holiday_cache SELECT 'KR', * FROM holiday_cache_legacy")
+        db.execute("DROP TABLE holiday_cache_legacy")
+      db.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
       self._seed_holiday_fallback(db)
       count = db.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
-      if count == 0 and self.seed_samples:
-        self._seed(db)
+      seeded = db.execute("SELECT 1 FROM schema_migrations WHERE migration_key='sample-initialized'").fetchone()
+      if self.seed_samples and not seeded:
+        if count == 0 and not db.execute("SELECT 1 FROM projects LIMIT 1").fetchone():
+          self._seed(db)
+        db.execute("INSERT INTO schema_migrations(migration_key,applied_at) VALUES ('sample-initialized',?)", (now_iso(),))
       for row in db.execute("SELECT id FROM projects").fetchall():
         self._normalize_task_order(db, row[0])
 
   def _seed(self, db: sqlite3.Connection) -> None:
     template_id = new_id()
     stamp = now_iso()
-    db.execute("INSERT INTO templates (id, name, description, project_color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (template_id, SAMPLE_TEMPLATE["name"], SAMPLE_TEMPLATE["description"], PROJECT_COLORS[0], stamp, stamp))
+    db.execute("INSERT INTO templates (id, name, description, project_color, calendar_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)", (template_id, SAMPLE_TEMPLATE["name"], SAMPLE_TEMPLATE["description"], SAMPLE_TEMPLATE["project_color"], SAMPLE_TEMPLATE["calendar_type"], stamp, stamp))
     key_to_id = {task["key"]: new_id() for task in SAMPLE_TEMPLATE["tasks"]}
     tasks = []
     for index, task in enumerate(SAMPLE_TEMPLATE["tasks"]):
-      tasks.append({**task, "id": key_to_id[task["key"]], "dependencies": [key_to_id[key] for key in task["dependencies"]], "sort_order": index, "color": TASK_COLORS[index % len(TASK_COLORS)]})
+      tasks.append({**task, "id": key_to_id[task["key"]], "dependencies": [key_to_id[key] for key in task["dependencies"]], "sort_order": index, "color": task.get("color", TASK_COLORS[index % len(TASK_COLORS)])})
     self._insert_template_tasks(db, template_id, tasks)
     for offset, name in enumerate(SAMPLE_BATCHES):
       project_id = new_id()
@@ -190,7 +192,7 @@ class Database:
       for task in tasks:
         snapshot.append({
           "id": project_task_ids[task["id"]], "template_task_key": task["key"], "name": task["name"],
-          "duration_value": task["duration_value"], "duration_unit": task["duration_unit"],
+          "duration_value": task["duration_value"], "duration_unit": task["duration_unit"], "start_day": task.get("start_day"),
           "dependencies": [project_task_ids[dependency] for dependency in task["dependencies"]], "owner": task["owner"], "handoff": task["handoff"],
           "blocker": "", "status": "todo", "planned_start": "", "planned_finish": "",
           "actual_start": "", "actual_finish": "", "notes": "", "sort_order": task["sort_order"],
@@ -396,15 +398,28 @@ class Database:
       projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY start_date, name")]
       return {"templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
 
-  def holidays(self, start: str | None = None, end: str | None = None, *, now: datetime | None = None, fetcher=None) -> dict[str, Any]:
+  def holiday_country(self):
+    with self.connection() as db:
+      row = db.execute("SELECT value FROM app_settings WHERE key='holiday_country'").fetchone()
+      return row[0] if row else "KR"
+
+  def set_holiday_country(self, country):
+    from .holiday_calendar import validate_country
+    country = validate_country(country)
+    with self.connection() as db:
+      db.execute("INSERT INTO app_settings(key,value) VALUES ('holiday_country',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (country,))
+    return {"holiday_country": country}
+
+  def holidays(self, start: str | None = None, end: str | None = None, *, country: str | None = None, now: datetime | None = None, fetcher=None) -> dict[str, Any]:
     from .holiday_calendar import calendar_payload
-    return calendar_payload(self, start, end, now=now, fetcher=fetcher)
+    return calendar_payload(self, start, end, country=country or self.holiday_country(), now=now, fetcher=fetcher)
 
   def schedule_template(self, tasks, start_date, calendar_type):
+    country = self.holiday_country()
     years = {}
     def is_holiday(day):
       if day.year not in years:
-        data = self.holidays(f"{day.year}-01-01", f"{day.year}-12-31")
+        data = self.holidays(f"{day.year}-01-01", f"{day.year}-12-31", country=country)
         if day.year not in data["coverage_years"]:
           raise ScheduleError(f"{day.year}년 공휴일 자료가 없어 주 5일 일정을 계산할 수 없습니다.")
         years[day.year] = {entry["date"] for entry in data["holidays"]}
@@ -670,6 +685,12 @@ class Database:
       db.execute("UPDATE project_tasks SET status='done',progress=100 WHERE project_id=?", (project_id,))
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)
+
+  def delete_template(self, template_id: str) -> bool:
+    # Instantiated projects own independent snapshots; only template rows cascade.
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      return db.execute("DELETE FROM templates WHERE id=?", (template_id,)).rowcount > 0
 
   def delete_project(self, project_id: str) -> bool:
     if project_id == UNASSIGNED_PROJECT_ID:

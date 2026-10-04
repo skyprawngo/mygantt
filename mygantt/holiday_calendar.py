@@ -1,4 +1,4 @@
-"""Cached Korean public holiday data for the Gantt date header.
+"""Cached country-specific public holiday data for the Gantt date header.
 
 The Nager.Date Community API is refreshed by year. Only the country code and
 year are sent to that provider; project or task data is never included. The
@@ -15,7 +15,7 @@ from typing import Any, Callable
 from urllib.request import Request, urlopen
 
 
-API_URL = "https://nagerholidays.com/api/v4/Holidays/KR/{year}"
+API_URL = "https://nagerholidays.com/api/v4/Holidays/{country}/{year}"
 API_SOURCE = "Nager.Date Community API v4"
 API_SOURCE_URL = "https://nagerholidays.com/api"
 FALLBACK_SOURCE = "KASI / 관세청 2026 기본 자료"
@@ -24,6 +24,21 @@ SUPPORTED_FUTURE_YEARS = 5
 CACHE_TTL = timedelta(days=7)
 RETRY_COOLDOWN = timedelta(hours=6)
 REQUEST_TIMEOUT_SECONDS = 4
+
+# Curated national calendars; regional-only holidays are excluded.
+CALENDARS = [
+  {"country": code, "group": group, "textID": f"calendar.country.{code}"}
+  for group, codes in [("asia", ["KR", "JP"]), ("americas", ["US", "CA"]),
+                       ("europe", ["GB", "DE", "FR"]), ("oceania", ["AU"])]
+  for code in codes
+]
+
+
+def validate_country(country: str) -> str:
+  if not isinstance(country, str) or country not in {item["country"] for item in CALENDARS}:
+    raise ValueError("지원하지 않는 국가 캘린더입니다.")
+  return country
+
 
 BUNDLED_HOLIDAYS_2026 = [
   {"date": "2026-01-01", "name": "신정"},
@@ -84,17 +99,17 @@ def _parse_provider_date(value: Any) -> date:
     raise ValueError(f"Invalid holiday date: {raw[:40]}") from error
 
 
-def normalize_provider_year(year: int, payload: Any) -> list[dict[str, str]]:
+def normalize_provider_year(year: int, payload: Any, country: str = "KR") -> list[dict[str, str]]:
   if not isinstance(payload, list):
     raise ValueError("Holiday API response must be a list")
   normalized: dict[str, str] = {}
   for item in payload:
     if not isinstance(item, dict):
       continue
-    if str(item.get("countryCode", "KR")).upper() != "KR":
+    if str(item.get("countryCode", country)).upper() != country:
       continue
     subdivisions = item.get("subdivisionCodes") or []
-    if subdivisions:
+    if subdivisions or item.get("nationalHoliday") is False:
       continue
     holiday_types = item.get("holidayTypes") or []
     if isinstance(holiday_types, str):
@@ -104,16 +119,16 @@ def normalize_provider_year(year: int, payload: Any) -> list[dict[str, str]]:
     holiday_date = _parse_provider_date(item.get("date"))
     if holiday_date.year != year:
       continue
-    name = str(item.get("localName") or KOREAN_NAMES.get(str(item.get("name", "")), item.get("name", "공휴일"))).strip()
+    name = str(item.get("localName") or (KOREAN_NAMES.get(str(item.get("name", "")), item.get("name", "공휴일")) if country == "KR" else item.get("name", "Public holiday"))).strip()
     if name:
       normalized[holiday_date.isoformat()] = name
   return [{"date": key, "name": normalized[key]} for key in sorted(normalized)]
 
 
-def fetch_public_holidays(year: int) -> list[dict[str, str]]:
+def fetch_public_holidays(year: int, country: str = "KR") -> list[dict[str, str]]:
   """Fetch one public year from Nager.Date without sending app data."""
   request = Request(
-    API_URL.format(year=year),
+    API_URL.format(year=year, country=validate_country(country)),
     headers={"Accept": "application/json", "User-Agent": "MyGantt-local/1.0"},
     method="GET",
   )
@@ -124,7 +139,7 @@ def fetch_public_holidays(year: int) -> list[dict[str, str]]:
     ssl_context = ssl.create_default_context()
   with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS, context=ssl_context) as response:
     payload = json.loads(response.read().decode("utf-8"))
-  return normalize_provider_year(year, payload)
+  return normalize_provider_year(year, payload, country)
 
 
 def _iso(value: datetime) -> str:
@@ -158,10 +173,12 @@ def calendar_payload(
   start: str | None = None,
   end: str | None = None,
   *,
+  country: str = "KR",
   now: datetime | None = None,
   fetcher: Callable[[int], list[dict[str, str]]] | None = None,
 ) -> dict[str, Any]:
   """Refresh requested years as needed, return cached data and honest status."""
+  country = validate_country(country)
   current = now or datetime.now(timezone.utc)
   if current.tzinfo is None:
     current = current.replace(tzinfo=timezone.utc)
@@ -178,7 +195,7 @@ def calendar_payload(
   with database.holiday_lock:
     for year in years:
       with database.connection() as connection:
-        row = connection.execute("SELECT * FROM holiday_cache WHERE year=?", (year,)).fetchone()
+        row = connection.execute("SELECT * FROM holiday_cache WHERE country=? AND year=?", (country, year,)).fetchone()
         cached = dict(row) if row else None
       is_supported = supported_first <= year <= supported_last
       attempted = _parse_stamp(cached.get("attempted_at") if cached else None)
@@ -190,7 +207,7 @@ def calendar_payload(
       if should_refresh:
         fetched_at = _iso(current)
         try:
-          holidays = active_fetcher(year)
+          holidays = active_fetcher(year) if country == "KR" else active_fetcher(year, country)
           # Revalidate injected and future provider implementations before
           # persisting data. The helper expects the same canonical shape.
           canonical = []
@@ -201,23 +218,23 @@ def calendar_payload(
           canonical.sort(key=lambda item: item["date"])
           with database.connection() as connection:
             connection.execute(
-              """INSERT INTO holiday_cache (year, source, source_url, attempted_at, last_success_at, last_error, holidays_json)
-                 VALUES (?, ?, ?, ?, ?, '', ?)
-                 ON CONFLICT(year) DO UPDATE SET source=excluded.source, source_url=excluded.source_url,
+              """INSERT INTO holiday_cache (country, year, source, source_url, attempted_at, last_success_at, last_error, holidays_json)
+                 VALUES (?, ?, ?, ?, ?, ?, '', ?)
+                 ON CONFLICT(country, year) DO UPDATE SET source=excluded.source, source_url=excluded.source_url,
                    attempted_at=excluded.attempted_at, last_success_at=excluded.last_success_at,
                    last_error='', holidays_json=excluded.holidays_json""",
-              (year, API_SOURCE, API_SOURCE_URL, fetched_at, fetched_at, json.dumps(canonical, ensure_ascii=False)),
+              (country, year, API_SOURCE, API_SOURCE_URL, fetched_at, fetched_at, json.dumps(canonical, ensure_ascii=False)),
             )
           cached = {"year": year, "source": API_SOURCE, "source_url": API_SOURCE_URL, "attempted_at": fetched_at, "last_success_at": fetched_at, "last_error": "", "holidays_json": json.dumps(canonical, ensure_ascii=False)}
         except Exception as error:
           message = str(error).strip() or error.__class__.__name__
           with database.connection() as connection:
             if cached:
-              connection.execute("UPDATE holiday_cache SET attempted_at=?, last_error=? WHERE year=?", (fetched_at, message[:300], year))
+              connection.execute("UPDATE holiday_cache SET attempted_at=?, last_error=? WHERE country=? AND year=?", (fetched_at, message[:300], country, year))
             else:
               connection.execute(
-                "INSERT INTO holiday_cache (year, source, source_url, attempted_at, last_success_at, last_error, holidays_json) VALUES (?, ?, ?, ?, '', ?, '[]')",
-                (year, API_SOURCE, API_SOURCE_URL, fetched_at, message[:300]),
+                "INSERT INTO holiday_cache (country, year, source, source_url, attempted_at, last_success_at, last_error, holidays_json) VALUES (?, ?, ?, ?, ?, '', ?, '[]')",
+                (country, year, API_SOURCE, API_SOURCE_URL, fetched_at, message[:300]),
               )
           if cached:
             cached["attempted_at"] = fetched_at
@@ -230,7 +247,7 @@ def calendar_payload(
           cached["holidays"] = json.loads(cached.get("holidays_json") or "[]")
         except (TypeError, json.JSONDecodeError):
           cached["holidays"] = []
-        if year == 2026 and cached.get("source") == API_SOURCE:
+        if country == "KR" and year == 2026 and cached.get("source") == API_SOURCE:
           # The community feed currently omits several Korean substitute
           # holidays. Keep its fresh dates, then overlay the checked 2026
           # calendar so provider refreshes cannot remove those known dates.
@@ -255,7 +272,7 @@ def calendar_payload(
     if item.get("source"):
       source_names.append(item["source"])
       source_urls.append(item.get("source_url") or "")
-      if year == 2026 and item["source"] == API_SOURCE:
+      if country == "KR" and year == 2026 and item["source"] == API_SOURCE:
         source_names.append(FALLBACK_SOURCE)
         source_urls.append(FALLBACK_SOURCE_URL)
   source_names = list(dict.fromkeys(name for name in source_names if name))
@@ -273,7 +290,7 @@ def calendar_payload(
   coverage_end = max(covered_years) if covered_years else None
   source = " + ".join(source_names) if source_names else API_SOURCE
   return {
-    "region": "KR",
+    "region": country,
     "source": source,
     "source_label": source,
     "source_url": source_urls[0] if len(source_urls) == 1 else API_SOURCE_URL,

@@ -48,6 +48,39 @@ class HttpApiTests(unittest.TestCase):
       content_type = response.headers.get("Content-Type", "")
       return raw.decode("utf-8") if "text/calendar" in content_type else json.loads(raw)
 
+  def test_country_calendar_settings_and_holiday_query(self):
+    from urllib.error import HTTPError
+    options = self.call('/api/holiday-calendars')
+    self.assertEqual(options['holiday_country'], 'KR')
+    self.assertIn('JP', [item['country'] for item in options['calendars']])
+    before = self.call('/api/state')['projects']
+    self.call('/api/settings/holiday-calendar', 'PATCH', {'holiday_country':'JP'})
+    self.database.holiday_fetcher = lambda year, country='KR': [{'date':f'{year}-01-01','name':country}]
+    result = self.call('/api/holidays?start=2026-01-01&end=2026-12-31')
+    self.assertEqual(result['region'], 'JP')
+    self.assertEqual(result['holidays'], [{'date':'2026-01-01','name':'JP'}])
+    self.assertEqual(self.call('/api/state')['projects'], before)
+    with self.assertRaises(HTTPError) as error:
+      self.call('/api/settings/holiday-calendar', 'PATCH', {'holiday_country':'XX'})
+    self.assertEqual(error.exception.code, 400)
+
+  def test_delete_template_preserves_instantiated_projects(self):
+    from urllib.error import HTTPError
+    before = self.call('/api/state')
+    template_id = before['templates'][0]['id']
+    self.assertEqual(self.call('/api/templates/' + template_id, 'DELETE'), {'deleted': True})
+    after = self.call('/api/state')
+    self.assertFalse(any(item['id'] == template_id for item in after['templates']))
+    self.assertEqual(before['projects'], after['projects'])
+    reopened = Database(self.db_path, holiday_fetcher=lambda year: [])
+    self.assertEqual(reopened.state()['templates'], after['templates'])
+    with self.database.connection() as db:
+      self.assertEqual(db.execute('SELECT count(*) FROM template_tasks WHERE template_id=?', (template_id,)).fetchone()[0], 0)
+      self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+    with self.assertRaises(HTTPError) as error:
+      self.call('/api/templates/' + template_id, 'DELETE')
+    self.assertEqual(error.exception.code, 404)
+
   def test_empty_project_creation_and_restart(self):
     payload = {'name': 'Empty project', 'start_date': '2026-10-04', 'calendar_type': 'working', 'request_id': 'empty-http'}
     project = self.call('/api/projects', 'POST', payload)

@@ -72,14 +72,20 @@ class DatabaseTests(unittest.TestCase):
     before = self.db.state()
     self.assertEqual(Database(self.path, seed_samples=False).state(), before)
 
-  def test_board_workflow_is_only_a_generic_seed_template(self):
+  def test_selected_template_is_seeded_with_relative_days_colors_and_connections(self):
     state = self.db.state()
-    template = next(item for item in state["templates"] if item["name"] == SAMPLE_TEMPLATE["name"])
-    by_name = {task["name"]: task for task in template["tasks"]}
-    self.assertEqual(by_name["PCB발주"]["dependencies"], [])
-    self.assertEqual(by_name["소자발주"]["dependencies"], [])
-    self.assertEqual(set(by_name["자삽"]["dependencies"]), {by_name["PCB입고검사"]["id"], by_name["소자발주"]["id"]})
+    template = next(item for item in state["templates"] if item["name"] == "New schedule template")
+    self.assertEqual(template["project_color"], "#b96749")
+    self.assertEqual(template["calendar_type"], "working")
+    self.assertEqual(len(template["tasks"]), 5)
+    by_id = {task["id"]: task["key"] for task in template["tasks"]}
+    for actual, expected in zip(template["tasks"], SAMPLE_TEMPLATE["tasks"]):
+      for field in ("key", "name", "start_day", "duration_value", "duration_unit", "color", "owner", "handoff"):
+        self.assertEqual(actual[field], expected[field])
+      self.assertEqual([by_id[key] for key in actual["dependencies"]], expected["dependencies"])
     self.assertEqual(len([p for p in state["projects"] if p["name"] in SAMPLE_BATCHES]), len(SAMPLE_BATCHES))
+    before = self.db.state()
+    self.assertEqual(Database(self.path, holiday_fetcher=lambda year: []).state(), before)
 
   def test_new_instance_rows_store_date_ranges_without_duration_columns(self):
     template = self.db.save_template({"name": "날짜 속성", "tasks": [

@@ -50,5 +50,5 @@ class TemplateDayTests(unittest.TestCase):
       result=db.schedule_template(tasks,'2026-12-31','working')
       self.assertEqual(result[0]['planned_finish'],'2027-01-04')
       self.assertEqual(db.schedule_template(tasks,'2026-12-31','calendar')[0]['planned_finish'],'2027-01-01')
-      db.holidays=lambda *args: {'coverage_years':[],'holidays':[]}
+      db.holidays=lambda *args, **kwargs: {'coverage_years':[],'holidays':[]}
       with self.assertRaises(ScheduleError): db.schedule_template(tasks,'2027-01-04','working')

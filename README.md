@@ -1,61 +1,57 @@
 # MyGantt · 생산 일정 관리
 
-MyGantt is a local browser app for reusable process templates and concurrent production batches. The Korean interface talks to a Python standard-library HTTP backend, which persists templates, project snapshots, task status and dependency edges in SQLite. It needs no package install or separate database service.
+## 소개
 
-## Run on macOS
+MyGantt는 여러 프로젝트와 생산 배치의 일정을 간트 차트로 관리하는 웹 앱입니다. 반복되는 공정은 일정 템플릿으로 만들고, 프로젝트별 예정·실제 작업일과 진행 상황을 한 화면에서 확인할 수 있습니다.
+
+Python 표준 라이브러리와 SQLite로 실행되며, 별도의 패키지 설치나 데이터베이스 서버가 필요하지 않습니다. 데이터는 앱 서버가 실행되는 컴퓨터에 저장되고, PC와 휴대폰 브라우저에서 사용할 수 있습니다.
+
+## 주요 기능
+
+- **직접 편집하는 간트 차트** — 작업 바를 드래그해 일정을 이동하거나 양 끝을 조절해 기간을 변경합니다. 예정·실제 작업일과 진행률을 함께 표시하며, 속성 편집은 자동 저장되어 차트에 반영됩니다.
+- **선·후행 작업 연결과 일정 연동** — 여러 선행·후행 작업을 연결하고 흐름을 시각적으로 확인합니다. ‘후행 같이 조정’을 켜면 예정·실제 종료일 중 더 늦은 날짜의 변경량만큼 연결된 모든 후행 작업의 예정 일정을 이동하고, 실제 기록은 유지합니다.
+- **재사용 가능한 일정 템플릿** — 작업 구성과 연결 관계를 템플릿으로 저장해 새 프로젝트를 만듭니다. 생성된 프로젝트는 독립된 일정이므로 이후 템플릿 수정의 영향을 받지 않습니다. 단일 작업도 별도로 추가할 수 있습니다.
+- **프로젝트 중심의 일정 정리** — 검색·상태 필터·정렬·그룹별 보기와 간트·목록 보기를 제공합니다. 프로젝트를 접거나 숨길 수 있고, 완료된 프로젝트는 접힘·이동 애니메이션 후 숨겨집니다. 사이드바에서 다시 선택하면 표시됩니다.
+- **PC·모바일 및 다국어 지원** — 좁은 화면에서는 메뉴와 속성 패널을 열고 닫아 작업 공간을 확보합니다. 설정에서 한국어(KR), 영어(US), 일본어(JP)를 선택할 수 있습니다.
+- **캘린더 활용** — 주말·선택한 국가의 공휴일을 표시하고 일정을 `.ics` 파일로 내보냅니다. 내보낸 일정은 외부 캘린더로 가져올 수 있으며, 양방향 동기화는 지원하지 않습니다.
+
+## 설치 및 실행
+
+Git과 Python 3.12를 준비합니다. Python 3.12는 프로젝트 CI에서 사용하는 버전입니다.
+
+### 1. 저장소 받기
 
 ```sh
-cd /Users/skyprawngo/Documents/Coding/mygantt
+git clone https://github.com/skyprawngo/mygantt.git
+cd mygantt
+```
+
+### 2. 서버 실행
+
+```sh
 python3 -m mygantt.server --host 127.0.0.1 --port 8765
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). Stop the server with `Ctrl+C`. It listens on loopback by default. The only external request is a read-only Korean public-holiday lookup by country and year; no project or task data is sent.
+### 3. 브라우저에서 열기
 
-The first launch creates the editable **보드 제작 기본 공정** template and six example batches: MARKOS MAIN보드 50EA, MARKOS MAIN보드 200EA, MARKOS DIB보드 50EA, VIDEO, OUTPUT, and ICE640N 메인보드. Initial durations are clearly editable sample estimates, not supplied production commitments. Seed data is inserted only when the database has no templates.
+[http://127.0.0.1:8765](http://127.0.0.1:8765)에 접속합니다. 서버를 종료하려면 실행한 터미널에서 `Ctrl+C`를 누릅니다.
 
-## Templates and schedules
+기본 실행 시 초기 데이터베이스에 `New schedule template` 시드 템플릿과 생산 배치가 생성됩니다. 시드 구성은 `mygantt/seed_template.json`에 저장되며, 기존 데이터베이스의 템플릿이나 프로젝트를 덮어쓰지 않습니다. 예제 없이 새로 시작하려면 첫 실행에 `--no-seed`를 추가합니다. 이 옵션은 기존 데이터를 삭제하지 않습니다.
 
-In **공정 템플릿**, add, remove, and rename arbitrary tasks; edit each task's duration in days or weeks, color and responsible team/vendor; set the default project tint; and check any number of predecessor tasks. A task with no predecessor is a parallel branch. A task with multiple predecessors waits for all of them. Use **일정 미리보기** to inspect the computed dates and catch cycles before saving. The board workflow is regular seed data in this same editor and scheduler.
+```sh
+python3 -m mygantt.server --host 127.0.0.1 --port 8765 --no-seed
+```
 
-Project creation copies every template task, color, dependency and the chosen project tint into an independent snapshot. Subsequent template edits do not alter existing projects. Templates keep editable sample durations and units; each instantiated task stores absolute planned start and finish dates, with no duration control on project tasks. Creating a batch is idempotent for repeat submissions from the same form. The calendar-first Gantt groups each project summary row with its tasks, shows one column per calendar date and aligns the date header, day-of-week labels, project-tinted rows, Saturday/Sunday and holiday shading, task-color keys, and today marker during horizontal and vertical scrolling, with finish-to-start links between dependent task bars. Project rows collapse independently. Expanded projects show a translucent duration band behind their task rows; fixed name cells and the date header remain above it. Project properties save automatically on field blur (color/calendar choices save on change), with per-field patches serialized to preserve subsequent edits and focus. Validation or save failures retain the entered value for correction/retry. Use the right-side **프로젝트 속성** and **작업 속성** sections to edit names, colors, group, tags, planned start/finish dates, ownership, status, blockers, handoff, dependencies, actual dates and notes. Drag either end of a task bar to resize its planned date range. The shared **후속 작업 일정 함께 이동** option controls whether date edits and bar resizing shift all successor plans. Project/task selection, accordion choice, cascade preference and collapsed project rows survive reloads in that browser profile. The overall schedule supports sidebar project filters, text search, task status filters, group-by-group layout, start/name/progress sorting, Gantt/list layouts, date-column zoom, and a today button. Editing a project's start date or calendar setting does not silently rewrite its task dates. The explicit **오늘 완료 처리** action records today's actual dates; successor planned dates shift during cascade edits, while actual dates remain fixed.
+### 데이터 저장과 백업
 
-## Scheduling convention
+기본 데이터 파일은 저장소 안의 `data/mygantt.sqlite3`입니다. 다른 위치를 사용하려면 실행 명령에 `--db /원하는/경로/mygantt.sqlite3`를 추가합니다.
 
-- Template scheduling uses finish-to-start dependencies: an initial successor starts on the next eligible day after every predecessor finishes. Later project edits preserve stored date ranges and apply the offset rule below.
-- The default **주 5일** calendar counts Monday–Friday and skips only Saturday and Sunday; **달력일** counts every day. Holiday labels never affect schedule calculations. The app refreshes countrywide Korean public-holiday dates from the [Nager.Date Community API](https://nagerholidays.com/api), whose documented coverage is the current year plus five future years. The source, last successful update, covered years, and stale/error state appear beside the Gantt legend. For 2026, refreshed provider data is combined with the verified [Korea Customs Service 2026 list](https://www.customs.go.kr/engportal/cm/cntnts/cntntsView.do?cntntsId=7401&mi=13284) and [Korea Astronomy and Space Science Institute 2026 calendar](https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2026); this preserves substitute dates missing from the community feed. The same checked snapshot remains available offline. For every other year, the app displays Nager.Date data alone and warns in the Gantt legend that substitute holidays may be missing; check an official calendar before relying on those dates. Nager.Date is community-maintained rather than a Korean government feed, so verify dates for payroll, legal or other authoritative use. Regional dates and memorial days may be excluded by the provider.
-- Durations are positive whole numbers. One week means five workdays in the workday calendar and seven days in the calendar-day setting. Finish dates are inclusive.
-- Template preview and batch creation derive dates from template durations, dependencies, selected start date and calendar. After creation, project task dates are authoritative and are edited directly; template duration edits never rewrite existing batches.
-- Cascade is opt-in for planned/actual date inputs and bar-edge resizing. Its reference is the later of the edited task's planned and actual finish, regardless of status. Every direct and indirect successor's planned start and finish shift by that reference's signed calendar-day difference, including weekends and completed tasks. A merge shifts once, preserving existing overlaps and spacing; actual records remain unchanged. A start-only edit or earlier-end edit with an unchanged reference does not shift successors. Invalid dates and cycles are rejected atomically.
-- Scheduling and bar resizing are day-granular. There are no working hours, resource leveling/capacity, external dependencies, whole-bar move, or milestones. The calendar-day mode counts every date; the workday mode skips weekends and does not skip holidays.
-- A status change alone does not invent or rewrite actual dates and cannot trigger an offset. The later planned/actual finish controls offsets regardless of status.
-- The task inspector shows one connection table with predecessor and successor checkbox columns. Either direction updates the same dependency graph atomically, preserving unrelated connections. Self-links, cross-project links and cycles are rejected before saving.
-
-## Local data and backup
-
-SQLite lives at `data/mygantt.sqlite3`. For a consistent manual backup, stop MyGantt and copy that file, for example:
+백업은 서버를 종료한 후 데이터 파일을 복사합니다.
 
 ```sh
 cp data/mygantt.sqlite3 data/mygantt-backup.sqlite3
 ```
 
-The app does not transmit schedules. Calendar export downloads a standard `.ics` snapshot that can be imported into Apple Calendar or Google Calendar. Editing that exported file in a calendar does not sync changes back. A provider-neutral adapter contract is in `mygantt/integrations/provider.py`; live Google/Apple sync, credentials, and account grants are not configured.
+공휴일 조회에는 외부 API를 사용하며, 프로젝트·작업 데이터는 조회 요청에 포함하지 않습니다. 설정의 국가 캘린더에서 한국·일본·미국·캐나다·영국·독일·프랑스·호주를 선택할 수 있습니다. 국가 선택은 같은 서버를 사용하는 기기에 공통 적용됩니다. 전국 공휴일을 표시하며 주·지역 한정 공휴일은 제외합니다. 새 프로젝트의 주 5일 일정은 선택한 국가의 공휴일과 주말을 제외하고, 달력일 설정은 모든 날짜를 계산합니다. 국가 변경으로 기존 작업 날짜가 바뀌지는 않습니다.
 
-## Tests
-
-Using only the Python standard library:
-
-```sh
-python3 -m unittest discover -s tests -v
-node --check web/app.js
-python3 -m compileall -q mygantt tests
-```
-
-Tests cover parallel branches, multi-predecessor joins, workday/calendar-day conventions, cycle and missing-edge rejection, completed actual dates, calendar export, the generic sample board graph, a completely different branching template, two isolated snapshots, template-color snapshots and overrides, repeat submissions, holiday parsing, cache refresh and offline fallback, API restart persistence, and local static serving.
-
-Holiday data is cached persistently in SQLite. A successful response is reused for seven days; failed requests keep the last cached year and retry after six hours. With no provider cache, only the 2026 verified snapshot can be shown offline. Requests to Nager.Date contain only `KR` and the requested year; no API key or account grant is used. This remains a display calendar rather than an authoritative payroll calendar.
-
-On first startup against an older SQLite file, MyGantt makes additive schema changes and creates a pre-migration backup before marking stored planned dates authoritative. It preserves project/task rows and actual dates. Legacy instance-duration columns may remain physically present in an older database for compatibility, but are no longer read, exposed by the API, or editable; fresh databases omit them. Migration tests verify preservation and backup behavior.
-
-## MVP limitations
-
-The current UI does not yet create one-off tasks inside an instantiated project, delete/archive projects, move an entire bar, support milestones or custom calendars, or provide live bidirectional calendar sync. Holiday-provider coverage is limited to its documented current-year-plus-five-year window, with an offline snapshot only for 2026. Gantt bars show day-level planned ranges; list view carries the more detailed handoff/blocker fields.
+기본 주소는 실행 중인 컴퓨터에서만 접속할 수 있습니다. 휴대폰 등 다른 기기에서 사용할 서버를 구성하려면 [Ubuntu 배포 안내](deploy/ubuntu/README.md)를 참고하세요.

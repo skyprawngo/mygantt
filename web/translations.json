@@ -1807,9 +1807,9 @@
   },
   {
     "textID": "settings.data_used_to_display_south_korean",
-    "KR": "대한민국 공휴일을 일정 달력에 표시하는 데 사용하는 자료입니다.",
-    "US": "Data used to display South Korean public holidays on the calendar.",
-    "JP": "韓国の祝日をスケジュールカレンダーに表示するためのデータです。"
+    "KR": "선택한 국가의 전국 공휴일을 표시합니다. 주·지역 한정 공휴일은 제외됩니다.",
+    "US": "Shows national public holidays for the selected country. State and regional holidays are excluded.",
+    "JP": "選択した国の全国共通の祝日を表示します。州・地域限定の祝日は含みません。"
   },
   {
     "textID": "settings.checking_public_holiday_data",
@@ -1819,9 +1819,9 @@
   },
   {
     "textID": "settings.new_projects_use_public_holiday_data",
-    "KR": "새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.",
-    "US": "New projects use public holiday data for 5-day scheduling. Existing task dates stay unchanged.",
-    "JP": "新しいプロジェクトの週5日の日程計算に祝日データを使用します。既存の作業日は維持されます。"
+    "KR": "국가 선택은 이 서버를 사용하는 모든 기기에 적용됩니다. 새 프로젝트의 주 5일 일정 계산에도 사용하며, 기존 작업 날짜는 유지됩니다.",
+    "US": "The country selection applies to all devices using this server and to new projects’ five-day schedules. Existing task dates are preserved.",
+    "JP": "国の選択はこのサーバーを使うすべての端末と新規プロジェクトの週5日の日程計算に適用されます。既存の作業日付は維持されます。"
   },
   {
     "textID": "help.chart_legend",
@@ -2452,5 +2452,131 @@
     "KR": "상위 디렉토리",
     "US": "Root directory",
     "JP": "ルートディレクトリ"
+  },
+  {
+    "textID": "template.color",
+    "KR": "템플릿 컬러",
+    "US": "Template color",
+    "JP": "テンプレートカラー"
+  },
+  {
+    "textID": "template.save",
+    "KR": "저장",
+    "US": "Save",
+    "JP": "保存"
+  },
+  {
+    "textID": "template.delete",
+    "KR": "삭제",
+    "US": "Delete",
+    "JP": "削除"
+  },
+  {
+    "textID": "template.delete_confirm",
+    "KR": "“{p0}” 템플릿을 삭제할까요? 이미 생성된 프로젝트는 유지됩니다.",
+    "US": "Delete template “{p0}”? Existing projects will be preserved.",
+    "JP": "テンプレート「{p0}」を削除しますか？作成済みのプロジェクトは保持されます。"
+  },
+  {
+    "textID": "calendar.country_label",
+    "KR": "국가 캘린더",
+    "US": "Country calendar",
+    "JP": "国のカレンダー"
+  },
+  {
+    "textID": "calendar.group.asia",
+    "KR": "아시아",
+    "US": "Asia",
+    "JP": "アジア"
+  },
+  {
+    "textID": "calendar.group.americas",
+    "KR": "아메리카",
+    "US": "Americas",
+    "JP": "アメリカ"
+  },
+  {
+    "textID": "calendar.group.europe",
+    "KR": "유럽",
+    "US": "Europe",
+    "JP": "ヨーロッパ"
+  },
+  {
+    "textID": "calendar.group.oceania",
+    "KR": "오세아니아",
+    "US": "Oceania",
+    "JP": "オセアニア"
+  },
+  {
+    "textID": "calendar.country.KR",
+    "KR": "대한민국",
+    "US": "South Korea",
+    "JP": "韓国"
+  },
+  {
+    "textID": "calendar.country.JP",
+    "KR": "일본",
+    "US": "Japan",
+    "JP": "日本"
+  },
+  {
+    "textID": "calendar.country.US",
+    "KR": "미국",
+    "US": "United States",
+    "JP": "米国"
+  },
+  {
+    "textID": "calendar.country.CA",
+    "KR": "캐나다",
+    "US": "Canada",
+    "JP": "カナダ"
+  },
+  {
+    "textID": "calendar.country.GB",
+    "KR": "영국",
+    "US": "United Kingdom",
+    "JP": "英国"
+  },
+  {
+    "textID": "calendar.country.DE",
+    "KR": "독일",
+    "US": "Germany",
+    "JP": "ドイツ"
+  },
+  {
+    "textID": "calendar.country.FR",
+    "KR": "프랑스",
+    "US": "France",
+    "JP": "フランス"
+  },
+  {
+    "textID": "calendar.country.AU",
+    "KR": "호주",
+    "US": "Australia",
+    "JP": "オーストラリア"
+  },
+  {
+    "textID": "calendar.unsupported_country",
+    "KR": "지원하지 않는 국가 캘린더입니다.",
+    "US": "Unsupported holiday calendar",
+    "JP": "対応していない国のカレンダーです。"
+  },
+  {
+    "textID": "task.save",
+    "KR": "작업 저장",
+    "US": "Save task",
+    "JP": "作業を保存"
+  },
+  {
+    "textID": "template.default_calendar",
+    "KR": "기본 일정 기준",
+    "US": "Default calendar",
+    "JP": "既定の日程基準"
+  },
+  {
+    "textID": "template.default_calendar_help",
+    "KR": "템플릿으로 프로젝트 추가 시 사용할 기본값입니다. 실제 일정 기준은 프로젝트 추가 창에서 변경할 수 있으며, 템플릿의 D+ 작업 배치는 바뀌지 않습니다.",
+    "US": "Sets the default in the project creation dialog. You can change the calendar there; the template’s D+ task positions stay unchanged.",
+    "JP": "テンプレートからプロジェクトを作成する際の既定値です。作成画面で変更でき、テンプレートのD+作業配置は変わりません。"
   }
 ]

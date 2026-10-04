@@ -31,8 +31,8 @@
       </a>
       <div class="workspace-label"><span data-i18n="navigation.workspace">워크스페이스</span> <span class="tiny-dot"></span></div>
       <nav class="primary-nav" aria-label="주 메뉴" data-i18n-attrs="aria-label:navigation.main_navigation">
-        <button class="nav-item active" data-view="timeline"><span class="nav-icon">▤</span> <span data-i18n="navigation.all_schedules">전체 일정</span> <span class="nav-count" id="project-count">0</span></button>
-        <button class="nav-item" data-view="templates"><span class="nav-icon">▦</span> <span data-i18n="navigation.schedule_templates">일정 템플릿</span></button>
+        <button class="nav-item active" data-view="timeline"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 3v18h17M8 6h7M8 11h12M12 16h8"/></svg></span> <span data-i18n="navigation.all_schedules">전체 일정</span> <span class="nav-count" id="project-count">0</span></button>
+        <button class="nav-item" data-view="templates"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"/></svg></span> <span data-i18n="navigation.schedule_templates">일정 템플릿</span></button>
         <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span> <span data-i18n="navigation.settings">설정</span></button>
       </nav>
       <section id="sidebar-project-section">
@@ -117,7 +117,8 @@
           </section>
           <section class="settings-card" aria-labelledby="holiday-info-title">
             <h2 id="holiday-info-title"><span data-i18n="settings.public_holiday_data">공휴일 자료</span></h2>
-            <p class="settings-description"><span data-i18n="settings.data_used_to_display_south_korean">대한민국 공휴일을 일정 달력에 표시하는 데 사용하는 자료입니다.</span></p>
+            <p class="settings-description"><span data-i18n="settings.data_used_to_display_south_korean">선택한 국가의 전국 공휴일을 표시합니다. 주·지역 한정 공휴일은 제외됩니다.</span></p>
+            <dl class="settings-details"><div><dt><label for="holiday-country-select" data-i18n="calendar.country_label">국가 캘린더</label></dt><dd><select id="holiday-country-select" class="select-input"></select></dd></div></dl>
             <div id="holiday-settings" aria-live="polite"><span data-i18n="settings.checking_public_holiday_data">공휴일 자료 확인 중</span></div>
             <p class="settings-note"><span data-i18n="settings.new_projects_use_public_holiday_data">새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.</span></p>
           </section>

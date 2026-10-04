@@ -1,0 +1,74 @@
+{
+  "name": "New schedule template",
+  "description": "Test Seed Project Template",
+  "project_color": "#b96749",
+  "calendar_type": "working",
+  "tasks": [
+    {
+      "key": "task_f7519031",
+      "name": "Task 1",
+      "duration_value": 7,
+      "duration_unit": "days",
+      "owner": "",
+      "handoff": "",
+      "sort_order": 0,
+      "color": "#5872d9",
+      "start_day": 1,
+      "dependencies": []
+    },
+    {
+      "key": "task_9bd811e3",
+      "name": "New task 2",
+      "duration_value": 5,
+      "duration_unit": "days",
+      "owner": "",
+      "handoff": "",
+      "sort_order": 1,
+      "color": "#b96749",
+      "start_day": 6,
+      "dependencies": [
+        "task_f7519031",
+        "task_7bed1618"
+      ]
+    },
+    {
+      "key": "task_7bed1618",
+      "name": "New task 3",
+      "duration_value": 4,
+      "duration_unit": "days",
+      "owner": "",
+      "handoff": "",
+      "sort_order": 2,
+      "color": "#27897f",
+      "start_day": 3,
+      "dependencies": []
+    },
+    {
+      "key": "task_61d32b2b",
+      "name": "New task 4",
+      "duration_value": 6,
+      "duration_unit": "days",
+      "owner": "",
+      "handoff": "",
+      "sort_order": 3,
+      "color": "#a45ca8",
+      "start_day": 11,
+      "dependencies": [
+        "task_9bd811e3",
+        "task_8603f5e5"
+      ]
+    },
+    {
+      "key": "task_8603f5e5",
+      "name": "New task 5",
+      "duration_value": 2,
+      "duration_unit": "days",
+      "owner": "",
+      "handoff": "",
+      "sort_order": 4,
+      "color": "#b48527",
+      "start_day": 8,
+      "dependencies": []
+    }
+  ]
+}

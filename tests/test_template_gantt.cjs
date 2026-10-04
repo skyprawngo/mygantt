@@ -15,16 +15,18 @@ test('relative schedule retains legacy dependencies and permits explicit overlap
 });
 test('body and endpoint drags save relative days; cancellation keeps original',()=>{
   for(const [edge,delta,expected] of [[undefined,2,[5,4]],['start',1,[4,3]],['end',2,[3,6]],['cancel',2,[3,4]]]){
+    let saves=0;
     const handlers={}; const task={key:'a',name:'A',start_day:3,duration_value:4,duration_unit:'days',dependencies:[]};
     const chart={addEventListener:(type,fn)=>handlers[type]=fn};
     const bar={dataset:{templateSelect:'a'},style:{},setPointerCapture(){}};
-    const c={state:{draft:{tasks:[task]}},$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''},renderTemplateEditor(){},renderTemplateGantt(){},renderTemplateConnections(){},syncDraftFromEditor(){},toast(){}};
+    const c={state:{draft:{tasks:[task]}},$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''},renderTemplateEditor(){},renderTemplateGantt(){},renderTemplateConnections(){},queueTemplateSave(){saves++;},syncDraftFromEditor(){},toast(){}};
     withI18n(vm.createContext(c));vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function attachTemplateDrag(', 'function renderTemplateEditor('),c);
     c.attachTemplateDrag();
     const event={button:0,isPrimary:true,pointerId:1,clientX:100,preventDefault(){},target:{closest:s=>s==='.template-bar'?bar:edge?{dataset:{templateEdge:edge}}:null}};
     handlers.pointerdown(event);handlers.pointermove({...event,clientX:100+46*delta});
     if(edge==='cancel')handlers.pointercancel();else handlers.pointerup(event);
     assert.deepEqual([task.start_day,task.duration_value],expected);
+    assert.equal(saves,edge==='cancel'?0:1);
   }
 });
 test('successor selection updates reverse dependency, removes it, and rejects cycles atomically',()=>{
@@ -76,4 +78,45 @@ test('invalid negative successor position rejects entire edit atomically',()=>{
   const before=JSON.stringify(tasks);
   assert.throws(()=>c.updateTemplateSchedule('a',{duration_value:1}),/D\+9999/);
   assert.equal(JSON.stringify(tasks),before);
+});
+
+test('template inspector shares schedule date grid and disables execution-only fields',()=>{
+  const c={esc:value=>String(value??''),taskColors:['#5872d9'],paletteStyle:()=>''};withI18n(vm.createContext(c));
+  vm.runInContext(block('function taskDateGrid(', 'function renderInspector(')+block('function templateTaskRow(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
+  const task={key:'a',name:'Template task',duration_value:2,duration_unit:'days',dependencies:[],handoff:'Keep this note'};
+  const html=c.templateTaskProperties(task,0,[task]);
+  assert.match(html,/class="task-date-grid"/);
+  assert.match(html,/template-start-day/);
+  assert.match(html,/template-end-day/);
+  assert.equal((html.match(/type="date"[^>]*disabled/g)||[]).length,2);
+  assert.match(html,/role="slider"[^>]*disabled/);
+  assert.match(html,/textarea[^>]*template-task-handoff[^>]*>Keep this note/);
+  assert.ok(html.indexOf('template-task-name') < html.indexOf('task-date-grid'));
+  assert.match(html,/inspector-actions/);
+});
+
+test('template scroll range starts at 45 days and grows by 15 only at the right edge',()=>{
+ const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:''};
+ const c={fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''}};
+ Object.defineProperty(chart,'scrollWidth',{get:()=>254+c.state.templateVisibleDays*46});
+ withI18n(vm.createContext(c));vm.runInContext(block('function renderTemplateGantt(', 'function renderTemplateConnections('),c);
+ c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);
+ chart.scrollLeft=100;chart.onscroll();assert.equal(c.state.templateVisibleDays,45);
+ chart.scrollLeft=chart.scrollWidth-chart.clientWidth;chart.onscroll();assert.equal(c.state.templateVisibleDays,60);
+ const preserved=chart.scrollLeft;chart.onscroll();assert.equal(c.state.templateVisibleDays,60);assert.equal(chart.scrollLeft,preserved);
+ chart.scrollLeft=chart.scrollWidth-chart.clientWidth;chart.onscroll();assert.equal(c.state.templateVisibleDays,75);
+ chart.scrollLeft=0;chart.onscroll();assert.equal(c.state.templateVisibleDays,75);
+ c.state.draft={name:'Other',tasks:[]};c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);
+});
+
+test('template day headers progressively remove D and plus to fit their own cells',()=>{
+ const text={textContent:''};let selected;
+ const c={templateDayLabel:d=>d===1?'D':`D+${d-1}`,document:{createRange:()=>({selectNodeContents:el=>selected=el,getBoundingClientRect:()=>({width:selected.textContent.length*6})})}};
+ vm.createContext(c);vm.runInContext(block('function fitTemplateDayLabels(', 'function renderTemplateGantt('),c);
+ for(const [width,expected] of [[30,'D+20'],[20,'+20'],[12,'20']]){
+   c.fitTemplateDayLabels({querySelectorAll:()=>[{dataset:{day:'21'},clientWidth:width,querySelector:()=>text}]});
+   assert.equal(text.textContent,expected);
+ }
+ c.fitTemplateDayLabels({querySelectorAll:()=>[{dataset:{day:'1'},clientWidth:12,querySelector:()=>text}]});
+ assert.equal(text.textContent,'D');
 });

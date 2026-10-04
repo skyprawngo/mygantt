@@ -98,6 +98,59 @@ class HolidayCalendarTests(unittest.TestCase):
     self.assertEqual(result["unsupported_years"], [2032])
     self.assertEqual(calls, [])
 
+  def test_country_caches_are_isolated_and_selection_persists(self):
+    calls = []
+    def fetch(year, country="KR"):
+      calls.append((country, year))
+      return [{"date": f"{year}-07-04", "name": country}]
+    db = Database(self.path, holiday_fetcher=fetch, seed_samples=False)
+    kr = db.holidays("2026-01-01", "2026-12-31", now=self.now)
+    db.set_holiday_country("US")
+    us = db.holidays("2026-01-01", "2026-12-31", now=self.now)
+    self.assertEqual(us["region"], "US")
+    self.assertEqual(us["holidays"], [{"date":"2026-07-04", "name":"US"}])
+    self.assertNotIn(FALLBACK_SOURCE, us["source"])
+    self.assertGreater(len(kr["holidays"]), 1)
+    restarted = Database(self.path, holiday_fetcher=fetch, seed_samples=False)
+    self.assertEqual(restarted.holiday_country(), "US")
+    restarted.holidays("2026-01-01", "2026-12-31", now=self.now)
+    self.assertEqual(calls, [("KR",2026),("US",2026)])
+    with self.assertRaises(ValueError): db.set_holiday_country("INVALID")
+    self.assertEqual(db.holiday_country(), "US")
+
+  def test_foreign_failure_never_uses_korean_fallback(self):
+    def offline(year, country="KR"): raise OSError("offline")
+    db = Database(self.path, holiday_fetcher=offline, seed_samples=False)
+    result = db.holidays("2026-01-01", "2026-12-31", country="JP", now=self.now)
+    self.assertEqual(result["status"], "unavailable")
+    self.assertEqual(result["holidays"], [])
+    self.assertNotIn(FALLBACK_SOURCE, result["source"])
+
+  def test_old_cache_migrates_without_losing_dates(self):
+    import sqlite3
+    with sqlite3.connect(self.path) as conn:
+      conn.execute("CREATE TABLE holiday_cache (year INTEGER PRIMARY KEY, source TEXT NOT NULL, source_url TEXT, attempted_at TEXT, last_success_at TEXT, last_error TEXT, holidays_json TEXT)")
+      conn.execute("INSERT INTO holiday_cache VALUES (2027,'old','url','','','','[]')")
+    db = Database(self.path, seed_samples=False)
+    with db.connection() as conn:
+      row = conn.execute("SELECT * FROM holiday_cache WHERE year=2027").fetchone()
+      self.assertEqual(row["country"], "KR")
+      self.assertEqual(row["source"], "old")
+
+  def test_new_schedule_uses_selected_country_without_editing_existing_projects(self):
+    db = Database(self.path, holiday_fetcher=lambda year, country="KR": [{"date":f"{year}-10-05", "name":"Test holiday"}] if country=="US" else [], seed_samples=False)
+    db.set_holiday_country("US")
+    tasks = [{"id":"a", "key":"a", "name":"A", "duration_value":1, "duration_unit":"days", "dependencies":[]}]
+    result = db.schedule_template(tasks,"2026-10-05","working")
+    self.assertEqual(result[0]["planned_start"], "2026-10-06")
+
+  def test_foreign_names_and_national_filter(self):
+    result = normalize_provider_year(2026, [
+      {"date":"2026-01-01", "countryCode":"US", "name":"New Year's Day", "holidayTypes":["Public"]},
+      {"date":"2026-01-02", "countryCode":"US", "name":"Regional", "nationalHoliday":False, "holidayTypes":["Public"]},
+    ], "US")
+    self.assertEqual(result, [{"date":"2026-01-01", "name":"New Year's Day"}])
+
 
 if __name__ == "__main__":
   unittest.main()

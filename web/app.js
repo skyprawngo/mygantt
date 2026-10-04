@@ -101,14 +101,15 @@ async function api(path, options = {}) {
 }
 async function loadState() {
   state.data = await api('/api/state');
+  if (!state.holidayCalendars) state.holidayCalendars = (await api('/api/holiday-calendars')).calendars;
   timelineReferenceTime = new Date();
   const dates = state.data.projects.flatMap((project) => project.tasks.flatMap((task) => [task.planned_start, task.planned_finish])).filter(Boolean).sort();
   const start = dates[0] && dates[0] < todayInput() ? dates[0] : todayInput();
   const end = dates.at(-1) && dates.at(-1) > todayInput() ? dates.at(-1) : todayInput();
   try {
-    state.holidayData = await api(`/api/holidays?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`);
+    state.holidayData = await api(`/api/holidays?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&country=${encodeURIComponent(state.data.holiday_country || 'KR')}`);
   } catch (error) {
-    state.holidayData = { region: 'KR', source_label: 'Nager.Date Community API v4', status: 'unavailable', last_updated: null, coverage_years: [], holidays: [], last_error: error.message };
+    state.holidayData = { region: state.data.holiday_country || 'KR', source_label: 'Nager.Date Community API v4', status: 'unavailable', last_updated: null, coverage_years: [], holidays: [], last_error: error.message };
   }
   if (!state.selectedTemplateId && state.data.templates.length) state.selectedTemplateId = state.data.templates[0].id;
   if (state.selectedTemplateId && !state.data.templates.some((t) => t.id === state.selectedTemplateId)) state.selectedTemplateId = state.data.templates[0]?.id || null;
@@ -168,9 +169,10 @@ function renderSidebar() {
   $('#sidebar-template-section').classList.toggle('hidden', state.view !== 'templates');
   $('#project-count').textContent = state.data.projects.filter(project => !project.is_unassigned).length;
   $('#sidebar-projects').innerHTML = state.data.projects.map((project) => `
-    <div class="side-project-row"><button class="side-project ${state.selection?.type === 'project' && state.selection.id === project.id ? 'selected' : ''}" data-project="${esc(project.id)}" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">
+    <div class="side-project-swipe" data-swipe-project="${esc(project.id)}"><div class="side-project-row"><button class="side-project ${state.selection?.type === 'project' && state.selection.id === project.id ? 'selected' : ''}" data-project="${esc(project.id)}" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">
       <i style="background:${colorPalette(project.color).base}"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span>
-    </button><button type="button" class="project-visibility" data-visibility-project="${esc(project.id)}" aria-pressed="${!state.hiddenProjects.has(project.id)}" aria-label="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}" title="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${state.hiddenProjects.has(project.id) ? '<path d="M3 3 21 21"/>' : ''}</svg></button><span class="side-progress">${project.progress}%</span></div>`).join('');
+    </button><button type="button" class="project-visibility" data-visibility-project="${esc(project.id)}" aria-pressed="${!state.hiddenProjects.has(project.id)}" aria-label="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}" title="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${state.hiddenProjects.has(project.id) ? '<path d="M3 3 21 21"/>' : ''}</svg></button><span class="side-progress">${project.progress}%</span></div>${project.is_unassigned ? '' : `<button type="button" class="side-project-delete" tabindex="-1" aria-hidden="true" aria-label="${esc(project.name)} ${t("project.delete")}">${t("template.delete")}</button>`}</div>`).join('');
+  bindSidebarProjectSwipe();
   $$('.project-visibility').forEach(button => button.addEventListener('click', () => {
     const id = button.dataset.visibilityProject;
     if (state.hiddenProjects.has(id)) state.hiddenProjects.delete(id);
@@ -186,6 +188,66 @@ function renderSidebar() {
     switchView('timeline');
     selectItem('project', projectId);
   }));
+}
+function bindSidebarProjectSwipe() {
+  const shells = $$('.side-project-swipe');
+  const setOpen = (shell, open) => {
+    shell.classList.toggle('swipe-open',open);
+    shell.style.removeProperty('--swipe-offset');
+    const button=$('.side-project-delete',shell);
+    if (button) { button.tabIndex=open?0:-1; button.setAttribute('aria-hidden',String(!open)); }
+  };
+  for (const shell of shells) {
+    const remove=$('.side-project-delete',shell);
+    if (!remove) continue;
+    let drag=null, suppressClick=false;
+    shell.addEventListener('pointerdown',event=>{
+      suppressClick=false;
+      if (event.button!==0 || !event.isPrimary || event.target.closest('.side-project-delete')) return;
+      drag={id:event.pointerId,x:event.clientX,y:event.clientY,open:shell.classList.contains('swipe-open'),horizontal:false,offset:0};
+    });
+    shell.addEventListener('pointermove',event=>{
+      if (!drag || event.pointerId!==drag.id) return;
+      const dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+      if (!drag.horizontal) {
+        if (Math.abs(dy)>8 && Math.abs(dy)>Math.abs(dx)) {drag=null;return;}
+        if (Math.abs(dx)<8 || Math.abs(dx)<=Math.abs(dy)) return;
+        drag.horizontal=true; suppressClick=true;
+        shells.forEach(other=>{if(other!==shell)setOpen(other,false);});
+        shell.setPointerCapture(event.pointerId);
+        shell.classList.add('swipe-dragging');
+      }
+      event.preventDefault();
+      drag.offset=Math.max(-64,Math.min(0,(drag.open?-64:0)+dx));
+      shell.style.setProperty('--swipe-offset',`${drag.offset}px`);
+    });
+    const finish=(event,cancelled=false)=>{
+      if (!drag || event.pointerId!==drag.id) return;
+      const current=drag;drag=null;shell.classList.remove('swipe-dragging');
+      if(current.horizontal)setOpen(shell,cancelled?current.open:current.offset<=-24);
+    };
+    shell.addEventListener('pointerup',event=>finish(event));
+    shell.addEventListener('pointercancel',event=>finish(event,true));
+    shell.addEventListener('click',event=>{
+      if(suppressClick){event.preventDefault();event.stopImmediatePropagation();suppressClick=false;return;}
+      if(shell.classList.contains('swipe-open')&&!event.target.closest('.side-project-delete')){setOpen(shell,false);event.preventDefault();event.stopImmediatePropagation();}
+    },true);
+    shell.addEventListener('keydown',event=>{
+      if(event.key==='ArrowLeft'){event.preventDefault();shells.forEach(other=>setOpen(other,other===shell));remove.focus();}
+      if(event.key==='Escape'||event.key==='ArrowRight'){setOpen(shell,false);$('.side-project',shell)?.focus();}
+    });
+    let wheelOffset=0;
+    shell.addEventListener('wheel',event=>{
+      if(Math.abs(event.deltaX)<=Math.abs(event.deltaY))return;
+      event.preventDefault();wheelOffset+=event.deltaX;
+      if(wheelOffset>24){shells.forEach(other=>setOpen(other,other===shell));wheelOffset=0;}
+      else if(wheelOffset < -24){setOpen(shell,false);wheelOffset=0;}
+    },{passive:false});
+    remove.addEventListener('click',()=>{
+      const project=state.data.projects.find(item=>item.id===shell.dataset.swipeProject);
+      if(project)deleteInspectorItem('projects',project.id,project.name);
+    });
+  }
 }
 function filteredProjects() {
   let projects = state.data.projects.filter(project => !state.hiddenProjects?.has(project.id));
@@ -213,7 +275,7 @@ function dateColumns(start, days, perDay) {
     const current = new Date(first);
     current.setDate(first.getDate() + index);
     const key = dateKey(current);
-    const holiday = I18n.systemText(state.holidays[key], 'holiday.');
+    const holiday = (state.holidayData?.region || 'KR') === 'KR' ? I18n.systemText(state.holidays[key], 'holiday.') : state.holidays[key];
     const isWeekend = current.getDay() === 0 || current.getDay() === 6;
     const today = key === dateKey(timelineReferenceTime);
     const dateText = current.getDate() === 1 || index === 0 ? `${current.getMonth() + 1}.${current.getDate()}` : String(current.getDate());
@@ -227,7 +289,7 @@ function renderHolidayStatus() {
   const source = (holidayData.source_label || holidayData.source || 'Nager.Date Community API v4').split(' + ').map(part => I18n.systemText(part,'source.')).join(' + ');
   const updated = holidayData.last_updated ? holidayData.last_updated.slice(0, 10) : t("calendar.no_update_recorded");
   const years = holidayData.coverage_years || [];
-  const unverifiedSubstituteYears = (holidayData.requested_years || years).filter((year) => Number(year) !== 2026);
+  const unverifiedSubstituteYears = (holidayData.region || 'KR') === 'KR' ? (holidayData.requested_years || years).filter((year) => Number(year) !== 2026) : [];
   const coverage = years.length ? years.join(', ') : t("calendar.no_data_supported", {p0:holidayData.supported_years?.from || t("calendar.current"),p1:holidayData.supported_years?.through || t("calendar.current_5_years")});
   const freshness = holidayData.status === 'fresh' ? t("calendar.up_to_date") : holidayData.status === 'stale' ? (holidayData.last_error ? t("calendar.update_failed_showing_saved_data") : t("calendar.showing_saved_data")) : t("calendar.no_data");
   node.innerHTML = `<dl class="settings-details"><div><dt>${t("calendar.source")}</dt><dd>${esc(source)}</dd></div><div><dt>${t("calendar.last_updated")}</dt><dd>${esc(updated)}</dd></div><div><dt>${t("calendar.coverage")}</dt><dd>${esc(coverage)}</dd></div><div><dt>${t("calendar.status")}</dt><dd><span class="holiday-freshness">${esc(freshness)}</span></dd></div></dl>`;
@@ -241,6 +303,14 @@ function renderHolidayStatus() {
 }
 function renderSettings() {
   $('#app-version').textContent = state.appVersion || t("calendar.version_unavailable");
+  const select = $('#holiday-country-select');
+  const groups = new Map();
+  for (const calendar of state.holidayCalendars || []) {
+    if (!groups.has(calendar.group)) groups.set(calendar.group, []);
+    groups.get(calendar.group).push(calendar);
+  }
+  select.innerHTML = [...groups].map(([group, calendars]) => `<optgroup label="${esc(t('calendar.group.'+group))}">${calendars.map(calendar => `<option value="${esc(calendar.country)}">${esc(t(calendar.textID))}</option>`).join('')}</optgroup>`).join('');
+  select.value = state.data.holiday_country || 'KR';
   renderHolidayStatus();
 }
 function projectBounds(projects) {
@@ -650,9 +720,10 @@ function addTemplateTask() {
   syncDraftFromEditor();
   const draft = state.draft;
   draft.tasks.push({ key: `task_${crypto.randomUUID().slice(0,8)}`, name: t("timeline.new_task", {p0:draft.tasks.length+1}), duration_value:1, duration_unit:'days', dependencies:[], owner:'', handoff:'', color:taskColors[draft.tasks.length % taskColors.length], sort_order:draft.tasks.length });
-  state.templateTaskKey=draft.tasks.at(-1).key;
+  state.templateTaskKey=draft.tasks.at(-1).key; state.templateTaskCollapsed=false;
   state.preview=null;
   renderTemplateEditor();
+  queueTemplateSave();
   $('.template-task-name')?.focus();
 }
 function openAddProjectTask() {
@@ -855,6 +926,13 @@ function renderTimeline({ preserveInspector = false } = {}) {
   $$('.list-task-row', $('#list-wrap')).forEach((row) => row.addEventListener('click', () => selectItem('task', row.dataset.task)));
 }
 
+function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish) {
+  return `<table class="task-date-grid" aria-label="${t("inspector.task_schedule")}"><colgroup><col class="date-row-label"><col><col></colgroup>
+    <thead><tr><th scope="col">${t("inspector.dates")}</th><th scope="col">${t("inspector.start_date")}</th><th scope="col">${t("inspector.finish_date")}</th></tr></thead>
+    <tbody><tr><th scope="row">${t("inspector.planned_dates")}</th><td>${plannedStart}</td><td>${plannedFinish}</td></tr>
+    <tr><th scope="row">${t("inspector.actual_dates")}</th><td>${actualStart}</td><td>${actualFinish}</td></tr></tbody></table>`;
+}
+
 function renderInspector() {
   const project = state.data.projects.find((item) => item.id === (state.selection?.type === 'project' ? state.selection.id : state.data.projects.find((p) => p.tasks.some((task) => task.id === state.selection?.id))?.id));
   const task = project?.tasks.find((item) => item.id === state.selection?.id && state.selection?.type === 'task');
@@ -896,11 +974,7 @@ function renderInspector() {
         <div class="property-grid">
         <label class="inspector-field"><span>${t("timeline.task_name")}</span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required></label>
         <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code></div></div>
-        <table class="task-date-grid" aria-label="${t("inspector.task_schedule")}"><colgroup><col class="date-row-label"><col><col></colgroup>
-          <thead><tr><th scope="col">${t("inspector.dates")}</th><th scope="col">${t("inspector.start_date")}</th><th scope="col">${t("inspector.finish_date")}</th></tr></thead>
-          <tbody><tr><th scope="row">${t("inspector.planned_dates")}</th><td><input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required></td><td><input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required></td></tr>
-          <tr><th scope="row">${t("inspector.actual_dates")}</th><td><input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}"></td><td><input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}"></td></tr></tbody>
-        </table>
+        ${taskDateGrid(`<input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required>`, `<input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required>`, `<input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}">`, `<input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}">`)}
         <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.e_g_outsourced_work")}"></label>
         <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="${t("inspector.e_g_inspection_waiting")}"></label>
         <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.department_or_vendor")}"></label>
@@ -1334,17 +1408,20 @@ function normalizedTemplate(template) {
   const idToKey = Object.fromEntries(template.tasks.map((task) => [task.id, task.key]));
   return { ...template, tasks: template.tasks.map((task) => ({ ...task, dependencies: task.dependencies.map((id) => idToKey[id] || id) })) };
 }
-function renderTemplates() {
+function renderTemplateList() {
   const templates = state.data.templates;
   $('#template-count').textContent = templates.length;
-  $('#template-list').innerHTML = templates.map((template) => `<div class="template-card ${template.id === state.selectedTemplateId ? 'selected' : ''}" data-template="${esc(template.id)}"><b>${esc(template.name)}</b><span>${template.tasks.length}${t("task.tasks")} ${(template.description || t("task.no_description")).slice(0, 36)}</span></div>`).join('');
+  $('#template-list').innerHTML = templates.map((template) => `<div class="template-card ${template.id === state.selectedTemplateId ? 'selected' : ''}" data-template="${esc(template.id)}"><b class="template-name-with-color"><i class="template-color-dot" aria-hidden="true" style="background:${colorPalette(template.project_color || projectColors[0]).base}"></i>${esc(template.name)}</b><span>${template.tasks.length}${t("task.tasks")} ${(template.description || t("task.no_description")).slice(0, 36)}</span></div>`).join('');
   $$('.template-card').forEach((card) => card.addEventListener('click', () => {
     state.selectedTemplateId = card.dataset.template;
     state.draft = normalizedTemplate(templates.find((item) => item.id === state.selectedTemplateId));
     state.preview = null;
     renderTemplates();
   }));
-  const selected = templates.find((template) => template.id === state.selectedTemplateId);
+}
+function renderTemplates() {
+  renderTemplateList();
+  const selected = state.data.templates.find((template) => template.id === state.selectedTemplateId);
   if (!state.draft && selected) state.draft = normalizedTemplate(selected);
   renderTemplateEditor();
 }
@@ -1372,12 +1449,12 @@ function templateSchedule(tasks, calendar = 'working') {
 // Materialize implicit positions so an unchecked edit cannot move successors indirectly.
 function updateTemplateSchedule(taskKey, fields) {
   const tasks = state.draft.tasks;
-  const before = templateSchedule(tasks, state.templateCalendar);
+  const before = templateSchedule(tasks);
   const original = before.find(row => row.task.key === taskKey);
   const candidate = tasks.map(task => ({...task}));
   const edited = candidate.find(task => task.key === taskKey);
   Object.assign(edited, fields);
-  const after = templateSchedule(candidate, state.templateCalendar).find(row => row.task.key === taskKey);
+  const after = templateSchedule(candidate).find(row => row.task.key === taskKey);
   const offset = state.cascadeDependents ? after.end - original.end : 0;
   const reachable = new Set([taskKey]);
   for (const key of reachable) {
@@ -1391,28 +1468,57 @@ function updateTemplateSchedule(taskKey, fields) {
   if (candidate.some(task => task.start_day != null && (!Number.isInteger(task.start_day) || task.start_day < 1 || task.start_day > 10000))) {
     throw new Error(t("task.start_dates_including_successors_must_be"));
   }
-  templateSchedule(candidate, state.templateCalendar);
+  templateSchedule(candidate);
   candidate.forEach((task, index) => Object.assign(tasks[index], task));
 }
 // Stored template days remain one-based for compatibility; the UI starts at D.
 function templateDayLabel(day) { return day === 1 ? 'D' : t("template.d", {p0:day - 1}); }
+function fitTemplateDayLabels(chart) {
+  for (const cell of chart.querySelectorAll('.template-day')) {
+    const text = cell.querySelector('span');
+    const day = Number(cell.dataset.day);
+    const full = templateDayLabel(day);
+    const candidates = day === 1 ? [full] : [full, `+${day-1}`, String(day-1)];
+    const range = document.createRange();
+    for (const candidate of candidates) {
+      text.textContent = candidate;
+      range.selectNodeContents(text);
+      if (range.getBoundingClientRect().width <= cell.clientWidth) break;
+    }
+  }
+}
 function renderTemplateGantt() {
   const chart = $('#template-gantt');
   if (!chart) return;
   let rows;
-  try { rows = templateSchedule(state.draft.tasks, state.templateCalendar); }
+  try { rows = templateSchedule(state.draft.tasks); }
   catch (error) { chart.innerHTML = `<p class="preview-error">${esc(error.message)}</p>`; return; }
-  const px = state.templateZoom || 46, label = 254, days = Math.max(21, ...rows.map(r => r.end + 5));
+  if (state.templateRangeDraft !== state.draft) {
+    state.templateRangeDraft = state.draft;
+    state.templateVisibleDays = 45;
+  }
+  const requiredDays = Math.max(45, ...rows.map(row => row.end));
+  state.templateVisibleDays = Math.max(state.templateVisibleDays, 45 + Math.ceil((requiredDays - 45) / 15) * 15);
+  const px = state.templateZoom || 46, label = 254, days = state.templateVisibleDays;
   const projectStart = rows.length ? Math.min(...rows.map(r => r.start)) : 1;
   const projectEnd = Math.max(1, ...rows.map(r => r.end));
   const projectRow = `<div class="gantt-row project-row ${state.templateTaskKey === '__project__' ? 'selected-row' : ''}"><div class="gantt-left project-left"><button class="project-select" data-template-project aria-pressed="${state.templateTaskKey === '__project__'}"><i class="group-dot" style="background:${colorPalette(state.draft.project_color || projectColors[0]).base}"></i><span class="project-name">${esc(state.draft.name || t("template.new_project"))}</span><span class="project-meta">${rows.length}${t("template.tasks")}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="project-summary-bar" data-template-project style="left:${(projectStart-1)*px}px;width:${(projectEnd-projectStart+1)*px}px;${paletteStyle(state.draft.project_color || projectColors[0], 'bar')}"><span>${templateDayLabel(projectStart)}–${templateDayLabel(projectEnd)}</span></button></div></div>`;
   const scroll = chart.scrollLeft, scrollTop = chart.scrollTop;
-  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left">${t("timeline.project_task")}</div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day">${templateDayLabel(i+1)}</div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left">${t("timeline.project_task")}</div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day" data-day="${i+1}" title="${esc(templateDayLabel(i+1))}" aria-label="${esc(templateDayLabel(i+1))}"><span>${templateDayLabel(i+1)}</span></div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" draggable="true" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  fitTemplateDayLabels(chart);
   $('#add-template-task').addEventListener('click', addTemplateTask);
   renderTemplateConnections();
   $('#template-range').textContent = `${templateDayLabel(projectStart)} — ${templateDayLabel(projectEnd)}`;
   chart.scrollLeft = scroll;
   chart.scrollTop = scrollTop;
+  let previousLeft = scroll;
+  chart.onscroll = () => {
+    const movedRight = chart.scrollLeft > previousLeft;
+    previousLeft = chart.scrollLeft;
+    if (!movedRight || chart.scrollLeft + chart.clientWidth < chart.scrollWidth - 2) return;
+    state.templateVisibleDays += 15;
+    renderTemplateGantt();
+  };
   for (const row of rows) {
     const fields = $(`[data-template-days="${CSS.escape(row.task.key)}"]`);
     if (fields) { $('.template-start-day', fields).value=row.start-1; $('.template-end-day', fields).value=row.end-1; }
@@ -1426,20 +1532,20 @@ function attachTemplateDrag() {
   let drag = null, suppressClick = false;
   chart.addEventListener('click', event => {
     if (suppressClick) { suppressClick=false; return; }
-    if (event.target.closest('[data-template-project]')) { syncDraftFromEditor(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); return; }
+    if (event.target.closest('[data-template-project]')) { syncDraftFromEditor(); queueTemplateSave(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); return; }
     const button = event.target.closest('[data-template-select],.dependency-link[data-task-select]');
     if (!button) return;
-    syncDraftFromEditor(); state.templateTaskKey=button.dataset.templateSelect || button.dataset.taskSelect; renderTemplateEditor();
+    syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=button.dataset.templateSelect || button.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor();
   });
   chart.addEventListener('keydown', event => {
     if (!['Enter', ' '].includes(event.key) || !event.target.matches('.dependency-link')) return;
-    event.preventDefault(); syncDraftFromEditor(); state.templateTaskKey=event.target.dataset.taskSelect; renderTemplateEditor();
+    event.preventDefault(); syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=event.target.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor();
   });
   chart.addEventListener('pointerdown', event => {
     const bar=event.target.closest('.template-bar');
     if (!bar || event.button!==0 || !event.isPrimary) return;
     event.preventDefault();
-    const row=templateSchedule(state.draft.tasks,state.templateCalendar).find(r=>r.task.key===bar.dataset.templateSelect);
+    const row=templateSchedule(state.draft.tasks).find(r=>r.task.key===bar.dataset.templateSelect);
     drag={...row,bar,x:event.clientX,id:event.pointerId,edge:event.target.closest('[data-template-edge]')?.dataset.templateEdge,delta:0};
     bar.setPointerCapture(event.pointerId);
   });
@@ -1461,14 +1567,43 @@ function attachTemplateDrag() {
       try {
         updateTemplateSchedule(current.task.key, {start_day:current.preview.start, duration_value:current.preview.end-current.preview.start+1, duration_unit:'days'});
       } catch (error) { toast(error.message); renderTemplateGantt(); return; }
-      state.templateTaskKey=current.task.key; suppressClick=true;
+      state.templateTaskKey=current.task.key; state.templateTaskCollapsed=false; suppressClick=true;
       renderTemplateEditor();
+      queueTemplateSave();
     }
   });
   chart.addEventListener('pointercancel', () => { drag=null; renderTemplateGantt(); });
 }
+function bindTemplateReordering() {
+  const chart = $('#template-gantt');
+  let sourceKey = null;
+  chart.addEventListener('dragstart', event => {
+    sourceKey = event.target.closest('.task-label[data-template-select]')?.dataset.templateSelect || null;
+    if (sourceKey) { event.dataTransfer.effectAllowed='move'; event.dataTransfer.setData('text/plain',sourceKey); }
+  });
+  chart.addEventListener('dragover', event => {
+    if (sourceKey && event.target.closest('.task-label[data-template-select]')) { event.preventDefault(); event.dataTransfer.dropEffect='move'; }
+  });
+  chart.addEventListener('drop', event => {
+    const target=event.target.closest('.task-label[data-template-select]');
+    if (!sourceKey || !target) return;
+    event.preventDefault();
+    const key=sourceKey; sourceKey=null;
+    if (key===target.dataset.templateSelect) return;
+    syncDraftFromEditor();
+    const tasks=state.draft.tasks, from=tasks.findIndex(task=>task.key===key);
+    if (from<0) return;
+    const [task]=tasks.splice(from,1), at=tasks.findIndex(task=>task.key===target.dataset.templateSelect);
+    const rect=target.getBoundingClientRect();
+    tasks.splice(at+(event.clientY>rect.top+rect.height/2?1:0),0,task);
+    tasks.forEach((item,index)=>{item.sort_order=index;});
+    state.templateTaskKey=key; state.templateTaskCollapsed=false;
+    renderTemplateEditor(); queueTemplateSave();
+  });
+  chart.addEventListener('dragend',()=>{sourceKey=null;});
+}
 function templateTaskProperties(task, index, tasks) {
-  return `<section class="template-properties-card property-grid"><div class="template-day-fields" data-template-days="${esc(task.key)}"><label class="inspector-field"><span>${t("template.start_d")}</span><input class="text-input template-start-day" type="number" min="0" max="9999" required></label><label class="inspector-field"><span>${t("template.finish_d")}</span><input class="text-input template-end-day" type="number" min="0" required></label><button class="button button-small template-auto-days">${t("template.auto_schedule_from_predecessors")}</button></div>${templateTaskRow(task,index,tasks)}</section>`;
+  return `<section class="template-properties-card inspector-form"><div class="property-grid" data-template-days="${esc(task.key)}">${templateTaskRow(task,index,tasks)}</div><div class="inspector-actions"><button class="button delete-button remove-task" data-index="${index}" type="button">${t("task.delete")}</button><button id="save-template-task" class="button save-button" type="button">${t("task.save")}</button></div></section>`;
 }
 function attachTemplateDayFields() {
   $$('[data-template-days]').forEach(fields => {
@@ -1483,7 +1618,7 @@ function attachTemplateDayFields() {
       const card=fields.closest('.template-properties-card');
       $('.template-task-duration',card).value=task.duration_value;$('.template-task-unit',card).value='days';renderTemplateGantt();
     });
-    $('.template-auto-days',fields).addEventListener('click',()=>{try { updateTemplateSchedule(task.key,{start_day:null}); } catch(error) { toast(error.message); } renderTemplateEditor();});
+    $('.template-auto-days',fields).addEventListener('click',()=>{try { updateTemplateSchedule(task.key,{start_day:null}); } catch(error) { toast(error.message); } renderTemplateEditor(); queueTemplateSave();});
   });
 }
 
@@ -1515,31 +1650,33 @@ function renderTemplateEditorContent() {
   const selectedTask = draft.tasks.find(t => t.key === state.templateTaskKey) || draft.tasks[0];
   const projectSelected = state.templateTaskKey === '__project__' || !selectedTask;
   const projectOpen = projectSelected && !state.templateProjectCollapsed;
-  const taskOpen = !projectSelected;
+  const taskOpen = !projectSelected && !state.templateTaskCollapsed;
   if (!projectSelected) state.templateTaskKey = selectedTask.key;
   $('#template-editor').innerHTML = `
     <div class="timeline-layout">
       <div class="timeline-main"><div class="schedule-card">
-        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="${t("template.template_title")}" value="${esc(draft.name)}" placeholder="${t("template.template_title")}"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">${t("template.move_successors")}</span><span class="cascade-label-short">${t("template.successors")}</span></label><label class="template-calendar-label">${t("template.calendar")} <select id="template-calendar" class="select-control"><option value="working">${t("template.5_day_week")}</option><option value="calendar">${t("inspector.7_day_week")}</option></select></label><label class="zoom-slider-control">${t("template.zoom")} <input id="template-zoom" type="range" min="24" max="62" value="${state.templateZoom || 46}" aria-label="${t("template.template_zoom")}"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><button id="save-template" class="button button-primary">${t("template.save_template")}</button><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_chart_legend")}" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>${t("timeline.predecessor_successor_legend")}</b><br>${t("template.connections_lead_from_predecessors_to_successors")}<br><br>${t("template.d_is_the_project_s_first")}</span></span></div></div>
+        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="${t("template.template_title")}" value="${esc(draft.name)}" placeholder="${t("template.template_title")}"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">${t("template.move_successors")}</span><span class="cascade-label-short">${t("template.successors")}</span></label><label class="zoom-slider-control">${t("template.zoom")} <input id="template-zoom" type="range" min="12" max="62" value="${state.templateZoom || 46}" aria-label="${t("template.template_zoom")}"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_chart_legend")}" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>${t("timeline.predecessor_successor_legend")}</b><br>${t("template.connections_lead_from_predecessors_to_successors")}<br><br>${t("template.d_is_the_project_s_first")}</span></span></div></div>
         <div class="schedule-legend"><span>${t("timeline.predecessor_successor_legend")}</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
-      <aside class="inspector" aria-label="${t("template.template_properties")}"><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span class="inspector-state">${t("template.template_save_after_editing")}</span></div>
-        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.project_properties")}</span><small>${esc(draft.name)}</small></button><div class="inspector-content property-grid ${projectOpen?'':'hidden'}">
+      <aside class="inspector" aria-label="${t("template.template_properties")}"><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span></div>
+        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.template_properties")}</span><small>${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
           <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
-          <label class="inspector-field"><span>${t("template.description")}</span><input id="template-description" class="text-input" value="${esc(draft.description || '')}"></label>
-          <div class="inspector-field"><span>${t("inspector.project_color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.default_template_project_color")}"><code>${esc(draft.project_color || projectColors[0])}</code></div></div>
-        </div></section>
+          <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code></div></div>
+          <label class="inspector-field"><span>${t("inspector.start_date")}</span><input class="text-input" value="D+0" disabled></label>
+          <label class="inspector-field"><span>${t("template.default_calendar")} ${formInfo("template-default-calendar-help", t("template.default_calendar"), t("template.default_calendar_help"))}</span><select id="template-inspector-calendar" class="select-input"><option value="working" ${draft.calendar_type !== 'calendar' ? 'selected' : ''}>${t("inspector.5_day_week_mon_fri")}</option><option value="calendar" ${draft.calendar_type === 'calendar' ? 'selected' : ''}>${t("inspector.7_day_week")}</option></select></label>
+          <label class="inspector-field"><span>${t("inspector.group")}</span><input class="text-input" disabled></label>
+          <label class="inspector-field"><span>${t("inspector.tags")}</span><input class="text-input" disabled></label>
+          <label class="inspector-field"><span>${t("template.description")}</span><textarea id="template-description" class="text-area" rows="3">${esc(draft.description || '')}</textarea></label>
+        </div><div class="inspector-actions"><button id="delete-template" type="button" class="button delete-button">${t("template.delete")}</button><button id="save-template" type="button" class="button save-button">${t("template.save")}</button></div></div></section>
         <section class="inspector-section"><button type="button" id="template-task-accordion" class="inspector-accordion" aria-expanded="${taskOpen}"><span class="accordion-chevron">${taskOpen?'⌄':'›'}</span><span>${t("template.task_properties")}</span><small>${esc(projectOpen ? t("inspector.not_selected") : selectedTask?.name || t("inspector.not_selected"))}</small></button><div id="template-tasks" class="inspector-content ${taskOpen?'':'hidden'}">${selectedTask ? templateTaskProperties(selectedTask,draft.tasks.indexOf(selectedTask),draft.tasks) : `<p>${t("template.add_a_task")}</p>`}</div></section>
       </aside>
     </div>`;
-  $('#template-project-accordion').addEventListener('click', () => { syncDraftFromEditor(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); });
-  $('#template-task-accordion').addEventListener('click', () => { syncDraftFromEditor(); state.templateTaskKey=selectedTask?.key; renderTemplateEditor(); });
+  $('#template-project-accordion').addEventListener('click', () => { syncDraftFromEditor(); queueTemplateSave(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); });
+  $('#template-task-accordion').addEventListener('click', () => { syncDraftFromEditor(); queueTemplateSave(); state.templateTaskCollapsed = taskOpen; state.templateTaskKey=selectedTask?.key; renderTemplateEditor(); });
   $('#template-zoom').addEventListener('input', event => { state.templateZoom=Number(event.target.value); event.target.nextElementSibling.textContent=`${Math.round(state.templateZoom/46*100)}%`; renderTemplateGantt(); });
   $('#template-cascade-setting').addEventListener('change', event => setCascadeSetting(event.target.checked));
-  state.templateCalendar = draft.calendar_type || 'working';
-  $('#template-calendar').value = state.templateCalendar;
-  $('#template-calendar').addEventListener('change', event => { state.templateCalendar = event.target.value; draft.calendar_type = event.target.value; renderTemplateGantt(); });
+  $('#template-inspector-calendar').addEventListener('change', event => { draft.calendar_type = event.target.value; });
   renderTemplateGantt();
   attachTemplateDrag();
   attachTemplateDayFields();
@@ -1575,11 +1712,15 @@ function renderTemplateEditorContent() {
     const removed = draft.tasks[Number(button.dataset.index)];
     draft.tasks.splice(Number(button.dataset.index), 1);
     draft.tasks.forEach((task) => { task.dependencies = task.dependencies.filter((key) => key !== removed.key); });
-    state.preview = null; renderTemplateEditor();
+    state.preview = null; renderTemplateEditor(); queueTemplateSave();
   }));
 
 
   $('#save-template').addEventListener('click', saveTemplate);
+  $('#save-template-task')?.addEventListener('click', saveTemplate);
+  $('#delete-template').addEventListener('click', deleteTemplate);
+  bindTemplateAutoSave();
+  bindTemplateReordering();
 }
 function templateRelationSummary(task, tasks) {
   const successors = tasks.filter(other => (other.dependencies || []).includes(task.key)).length;
@@ -1596,12 +1737,17 @@ function setTemplateRelation(tasks, taskKey, otherKey, successor, checked) {
 function templateTaskRow(task, index, tasks) {
   const field = (label, content) => `<label class="inspector-field"><span>${label}</span>${content}</label>`;
   return `${field(t("timeline.task_name"),`<input class="text-input template-task-name" data-key="${esc(task.key)}" value="${esc(task.name)}">`)}
-    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"></div></div>
+    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"><code>${esc(task.color || taskColors[index % taskColors.length])}</code></div></div>
+    ${taskDateGrid(`<input class="text-input template-start-day" type="number" min="0" max="9999" aria-label="${t("template.start_d")}" required>`, `<input class="text-input template-end-day" type="number" min="0" max="9999" aria-label="${t("template.finish_d")}" required>`, `<input class="text-input" type="date" aria-label="${t("inspector.actual_start")}" disabled>`, `<input class="text-input" type="date" aria-label="${t("inspector.actual_finish")}" disabled>`)}
+    <div class="inspector-field"><span>D+ <span class="info-tip"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-relative-help">i</button><span id="template-relative-help" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></span><div class="template-relative-help"><button type="button" class="button button-small template-auto-days">${t("template.auto_schedule_from_predecessors")}</button></div></div>
     <div class="inspector-field"><span>${t("template.duration")}</span><div class="duration-field"><input class="text-input template-task-duration" data-key="${esc(task.key)}" type="number" min="1" max="520" value="${esc(task.duration_value)}" aria-label="${t("template.duration")}"><select class="select-input template-task-unit" data-key="${esc(task.key)}" aria-label="${t("template.duration_unit")}"><option value="days" ${task.duration_unit==='days'?'selected':''}>${t("common.days")}</option><option value="weeks" ${task.duration_unit==='weeks'?'selected':''}>${t("common.weeks")}</option></select></div></div>
+    ${field(t("inspector.group"),`<input class="text-input" disabled>`)}
+    ${field(t("inspector.tags"),`<input class="text-input" disabled>`)}
     ${field(t("timeline.owner_vendor"),`<input class="text-input template-task-owner" data-key="${esc(task.key)}" value="${esc(task.owner || '')}">`)}
-    <div class="property-relations-label">${t("inspector.task_connections")}</div><div class="inspector-relations"><table aria-label="${t("template.template_predecessors_and_successors")}"><thead><tr><th class="relation-heading">${t("timeline.task")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="template-relations-help">i</button><span id="template-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}</span></span></th><th>${t("template.predecessor")}</th><th>${t("template.successors")}</th></tr></thead><tbody>${tasks.filter(other=>other.key!==task.key).map(other=>`<tr><th><span class="template-relation-name" data-key="${esc(other.key)}">${esc(other.name)}</span></th><td><input type="checkbox" class="template-dependency" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.predecessors")}" ${task.dependencies.includes(other.key)?'checked':''}></td><td><input type="checkbox" class="template-successor" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.successors")}" ${(other.dependencies||[]).includes(task.key)?'checked':''}></td></tr>`).join('') || `<tr><td colspan="3">${t("inspector.no_other_tasks_to_connect")}</td></tr>`}</tbody></table></div>
-    ${field(t("inspector.notes"),`<input class="text-input template-task-handoff" data-key="${esc(task.key)}" value="${esc(task.handoff || '')}">`)}
-    <button class="button button-small danger-button remove-task" data-index="${index}" type="button">${t("template.delete_task")}</button>`;
+    <div class="inspector-field"><span>${t("calendar.status")}</span><div class="task-progress-control" style="${paletteStyle(task.color || taskColors[index % taskColors.length])}"><div class="task-progress-track"><div class="task-progress-fill" style="width:0%"></div><button type="button" class="task-progress-knob" role="slider" aria-label="${t("inspector.task_progress")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" disabled></button></div><output>—</output></div></div>
+    <div class="inspector-field property-relations"><span>${t("inspector.task_connections")} <small>${t("inspector.select_multiple_tasks")}</small></span><div class="inspector-relations"><table aria-label="${t("template.template_predecessors_and_successors")}"><thead><tr><th class="relation-heading">${t("timeline.task")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="template-relations-help">i</button><span id="template-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}</span></span></th><th>${t("inspector.predecessors")}</th><th>${t("inspector.successors")}</th></tr></thead><tbody>${tasks.filter(other=>other.key!==task.key).map(other=>`<tr><th><span class="template-relation-name" data-key="${esc(other.key)}">${esc(other.name)}</span></th><td><input type="checkbox" class="template-dependency" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.predecessors")}" ${task.dependencies.includes(other.key)?'checked':''}></td><td><input type="checkbox" class="template-successor" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.successors")}" ${(other.dependencies||[]).includes(task.key)?'checked':''}></td></tr>`).join('') || `<tr><td colspan="3">${t("inspector.no_other_tasks_to_connect")}</td></tr>`}</tbody></table></div></div>
+    ${field(t("inspector.notes"),`<textarea class="text-area template-task-handoff" data-key="${esc(task.key)}" rows="3">${esc(task.handoff || '')}</textarea>`)}
+`;
 }
 
 function syncDraftFromEditor() {
@@ -1632,32 +1778,97 @@ function updateTemplateField(input) {
     if (input.classList.contains('template-task-duration')) updateTemplateSchedule(task.key, {duration_value:Math.max(1, Number(input.value) || 1)});
     if (input.classList.contains('template-task-unit')) updateTemplateSchedule(task.key, {duration_unit:input.value});
   } catch (error) { toast(error.message); renderTemplateEditor(); return; }
-  if (input.classList.contains('template-task-color')) task.color = input.value;
+  if (input.classList.contains('template-task-color')) { task.color = input.value; input.nextElementSibling.textContent = input.value; }
   if (input.classList.contains('template-task-owner')) task.owner = input.value;
   if (input.classList.contains('template-task-handoff')) task.handoff = input.value;
   renderTemplateGantt();
 }
-async function saveTemplate() {
-  const button = $('#save-template');
-  if (button.disabled) return;
-  button.disabled = true;
+let templateSaveQueue = Promise.resolve();
+const templateSavedPayloads = new WeakMap();
+const templatePendingPayloads = new WeakMap();
+function templatePayload(draft) {
+  return { name: draft.name.trim(), calendar_type: draft.calendar_type || 'working', description: draft.description || '', project_color: draft.project_color || projectColors[0], tasks: draft.tasks.map((task, index) => ({ key: task.key, name: task.name.trim(), duration_value: Number(task.duration_value), duration_unit: task.duration_unit, start_day: task.start_day ?? null, dependencies: task.dependencies, owner: task.owner || '', handoff: task.handoff || '', color: task.color || taskColors[index % taskColors.length], sort_order: index })) };
+}
+function templateSaveStatus(draft, message, failed = false) {
+  if (state.draft !== draft) return;
+  const status = $('#template-save-state');
+  if (status) { status.textContent = message; status.classList.toggle('save-error', failed); }
+}
+function saveTemplate() { return queueTemplateSave(true); }
+function queueTemplateSave(manual = false) {
+  const draft = state.draft;
+  if (!draft) return Promise.resolve();
+  let payload;
   try {
     for (const fields of $$('[data-template-days]')) {
-      const startField=$('.template-start-day',fields),endField=$('.template-end-day',fields);
-      if (!startField.checkValidity() || !endField.checkValidity() || Number(endField.value)<Number(startField.value)) throw new Error(t("template.check_the_start_and_finish_d"));
+      const start=$('.template-start-day',fields), end=$('.template-end-day',fields);
+      if (!start.checkValidity() || !end.checkValidity() || Number(end.value)<Number(start.value)) throw new Error(t("template.check_the_start_and_finish_d"));
     }
     syncDraftFromEditor();
-    if (!state.draft.name.trim()) throw new Error(t("template.enter_a_template_name"));
-    if (!state.draft.tasks.length) throw new Error(t("template.add_at_least_one_task"));
-    if (state.draft.tasks.some((task) => !String(task.name).trim())) throw new Error(t("template.enter_a_task_name"));
-    const payload = { name: state.draft.name.trim(), calendar_type: state.draft.calendar_type || 'working', description: state.draft.description || '', project_color: state.draft.project_color || projectColors[0], tasks: state.draft.tasks.map((task, index) => ({ key: task.key, name: task.name.trim(), duration_value: Number(task.duration_value), duration_unit: task.duration_unit, start_day: task.start_day ?? null, dependencies: task.dependencies, owner: task.owner || '', handoff: task.handoff || '', color: task.color || taskColors[index % taskColors.length], sort_order: index })) };
-    const saved = state.draft.id ? await api(`/api/templates/${encodeURIComponent(state.draft.id)}`, { method: 'PUT', body: JSON.stringify(payload) }) : await api('/api/templates', { method: 'POST', body: JSON.stringify(payload) });
-    state.selectedTemplateId = saved.id;
-    state.draft = null; state.preview = null;
+    if (!draft.name.trim()) throw new Error(t("template.enter_a_template_name"));
+    if (!draft.tasks.length) throw new Error(t("template.add_at_least_one_task"));
+    if (draft.tasks.some(task => !String(task.name).trim())) throw new Error(t("template.enter_a_task_name"));
+    templateSchedule(draft.tasks);
+    payload = JSON.stringify(templatePayload(draft));
+  } catch (error) {
+    templateSaveStatus(draft,error.message,true);
+    if (manual) toast(error.message);
+    return Promise.resolve();
+  }
+  if (templatePendingPayloads.get(draft) === payload) return templateSaveQueue;
+  if (!templatePendingPayloads.has(draft) && templateSavedPayloads.get(draft) === payload) return templateSaveQueue;
+  templatePendingPayloads.set(draft,payload);
+  templateSaveStatus(draft,t("inspector.saving"));
+  templateSaveQueue = templateSaveQueue.then(async () => {
+    try {
+      const saved = await api(draft.id ? `/api/templates/${encodeURIComponent(draft.id)}` : '/api/templates', {method:draft.id?'PUT':'POST',body:payload});
+      draft.id = saved.id;
+      templateSavedPayloads.set(draft,payload);
+      const index = state.data.templates.findIndex(item=>item.id===saved.id);
+      if (index < 0) state.data.templates.push(saved); else state.data.templates[index]=saved;
+      if (state.draft === draft) state.selectedTemplateId=saved.id;
+      // Update only navigation; retain the live draft, caret and scroll position.
+      if (state.view === 'templates') renderTemplateList();
+      if (templatePendingPayloads.get(draft) === payload) templateSaveStatus(draft,t("inspector.saved_automatically"));
+      if (manual) toast(t("template.template_saved_existing_project_schedules_are"));
+    } catch (error) {
+      templateSaveStatus(draft,error.message,true);
+      toast(error.message);
+    } finally {
+      if (templatePendingPayloads.get(draft) === payload) templatePendingPayloads.delete(draft);
+    }
+  });
+  return templateSaveQueue;
+}
+function bindTemplateAutoSave() {
+  const editor = $('#template-editor');
+  if (!templateSavedPayloads.has(state.draft) && state.draft.id) templateSavedPayloads.set(state.draft,JSON.stringify(templatePayload(state.draft)));
+  if (editor.templateFocusOut) editor.removeEventListener('focusout',editor.templateFocusOut);
+  editor.templateFocusOut = event => {
+    if (event.target.matches('input,textarea,select') && !event.target.disabled) queueTemplateSave();
+  };
+  editor.addEventListener('focusout',editor.templateFocusOut);
+  editor.onkeydown = event => { if (event.key === 'Escape' && event.target.matches('input,textarea,select')) { event.preventDefault(); event.target.blur(); } };
+  editor.onchange = event => {
+    if (event.target.matches('select,input[type="checkbox"],input[type="color"]') && !event.target.disabled) queueTemplateSave();
+  };
+  bindInspectorFocusToggle(editor);
+  disableFieldSuggestions(editor);
+}
+async function deleteTemplate() {
+  const draft = state.draft;
+  if (!draft || !window.confirm(t("template.delete_confirm", {p0:draft.name}))) return;
+  const button = $('#delete-template');
+  button.disabled = true;
+  try {
+    await templateSaveQueue;
+    if (draft.id) await api(`/api/templates/${encodeURIComponent(draft.id)}`, {method:'DELETE'});
+    state.draft = null; state.preview = null; state.selectedTemplateId = null;
+    state.templateTaskKey = '__project__';
     await loadState();
-    toast(t("template.template_saved_existing_project_schedules_are"));
+    toast(t("common.deleted"));
   } catch (error) { toast(error.message); }
-  finally { button.disabled = false; }
+  finally { if (button.isConnected) button.disabled = false; }
 }
 function createTemplate() {
   const key = `task_${crypto.randomUUID().slice(0, 8)}`;
@@ -2109,6 +2320,18 @@ function bindChartAutoRefresh() {
   });
 }
 function attachEvents() {
+  $('#holiday-country-select').addEventListener('change', async event => {
+    const select = event.target;
+    const previous = state.data.holiday_country || 'KR';
+    select.disabled = true;
+    try {
+      await api('/api/settings/holiday-calendar', {method:'PATCH', body:JSON.stringify({holiday_country:select.value})});
+      await loadState();
+    } catch (error) {
+      select.value = previous;
+      toast(error.message);
+    } finally { select.disabled = false; }
+  });
   $('#language-select').value = I18n.language;
   $('#language-select').addEventListener('change', async event => {
     await taskSaveQueue.catch(() => {});
