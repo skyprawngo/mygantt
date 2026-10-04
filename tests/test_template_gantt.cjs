@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm');
@@ -5,7 +6,7 @@ const fs=require('node:fs');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../web/app.js'),'utf8');
 const block=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b,source.indexOf(a)));
 test('relative schedule retains legacy dependencies and permits explicit overlaps',()=>{
-  const c={};vm.createContext(c);vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt('),c);
+  const c={};withI18n(vm.createContext(c));vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt('),c);
   const tasks=[{key:'a',duration_value:1,duration_unit:'weeks',dependencies:[]},{key:'b',duration_value:2,dependencies:['a']}];
   assert.equal(c.templateSchedule(tasks)[1].start,6);
   assert.equal(c.templateSchedule(tasks,'calendar')[1].start,8);
@@ -18,7 +19,7 @@ test('body and endpoint drags save relative days; cancellation keeps original',(
     const chart={addEventListener:(type,fn)=>handlers[type]=fn};
     const bar={dataset:{templateSelect:'a'},style:{},setPointerCapture(){}};
     const c={state:{draft:{tasks:[task]}},$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''},renderTemplateEditor(){},renderTemplateGantt(){},renderTemplateConnections(){},syncDraftFromEditor(){},toast(){}};
-    vm.createContext(c);vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function attachTemplateDrag(', 'function renderTemplateEditor('),c);
+    withI18n(vm.createContext(c));vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function attachTemplateDrag(', 'function renderTemplateEditor('),c);
     c.attachTemplateDrag();
     const event={button:0,isPrimary:true,pointerId:1,clientX:100,preventDefault(){},target:{closest:s=>s==='.template-bar'?bar:edge?{dataset:{templateEdge:edge}}:null}};
     handlers.pointerdown(event);handlers.pointermove({...event,clientX:100+46*delta});
@@ -27,7 +28,7 @@ test('body and endpoint drags save relative days; cancellation keeps original',(
   }
 });
 test('successor selection updates reverse dependency, removes it, and rejects cycles atomically',()=>{
-  const c={};vm.createContext(c);
+  const c={};withI18n(vm.createContext(c));
   vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function setTemplateRelation(', 'function templateTaskRow('),c);
   const tasks=[{key:'a',duration_value:1,dependencies:[]},{key:'b',duration_value:1,dependencies:[]}];
   c.setTemplateRelation(tasks,'a','b',true,true);
@@ -49,7 +50,7 @@ function cascadeHarness(enabled) {
     {key:'e',duration_value:2,dependencies:[]}
   ];
   const c={state:{draft:{tasks},cascadeDependents:enabled,templateCalendar:'working'}};
-  vm.createContext(c);vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt('),c);
+  withI18n(vm.createContext(c));vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt('),c);
   return {c,tasks,positions:()=>Array.from(c.templateSchedule(tasks),r=>[r.start,r.end])};
 }
 test('cascade shifts implicit and overlapping successors once across a diamond, preserving unrelated tasks',()=>{

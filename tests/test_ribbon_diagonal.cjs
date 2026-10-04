@@ -1,7 +1,8 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm'),fs=require('node:fs');
-const source=fs.readFileSync('web/app.js','utf8'),c={};vm.createContext(c);
+const source=fs.readFileSync('web/app.js','utf8'),c={};withI18n(vm.createContext(c));
 vm.runInContext(source.slice(source.indexOf('function dependencyRibbon('),source.indexOf('function dependencySourceKind(')),c);
 for(const kind of ['gap','surface']) for(const dy of [-180,40,180]) test(`${kind} ${dy}: smooth endpoint-driven contour without a straight waist`,()=>{
  const from={kind,x:100,surfaceX:100,y:200,centerY:200,height:22,width:70};

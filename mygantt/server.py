@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .i18n import error_reference, translate
+
 import argparse
 import json
 import mimetypes
@@ -85,6 +87,8 @@ def make_handler(database: Database):
       print(f"[{self.log_date_time_string()}] {format % args}")
 
     def _json(self, payload: Any, status: int = 200) -> None:
+      if isinstance(payload, dict) and isinstance(payload.get("error"), str):
+        payload = {**payload, **error_reference(payload["error"])}
       encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
       self.send_response(status)
       self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -148,6 +152,14 @@ def make_handler(database: Database):
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        parts = path.strip("/").split("/")
+        if path == "/api/projects":
+          self._json(database.create_project(payload), 201)
+          return
+        if len(parts) == 4 and parts[:2] == ["api", "projects"] and parts[3] == "complete":
+          project = database.complete_project(urllib.parse.unquote(parts[2]))
+          self._json(project if project else {"error": "프로젝트를 찾을 수 없습니다."}, 200 if project else 404)
+          return
         if path == "/api/templates":
           self._json(database.save_template(payload), 201)
           return
@@ -186,10 +198,31 @@ def make_handler(database: Database):
       except (ScheduleError, ValueError, KeyError, json.JSONDecodeError) as exc:
         self._error(str(exc))
 
+    def do_DELETE(self) -> None:
+      parts = urllib.parse.urlparse(self.path).path.strip("/").split("/")
+      try:
+        if len(parts) == 3 and parts[0] == "api" and parts[1] in ("projects", "tasks"):
+          delete = database.delete_project if parts[1] == "projects" else database.delete_task
+          removed = delete(urllib.parse.unquote(parts[2]))
+          if removed:
+            self._json({"deleted": True})
+          else:
+            self._error("프로젝트를 찾을 수 없습니다." if parts[1] == "projects" else "작업을 찾을 수 없습니다.", 404)
+          return
+        self._error("경로를 찾을 수 없습니다.", 404)
+      except (ScheduleError, ValueError) as exc:
+        self._error(str(exc))
+
     def do_PATCH(self) -> None:
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        if path.startswith("/api/tasks/") and path.endswith("/placement"):
+          if "directory_id" not in payload or set(payload) - {"directory_id", "anchor_id", "after"}:
+            raise ScheduleError("이동할 프로젝트를 지정하세요.")
+          project = database.place_task(path.split("/")[-2], payload["directory_id"], payload.get("anchor_id"), payload.get("after", False))
+          self._json(project if project else {"error": "작업을 찾을 수 없습니다."}, 200 if project else 404)
+          return
         if path.startswith("/api/tasks/") and path.endswith("/order"):
           if set(payload) != {"anchor_id", "after"}:
             raise ScheduleError("삽입할 작업과 방향을 지정하세요.")
@@ -225,6 +258,12 @@ def make_handler(database: Database):
         self._error("파일을 찾을 수 없습니다.", 404)
         return
       data = file_path.read_bytes()
+      if requested == 'manifest.webmanifest':
+        language = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('language', ['KR'])[0]
+        manifest = json.loads(data)
+        manifest['name'] = translate('common.mygantt_production_schedule', language)
+        manifest['lang'] = {'KR': 'ko-KR', 'US': 'en-US', 'JP': 'ja-JP'}.get(language, 'ko-KR')
+        data = json.dumps(manifest, ensure_ascii=False).encode('utf-8')
       content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
       if content_type.startswith("text/") or content_type in {"application/javascript", "application/json"}:
         content_type += "; charset=utf-8"

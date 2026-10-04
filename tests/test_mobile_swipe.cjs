@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm'),fs=require('node:fs');
@@ -5,7 +6,7 @@ const source=fs.readFileSync('web/app.js','utf8');
 function setup({mobile=true,open=false}={}){
  const handlers={}, calls=[], opts={};let prevented=0,taps=0;
  const context={mobileLayout:()=>mobile,setMobileDrawer:v=>calls.push(v),document:{body:{classList:{contains:()=>open}},addEventListener:(n,f,o)=>{handlers[n]=f;opts[n]=o;}}};
- vm.createContext(context);vm.runInContext(source.slice(source.indexOf('function bindMobileMenuSwipe('),source.indexOf('function bindMobileDrawers(')),context);context.bindMobileMenuSwipe();
+ withI18n(vm.createContext(context));vm.runInContext(source.slice(source.indexOf('function bindMobileMenuSwipe('),source.indexOf('function bindMobileDrawers(')),context);context.bindMobileMenuSwipe();
  const target={closest:s=>s==='.modal-overlay'?null:{click:()=>taps++}};
  const event=(x,y=100)=>({touches:[{identifier:1,clientX:x,clientY:y}],changedTouches:[{identifier:1,clientX:x,clientY:y}],target,cancelable:true,preventDefault(){prevented++;}});
  return {handlers,calls,opts,event,get prevented(){return prevented;},get taps(){return taps;}};

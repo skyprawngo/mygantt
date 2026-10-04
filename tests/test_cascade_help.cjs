@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const vm=require('node:vm'),fs=require('node:fs');
@@ -7,7 +8,7 @@ function setup(){
  const control={addEventListener:(n,f)=>handlers[n]=f,getBoundingClientRect:()=>({left:240,bottom:106})};
  const overlay={style:{},showPopover:()=>shown++};
  const ctx={$:s=>s==='#cascade-help'?overlay:{closest:()=>control},innerWidth:390,document:{addEventListener:(n,f)=>docs[n]=f},window:{addEventListener(){}},setTimeout:f=>(pending=f,1),clearTimeout:()=>pending=null};
- vm.createContext(ctx);vm.runInContext(source.slice(source.indexOf('function bindCascadeHelp()'),source.indexOf('function bindMobileSearch()')),ctx);ctx.bindCascadeHelp();
+ withI18n(vm.createContext(ctx));vm.runInContext(source.slice(source.indexOf('function bindCascadeHelp()'),source.indexOf('function bindMobileSearch()')),ctx);ctx.bindCascadeHelp();
  const down=()=>handlers.pointerdown({isPrimary:true,button:0,clientX:245,clientY:90});
  return {handlers,docs,down,fire:()=>pending?.(),shown:()=>shown};
 }

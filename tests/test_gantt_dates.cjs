@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 // Run with: node --test tests/test_gantt_dates.cjs
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
@@ -10,7 +11,7 @@ function harness(task) {
   const state={data:{projects:[{id:'p',tasks:[task]}]},zoom:46,cascadeDependents:true};
   const context={state,Date,console,$:()=>({addEventListener:(name,fn)=>handlers[name]=fn}),
     api:async(path,options)=>calls.push(JSON.parse(options.body)),persistUi(){},loadState:async()=>{},toast(){},renderTimeline(){},renderDependencyLinks(){}};
-  vm.createContext(context);
+  withI18n(vm.createContext(context));
   vm.runInContext(between('function actualTaskRange(', 'function taskRowHeight(')+between('function dateFrom(', 'function dateRangeLabel(')+between('function dependencySourceKind(', 'function renderDependencyLinks(')+between('async function saveDraggedTaskDates(', 'function normalizedTemplate('),context);
   vm.runInContext(between("  $('#gantt').addEventListener('pointerdown'", "  $('#gantt').addEventListener('keydown'"),context);
   const classes={add(){},remove(){},toggle(){}};

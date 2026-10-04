@@ -1,0 +1,2456 @@
+[
+  {
+    "textID": "status.planned",
+    "KR": "예정",
+    "US": "Planned",
+    "JP": "予定"
+  },
+  {
+    "textID": "status.in_progress",
+    "KR": "진행 중",
+    "US": "In progress",
+    "JP": "進行中"
+  },
+  {
+    "textID": "status.stopped",
+    "KR": "중지",
+    "US": "Stopped",
+    "JP": "中止"
+  },
+  {
+    "textID": "status.complete",
+    "KR": "완료",
+    "US": "Complete",
+    "JP": "完了"
+  },
+  {
+    "textID": "common.days",
+    "KR": "일",
+    "US": "days",
+    "JP": "日"
+  },
+  {
+    "textID": "common.weeks",
+    "KR": "주",
+    "US": "weeks",
+    "JP": "週"
+  },
+  {
+    "textID": "common.updated_at_left_00_00_right",
+    "KR": "{p0} · 갱신 시각 {p1}:{p2} (왼쪽 00시 · 오른쪽 24시)",
+    "US": "{p0} · Updated at {p1}:{p2} (left 00:00 · right 24:00)",
+    "JP": "{p0} · 更新時刻 {p1}:{p2}（左端 0時 · 右端 24時）"
+  },
+  {
+    "textID": "common.no_schedule",
+    "KR": "일정 없음",
+    "US": "No schedule",
+    "JP": "予定なし"
+  },
+  {
+    "textID": "common.request_failed",
+    "KR": "요청 실패 ({p0})",
+    "US": "Request failed ({p0})",
+    "JP": "リクエスト失敗（{p0}）"
+  },
+  {
+    "textID": "navigation.all_schedules",
+    "KR": "전체 일정",
+    "US": "All schedules",
+    "JP": "すべての予定"
+  },
+  {
+    "textID": "navigation.schedule_templates",
+    "KR": "일정 템플릿",
+    "US": "Schedule templates",
+    "JP": "スケジュールテンプレート"
+  },
+  {
+    "textID": "navigation.settings",
+    "KR": "설정",
+    "US": "Settings",
+    "JP": "設定"
+  },
+  {
+    "textID": "navigation.view_each_project_s_daily_schedule",
+    "KR": "프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.",
+    "US": "View each project's daily schedule and edit the selected item on the right.",
+    "JP": "プロジェクトごとの工程を日単位で表示し、選択した項目を右側で編集します。"
+  },
+  {
+    "textID": "navigation.define_a_workflow_once_and_apply",
+    "KR": "업무 흐름을 한 번 구성하고, 각 배치에 전체 작업과 일정을 함께 적용합니다. 템플릿을 수정해도 이미 만든 프로젝트 일정은 그대로 유지됩니다.",
+    "US": "Define a workflow once and apply its tasks and schedule to each batch. Editing a template does not change existing project schedules.",
+    "JP": "作業の流れを一度作成すると、各バッチにすべての作業と予定を適用できます。テンプレートを変更しても、作成済みプロジェクトの予定は変わりません。"
+  },
+  {
+    "textID": "navigation.view_the_app_version_and_public",
+    "KR": "앱 버전과 공휴일 자료 정보를 확인합니다.",
+    "US": "View the app version and public holiday data.",
+    "JP": "アプリのバージョンと祝日データを確認します。"
+  },
+  {
+    "textID": "navigation.storage_location_unavailable",
+    "KR": "저장 위치 확인 불가",
+    "US": "Storage location unavailable",
+    "JP": "保存先を確認できません"
+  },
+  {
+    "textID": "calendar.mon",
+    "KR": "월",
+    "US": "Mon",
+    "JP": "月"
+  },
+  {
+    "textID": "calendar.tue",
+    "KR": "화",
+    "US": "Tue",
+    "JP": "火"
+  },
+  {
+    "textID": "calendar.wed",
+    "KR": "수",
+    "US": "Wed",
+    "JP": "水"
+  },
+  {
+    "textID": "calendar.thu",
+    "KR": "목",
+    "US": "Thu",
+    "JP": "木"
+  },
+  {
+    "textID": "calendar.fri",
+    "KR": "금",
+    "US": "Fri",
+    "JP": "金"
+  },
+  {
+    "textID": "calendar.sat",
+    "KR": "토",
+    "US": "Sat",
+    "JP": "土"
+  },
+  {
+    "textID": "calendar.no_update_recorded",
+    "KR": "갱신일 기록 없음",
+    "US": "No update recorded",
+    "JP": "更新日の記録なし"
+  },
+  {
+    "textID": "calendar.current",
+    "KR": "현재",
+    "US": "Current",
+    "JP": "現在"
+  },
+  {
+    "textID": "calendar.current_5_years",
+    "KR": "현재+5년",
+    "US": "Current + 5 years",
+    "JP": "現在＋5年"
+  },
+  {
+    "textID": "calendar.no_data_supported",
+    "KR": "자료 없음 · 지원 {p0}–{p1}",
+    "US": "No data · supported {p0}–{p1}",
+    "JP": "データなし · 対応範囲 {p0}–{p1}"
+  },
+  {
+    "textID": "calendar.up_to_date",
+    "KR": "최신",
+    "US": "Up to date",
+    "JP": "最新"
+  },
+  {
+    "textID": "calendar.update_failed_showing_saved_data",
+    "KR": "갱신 실패 · 저장 자료 표시",
+    "US": "Update failed · showing saved data",
+    "JP": "更新失敗 · 保存済みデータを表示"
+  },
+  {
+    "textID": "calendar.showing_saved_data",
+    "KR": "저장 자료 표시",
+    "US": "Showing saved data",
+    "JP": "保存済みデータを表示"
+  },
+  {
+    "textID": "calendar.no_data",
+    "KR": "자료 없음",
+    "US": "No data",
+    "JP": "データなし"
+  },
+  {
+    "textID": "calendar.source",
+    "KR": "출처",
+    "US": "Source",
+    "JP": "出典"
+  },
+  {
+    "textID": "calendar.last_updated",
+    "KR": "최근 갱신",
+    "US": "Last updated",
+    "JP": "最終更新"
+  },
+  {
+    "textID": "calendar.coverage",
+    "KR": "자료 범위",
+    "US": "Coverage",
+    "JP": "データの対象範囲"
+  },
+  {
+    "textID": "calendar.status",
+    "KR": "상태",
+    "US": "Status",
+    "JP": "状態"
+  },
+  {
+    "textID": "calendar.years_other_than_2026_use_nager",
+    "KR": "2026년 외 연도({p0})는 Nager.Date 자료만 사용합니다. 대체공휴일이 누락될 수 있으니 공식 달력을 확인하세요.",
+    "US": "Years other than 2026 ({p0}) use Nager.Date data only. Substitute holidays may be missing; check an official calendar.",
+    "JP": "2026年以外の年（{p0}）はNager.Dateのデータのみ使用します。振替休日が含まれない場合があるため、公式カレンダーをご確認ください。"
+  },
+  {
+    "textID": "calendar.outside_automatic_coverage",
+    "KR": "자동 제공 범위 밖: {p0}",
+    "US": "Outside automatic coverage: {p0}",
+    "JP": "自動取得の対象範囲外：{p0}"
+  },
+  {
+    "textID": "calendar.version_unavailable",
+    "KR": "버전 정보 없음",
+    "US": "Version unavailable",
+    "JP": "バージョン情報なし"
+  },
+  {
+    "textID": "timeline.actual",
+    "KR": "실제",
+    "US": "Actual",
+    "JP": "実績"
+  },
+  {
+    "textID": "timeline.finish_to_start",
+    "KR": "{p0} · {p1} → {p2} (완료 후 시작)",
+    "US": "{p0} · {p1} → {p2} (finish to start)",
+    "JP": "{p0} · {p1} → {p2}（完了後に開始）"
+  },
+  {
+    "textID": "timeline.predecessor_and_successor_connections",
+    "KR": "선행 작업과 후행 작업 연결",
+    "US": "Predecessor and successor connections",
+    "JP": "先行作業と後続作業の接続"
+  },
+  {
+    "textID": "timeline.add_task",
+    "KR": "＋ 작업 추가",
+    "US": "＋ Add task",
+    "JP": "＋ 作業を追加"
+  },
+  {
+    "textID": "timeline.new_task",
+    "KR": "새 작업 {p0}",
+    "US": "New task {p0}",
+    "JP": "新しい作業 {p0}"
+  },
+  {
+    "textID": "timeline.project",
+    "KR": "프로젝트",
+    "US": "Project",
+    "JP": "プロジェクト"
+  },
+  {
+    "textID": "timeline.task_name",
+    "KR": "작업명",
+    "US": "Task name",
+    "JP": "作業名"
+  },
+  {
+    "textID": "timeline.new_task_name",
+    "KR": "새 작업 이름",
+    "US": "New task name",
+    "JP": "新しい作業名"
+  },
+  {
+    "textID": "timeline.planned_start",
+    "KR": "예정 시작일",
+    "US": "Planned start",
+    "JP": "予定開始日"
+  },
+  {
+    "textID": "timeline.planned_finish",
+    "KR": "예정 종료일",
+    "US": "Planned finish",
+    "JP": "予定終了日"
+  },
+  {
+    "textID": "timeline.add_task_2",
+    "KR": "작업 추가",
+    "US": "Add task",
+    "JP": "作業を追加"
+  },
+  {
+    "textID": "timeline.add_an_individual_task_to_the",
+    "KR": "선택한 프로젝트에 개별 작업을 추가합니다.",
+    "US": "Add an individual task to the selected project.",
+    "JP": "選択したプロジェクトに個別の作業を追加します。"
+  },
+  {
+    "textID": "timeline.cancel",
+    "KR": "취소",
+    "US": "Cancel",
+    "JP": "キャンセル"
+  },
+  {
+    "textID": "timeline.add",
+    "KR": "추가",
+    "US": "Add",
+    "JP": "追加"
+  },
+  {
+    "textID": "timeline.enter_a_task_name_and_valid",
+    "KR": "작업명과 올바른 예정 시작·종료일을 입력하세요.",
+    "US": "Enter a task name and valid planned start and finish dates.",
+    "JP": "作業名と正しい予定開始日・終了日を入力してください。"
+  },
+  {
+    "textID": "timeline.task_added",
+    "KR": "작업을 추가했습니다.",
+    "US": "Task added.",
+    "JP": "作業を追加しました。"
+  },
+  {
+    "textID": "timeline.weekend",
+    "KR": " · 주말",
+    "US": " · Weekend",
+    "JP": " · 週末"
+  },
+  {
+    "textID": "timeline.ungrouped",
+    "KR": "그룹 미지정",
+    "US": "Ungrouped",
+    "JP": "グループ未指定"
+  },
+  {
+    "textID": "timeline.projects",
+    "KR": "개 프로젝트",
+    "US": " projects",
+    "JP": "件のプロジェクト"
+  },
+  {
+    "textID": "timeline.project_duration",
+    "KR": "프로젝트 기간",
+    "US": "Project duration",
+    "JP": "プロジェクト期間"
+  },
+  {
+    "textID": "timeline.expand",
+    "KR": "펼치기",
+    "US": "Expand",
+    "JP": "展開"
+  },
+  {
+    "textID": "timeline.collapse",
+    "KR": "접기",
+    "US": "Collapse",
+    "JP": "折りたたむ"
+  },
+  {
+    "textID": "timeline.adjust_actual_start",
+    "KR": "실제 시작일 조정",
+    "US": "Adjust actual start",
+    "JP": "実績開始日を調整"
+  },
+  {
+    "textID": "timeline.adjust_actual_finish",
+    "KR": "실제 종료일 조정",
+    "US": "Adjust actual finish",
+    "JP": "実績終了日を調整"
+  },
+  {
+    "textID": "timeline.default_order",
+    "KR": "기본 순서",
+    "US": "Default order",
+    "JP": "標準の順序"
+  },
+  {
+    "textID": "timeline.planned",
+    "KR": "· 예정",
+    "US": "· Planned",
+    "JP": "· 予定"
+  },
+  {
+    "textID": "timeline.adjust_start_date",
+    "KR": "시작일 조정",
+    "US": "Adjust start date",
+    "JP": "開始日を調整"
+  },
+  {
+    "textID": "timeline.adjust_finish_date",
+    "KR": "종료일 조정",
+    "US": "Adjust finish date",
+    "JP": "終了日を調整"
+  },
+  {
+    "textID": "timeline.drag_to_change_the_default_order",
+    "KR": "드래그하여 기본 순서 변경",
+    "US": "Drag to change the default order",
+    "JP": "ドラッグして標準の順序を変更"
+  },
+  {
+    "textID": "timeline.switch_to_default_order_to_drag",
+    "KR": "기본 순서 보기에서 드래그할 수 있습니다.",
+    "US": "Switch to default order to drag tasks.",
+    "JP": "標準の順序で表示するとドラッグできます。"
+  },
+  {
+    "textID": "timeline.unassigned",
+    "KR": "담당 미지정",
+    "US": "Unassigned",
+    "JP": "担当未指定"
+  },
+  {
+    "textID": "timeline.planned_2",
+    "KR": "예정 · ",
+    "US": "Planned · ",
+    "JP": "予定 · "
+  },
+  {
+    "textID": "timeline.stopped",
+    "KR": " · 중지",
+    "US": " · Stopped",
+    "JP": " · 中止"
+  },
+  {
+    "textID": "timeline.project_task_column",
+    "KR": "프로젝트 / 작업 열",
+    "US": "Project / task column",
+    "JP": "プロジェクト / 作業列"
+  },
+  {
+    "textID": "timeline.project_task",
+    "KR": "프로젝트 / 작업",
+    "US": "Project / task",
+    "JP": "プロジェクト / 作業"
+  },
+  {
+    "textID": "timeline.collapse_2",
+    "KR": "축소",
+    "US": "Collapse",
+    "JP": "縮小"
+  },
+  {
+    "textID": "timeline.expand_2",
+    "KR": "확장",
+    "US": "Expand",
+    "JP": "拡大"
+  },
+  {
+    "textID": "timeline.task",
+    "KR": "작업",
+    "US": "Task",
+    "JP": "作業"
+  },
+  {
+    "textID": "timeline.owner_vendor",
+    "KR": "담당 / 협력사",
+    "US": "Owner / vendor",
+    "JP": "担当 / 協力会社"
+  },
+  {
+    "textID": "timeline.stop_reason",
+    "KR": "중지 사유",
+    "US": "Stop reason",
+    "JP": "中止理由"
+  },
+  {
+    "textID": "timeline.next_handoff",
+    "KR": "다음 인계",
+    "US": "Next handoff",
+    "JP": "次の引き継ぎ"
+  },
+  {
+    "textID": "timeline.unassigned_2",
+    "KR": "미지정",
+    "US": "Unassigned",
+    "JP": "未指定"
+  },
+  {
+    "textID": "inspector.select_an_item",
+    "KR": "선택 필요",
+    "US": "Select an item",
+    "JP": "選択してください"
+  },
+  {
+    "textID": "inspector.change_task_project",
+    "KR": "작업의 프로젝트 변경",
+    "US": "Change task project",
+    "JP": "作業の所属プロジェクトを変更"
+  },
+  {
+    "textID": "inspector.change_task_project_2",
+    "KR": "작업 프로젝트 변경: {p0}",
+    "US": "Change task project: {p0}",
+    "JP": "作業の所属プロジェクトを変更：{p0}"
+  },
+  {
+    "textID": "inspector.not_selected",
+    "KR": "선택되지 않음",
+    "US": "Not selected",
+    "JP": "未選択"
+  },
+  {
+    "textID": "inspector.auto_save",
+    "KR": "자동 저장",
+    "US": "Auto save",
+    "JP": "自動保存"
+  },
+  {
+    "textID": "inspector.nothing_selected",
+    "KR": "선택 항목 없음",
+    "US": "Nothing selected",
+    "JP": "選択項目なし"
+  },
+  {
+    "textID": "inspector.project_name",
+    "KR": "프로젝트 이름",
+    "US": "Project name",
+    "JP": "プロジェクト名"
+  },
+  {
+    "textID": "inspector.project_color",
+    "KR": "프로젝트 색상",
+    "US": "Project color",
+    "JP": "プロジェクトの色"
+  },
+  {
+    "textID": "inspector.start_date",
+    "KR": "시작일",
+    "US": "Start date",
+    "JP": "開始日"
+  },
+  {
+    "textID": "inspector.calendar",
+    "KR": "일정 기준",
+    "US": "Calendar",
+    "JP": "日程の基準"
+  },
+  {
+    "textID": "inspector.5_day_week_mon_fri",
+    "KR": "주 5일 (월–금)",
+    "US": "5-day week (Mon–Fri)",
+    "JP": "週5日（月～金）"
+  },
+  {
+    "textID": "inspector.7_day_week",
+    "KR": "주 7일",
+    "US": "7-day week",
+    "JP": "週7日"
+  },
+  {
+    "textID": "inspector.planned_range",
+    "KR": "예정 범위",
+    "US": "Planned range",
+    "JP": "予定期間"
+  },
+  {
+    "textID": "inspector.planned_range_help",
+    "KR": "예정 범위 도움말",
+    "US": "Planned range help",
+    "JP": "予定期間のヘルプ"
+  },
+  {
+    "textID": "inspector.changing_the_batch_start_or_calendar",
+    "KR": "배치 시작일과 달력을 수정해도 저장된 작업 날짜는 유지됩니다.",
+    "US": "Changing the batch start or calendar keeps saved task dates unchanged.",
+    "JP": "バッチの開始日とカレンダーを変更しても、保存済みの作業日は変わりません。"
+  },
+  {
+    "textID": "inspector.group",
+    "KR": "그룹",
+    "US": "Group",
+    "JP": "グループ"
+  },
+  {
+    "textID": "inspector.e_g_markos_q4_2026",
+    "KR": "예: MARKOS · 2026 4분기",
+    "US": "e.g. MARKOS · Q4 2026",
+    "JP": "例：MARKOS · 2026年第4四半期"
+  },
+  {
+    "textID": "inspector.tags",
+    "KR": "태그",
+    "US": "Tags",
+    "JP": "タグ"
+  },
+  {
+    "textID": "inspector.comma_separated",
+    "KR": "쉼표로 구분",
+    "US": "Comma separated",
+    "JP": "カンマ区切り"
+  },
+  {
+    "textID": "inspector.e_g_main_board_urgent",
+    "KR": "예: MAIN보드, 긴급",
+    "US": "e.g. MAIN board, urgent",
+    "JP": "例：MAINボード, 緊急"
+  },
+  {
+    "textID": "inspector.5_day_week_excludes_weekends_and",
+    "KR": "주 5일 · 주말·공휴일 제외",
+    "US": "5-day week · excludes weekends and holidays",
+    "JP": "週5日 · 週末・祝日を除く"
+  },
+  {
+    "textID": "inspector.no_project",
+    "KR": "프로젝트 없음",
+    "US": "No project",
+    "JP": "プロジェクトなし"
+  },
+  {
+    "textID": "inspector.select_a_task_and_use_the",
+    "KR": "작업을 선택하고 위 프로젝트 버튼에서 소속을 지정하세요.",
+    "US": "Select a task and use the project button above to assign it.",
+    "JP": "作業を選択し、上のプロジェクトボタンから所属を指定してください。"
+  },
+  {
+    "textID": "inspector.select_a_project",
+    "KR": "프로젝트를 선택하세요",
+    "US": "Select a project",
+    "JP": "プロジェクトを選択してください"
+  },
+  {
+    "textID": "inspector.select_a_project_row_in_the",
+    "KR": "간트의 프로젝트 행 또는 왼쪽 목록을 선택하면 속성을 편집할 수 있습니다.",
+    "US": "Select a project row in the chart or sidebar to edit its properties.",
+    "JP": "ガントのプロジェクト行または左側の一覧を選択すると、プロパティを編集できます。"
+  },
+  {
+    "textID": "inspector.task_color",
+    "KR": "작업 색상",
+    "US": "Task color",
+    "JP": "作業の色"
+  },
+  {
+    "textID": "inspector.task_schedule",
+    "KR": "작업 일정",
+    "US": "Task schedule",
+    "JP": "作業スケジュール"
+  },
+  {
+    "textID": "inspector.dates",
+    "KR": "작업일",
+    "US": "Dates",
+    "JP": "作業日"
+  },
+  {
+    "textID": "inspector.finish_date",
+    "KR": "종료일",
+    "US": "Finish date",
+    "JP": "終了日"
+  },
+  {
+    "textID": "inspector.planned_dates",
+    "KR": "예정 작업일",
+    "US": "Planned dates",
+    "JP": "予定作業日"
+  },
+  {
+    "textID": "inspector.actual_dates",
+    "KR": "실제 작업일",
+    "US": "Actual dates",
+    "JP": "実績作業日"
+  },
+  {
+    "textID": "inspector.actual_start",
+    "KR": "실제 시작일",
+    "US": "Actual start",
+    "JP": "実績開始日"
+  },
+  {
+    "textID": "inspector.actual_finish",
+    "KR": "실제 종료일",
+    "US": "Actual finish",
+    "JP": "実績終了日"
+  },
+  {
+    "textID": "inspector.e_g_outsourced_work",
+    "KR": "예: 외주 작업",
+    "US": "e.g. Outsourced work",
+    "JP": "例：外注作業"
+  },
+  {
+    "textID": "inspector.e_g_inspection_waiting",
+    "KR": "예: 검사, 대기",
+    "US": "e.g. Inspection, waiting",
+    "JP": "例：検査, 待機"
+  },
+  {
+    "textID": "inspector.department_or_vendor",
+    "KR": "부서 또는 업체",
+    "US": "Department or vendor",
+    "JP": "部署または会社"
+  },
+  {
+    "textID": "inspector.task_progress",
+    "KR": "작업 진행률",
+    "US": "Task progress",
+    "JP": "作業の進捗率"
+  },
+  {
+    "textID": "inspector.stopped_waiting_reason",
+    "KR": "중지 / 대기 사유",
+    "US": "Stopped / waiting reason",
+    "JP": "中止 / 待機理由"
+  },
+  {
+    "textID": "inspector.e_g_checking_component_delivery",
+    "KR": "예: 부품 납기 확인 중",
+    "US": "e.g. Checking component delivery",
+    "JP": "例：部品の納期を確認中"
+  },
+  {
+    "textID": "inspector.task_connections",
+    "KR": "작업 연결",
+    "US": "Task connections",
+    "JP": "作業の接続"
+  },
+  {
+    "textID": "inspector.select_multiple_tasks",
+    "KR": "여러 작업 선택 가능",
+    "US": "Select multiple tasks",
+    "JP": "複数の作業を選択可能"
+  },
+  {
+    "textID": "inspector.predecessors_and_successors",
+    "KR": "선행 및 후행 작업",
+    "US": "Predecessors and successors",
+    "JP": "先行作業と後続作業"
+  },
+  {
+    "textID": "inspector.predecessor_successor_help",
+    "KR": "선행·후행 작업 도움말",
+    "US": "Predecessor / successor help",
+    "JP": "先行・後続作業のヘルプ"
+  },
+  {
+    "textID": "inspector.predecessor_before_this_task_successor_after",
+    "KR": "선행: 이 작업보다 먼저 · 후행: 이 작업 다음",
+    "US": "Predecessor: before this task · Successor: after this task",
+    "JP": "先行：この作業の前 · 後続：この作業の後"
+  },
+  {
+    "textID": "inspector.predecessors",
+    "KR": "선행 작업",
+    "US": "Predecessors",
+    "JP": "先行作業"
+  },
+  {
+    "textID": "inspector.successors",
+    "KR": "후행 작업",
+    "US": "Successors",
+    "JP": "後続作業"
+  },
+  {
+    "textID": "inspector.notes",
+    "KR": "메모",
+    "US": "Notes",
+    "JP": "メモ"
+  },
+  {
+    "textID": "inspector.inspection_results_contact_details_etc",
+    "KR": "검사 결과, 연락 사항 등",
+    "US": "Inspection results, contact details, etc.",
+    "JP": "検査結果、連絡事項など"
+  },
+  {
+    "textID": "inspector.changes_are_saved_when_you_leave",
+    "KR": "포커스를 이동하면 자동 저장됩니다.",
+    "US": "Changes are saved when you leave the field.",
+    "JP": "フォーカスを移動すると自動保存されます。"
+  },
+  {
+    "textID": "inspector.complete_today",
+    "KR": "✓ 오늘 완료 처리",
+    "US": "✓ Complete today",
+    "JP": "✓ 本日完了にする"
+  },
+  {
+    "textID": "inspector.no_other_tasks_to_connect",
+    "KR": "연결할 다른 작업이 없습니다.",
+    "US": "No other tasks to connect.",
+    "JP": "接続できる他の作業がありません。"
+  },
+  {
+    "textID": "inspector.select_a_task",
+    "KR": "작업을 선택하세요",
+    "US": "Select a task",
+    "JP": "作業を選択してください"
+  },
+  {
+    "textID": "inspector.click_a_task_name_or_bar",
+    "KR": "작업 이름이나 간트 막대를 누르면 계획 날짜, 담당, 상태, 선행 관계와 인계 내용을 편집할 수 있습니다.",
+    "US": "Click a task name or bar to edit its dates, owner, status, dependencies, and notes.",
+    "JP": "作業名またはガントバーを押すと、予定日、担当、状態、先行関係と引き継ぎ内容を編集できます。"
+  },
+  {
+    "textID": "inspector.moving_a_task_removes_its_existing",
+    "KR": "소속 변경 시 기존 선행·후행 연결은 해제됩니다.",
+    "US": "Moving a task removes its existing predecessor and successor connections.",
+    "JP": "所属を変更すると、既存の先行・後続関係は解除されます。"
+  },
+  {
+    "textID": "inspector.task_moved_to",
+    "KR": "{p0}(으)로 작업을 이동했습니다.",
+    "US": "Task moved to {p0}.",
+    "JP": "作業を{p0}に移動しました。"
+  },
+  {
+    "textID": "inspector.saving",
+    "KR": "저장 중…",
+    "US": "Saving…",
+    "JP": "保存中…"
+  },
+  {
+    "textID": "inspector.editing_leave_the_field_to_save",
+    "KR": "수정 중 · 포커스를 이동하면 저장됩니다.",
+    "US": "Editing · leave the field to save",
+    "JP": "編集中 · フォーカスを移動すると保存されます。"
+  },
+  {
+    "textID": "inspector.saved_automatically",
+    "KR": "자동 저장됨",
+    "US": "Saved automatically",
+    "JP": "自動保存済み"
+  },
+  {
+    "textID": "inspector.enter_a_project_name",
+    "KR": "프로젝트 이름을 입력하세요.",
+    "US": "Enter a project name.",
+    "JP": "プロジェクト名を入力してください。"
+  },
+  {
+    "textID": "inspector.enter_a_valid_date",
+    "KR": "올바른 날짜를 입력하세요.",
+    "US": "Enter a valid date.",
+    "JP": "正しい日付を入力してください。"
+  },
+  {
+    "textID": "inspector.save_failed_leave_the_field_again",
+    "KR": "저장 실패: {p0} 포커스를 다시 이동하면 재시도합니다.",
+    "US": "Save failed: {p0} Leave the field again to retry.",
+    "JP": "保存失敗：{p0} フォーカスを再度移動すると再試行します。"
+  },
+  {
+    "textID": "inspector.project_save_failed",
+    "KR": "프로젝트 저장 실패: {p0}",
+    "US": "Project save failed: {p0}",
+    "JP": "プロジェクトの保存失敗：{p0}"
+  },
+  {
+    "textID": "task.stopped",
+    "KR": "중지 · {p0}%",
+    "US": "Stopped · {p0}%",
+    "JP": "中止 · {p0}%"
+  },
+  {
+    "textID": "task.planned_0",
+    "KR": "예정 · 0%",
+    "US": "Planned · 0%",
+    "JP": "予定 · 0%"
+  },
+  {
+    "textID": "task.complete_100",
+    "KR": "완료 · 100%",
+    "US": "Complete · 100%",
+    "JP": "完了 · 100%"
+  },
+  {
+    "textID": "task.in_progress",
+    "KR": "진행 중 · {p0}%",
+    "US": "In progress · {p0}%",
+    "JP": "進行中 · {p0}%"
+  },
+  {
+    "textID": "task.progress_save_failed",
+    "KR": "진행률 저장 실패: {p0}",
+    "US": "Progress save failed: {p0}",
+    "JP": "進捗率の保存失敗：{p0}"
+  },
+  {
+    "textID": "task.check_the_input_value",
+    "KR": "입력값을 확인하세요.",
+    "US": "Check the input value.",
+    "JP": "入力値を確認してください。"
+  },
+  {
+    "textID": "task.save_failed_leave_the_field_again",
+    "KR": "저장 실패: {p0} 다시 포커스를 이동하면 재시도합니다.",
+    "US": "Save failed: {p0} Leave the field again to retry.",
+    "JP": "保存失敗：{p0} フォーカスを再度移動すると再試行します。"
+  },
+  {
+    "textID": "task.enter_a_planned_date_to_save",
+    "KR": "예정일을 입력하면 자동 저장됩니다.",
+    "US": "Enter a planned date to save automatically.",
+    "JP": "予定日を入力すると自動保存されます。"
+  },
+  {
+    "textID": "task.marked_complete",
+    "KR": "완료로 전환했습니다.",
+    "US": "Marked complete.",
+    "JP": "完了に変更しました。"
+  },
+  {
+    "textID": "task.mark_complete",
+    "KR": "완료로 전환",
+    "US": "Mark complete",
+    "JP": "完了に変更"
+  },
+  {
+    "textID": "task.show_actual_start_finish",
+    "KR": "실제 시작/종료일 표시하기",
+    "US": "Show actual start / finish",
+    "JP": "実績開始日・終了日を表示"
+  },
+  {
+    "textID": "task.actual_dates_saved",
+    "KR": "실제 작업 날짜를 저장했습니다.",
+    "US": "Actual dates saved.",
+    "JP": "実績作業日を保存しました。"
+  },
+  {
+    "textID": "task.task_dates_and_connected_successor_schedules",
+    "KR": "작업 날짜와 연결된 후행 일정을 저장했습니다.",
+    "US": "Task dates and connected successor schedules saved.",
+    "JP": "作業日と接続された後続作業の予定を保存しました。"
+  },
+  {
+    "textID": "task.task_dates_saved",
+    "KR": "작업 날짜를 저장했습니다.",
+    "US": "Task dates saved.",
+    "JP": "作業日を保存しました。"
+  },
+  {
+    "textID": "task.tasks",
+    "KR": "개 작업 ·",
+    "US": " tasks ·",
+    "JP": "件の作業 ·"
+  },
+  {
+    "textID": "task.no_description",
+    "KR": "설명 없음",
+    "US": "No description",
+    "JP": "説明なし"
+  },
+  {
+    "textID": "task.task_dependencies_contain_a_cycle",
+    "KR": "선행 작업 연결에 순환이 있습니다.",
+    "US": "Task dependencies contain a cycle.",
+    "JP": "先行作業の接続に循環があります。"
+  },
+  {
+    "textID": "task.predecessor_not_found",
+    "KR": "선행 작업을 찾을 수 없습니다.",
+    "US": "Predecessor not found.",
+    "JP": "先行作業が見つかりません。"
+  },
+  {
+    "textID": "task.start_dates_including_successors_must_be",
+    "KR": "후행 작업을 포함한 시작일은 D부터 D+9999 사이여야 합니다.",
+    "US": "Start dates, including successors, must be between D and D+9999.",
+    "JP": "後続作業を含む開始日はDからD+9999の範囲にしてください。"
+  },
+  {
+    "textID": "template.d",
+    "KR": "D+{p0}",
+    "US": "D+{p0}",
+    "JP": "D+{p0}"
+  },
+  {
+    "textID": "template.tasks",
+    "KR": "개 작업",
+    "US": " tasks",
+    "JP": "件の作業"
+  },
+  {
+    "textID": "template.new_project",
+    "KR": "새 프로젝트",
+    "US": "New project",
+    "JP": "新しいプロジェクト"
+  },
+  {
+    "textID": "template.start_d",
+    "KR": "시작 D+",
+    "US": "Start D+",
+    "JP": "開始 D+"
+  },
+  {
+    "textID": "template.finish_d",
+    "KR": "종료 D+",
+    "US": "Finish D+",
+    "JP": "終了 D+"
+  },
+  {
+    "textID": "template.auto_schedule_from_predecessors",
+    "KR": "선행 기준 자동 배치",
+    "US": "Auto schedule from predecessors",
+    "JP": "先行作業を基準に自動配置"
+  },
+  {
+    "textID": "template.create_a_template_or_select_one",
+    "KR": "템플릿을 만들거나 왼쪽 목록에서 선택하세요.",
+    "US": "Create a template or select one from the sidebar.",
+    "JP": "テンプレートを作成するか、左側の一覧から選択してください。"
+  },
+  {
+    "textID": "template.template_title",
+    "KR": "템플릿 제목",
+    "US": "Template title",
+    "JP": "テンプレートのタイトル"
+  },
+  {
+    "textID": "template.move_successors",
+    "KR": "후행 같이 조정",
+    "US": "Move successors",
+    "JP": "後続も調整"
+  },
+  {
+    "textID": "template.successors",
+    "KR": "후행",
+    "US": "Successors",
+    "JP": "後続"
+  },
+  {
+    "textID": "template.calendar",
+    "KR": "기간 기준",
+    "US": "Calendar",
+    "JP": "期間の基準"
+  },
+  {
+    "textID": "template.5_day_week",
+    "KR": "주 5일",
+    "US": "5-day week",
+    "JP": "週5日"
+  },
+  {
+    "textID": "template.zoom",
+    "KR": "축척",
+    "US": "Zoom",
+    "JP": "表示倍率"
+  },
+  {
+    "textID": "template.template_zoom",
+    "KR": "템플릿 축척",
+    "US": "Template zoom",
+    "JP": "テンプレートの表示倍率"
+  },
+  {
+    "textID": "template.save_template",
+    "KR": "템플릿 저장",
+    "US": "Save template",
+    "JP": "テンプレートを保存"
+  },
+  {
+    "textID": "template.template_chart_legend",
+    "KR": "템플릿 간트 표시 설명",
+    "US": "Template chart legend",
+    "JP": "テンプレートのガント表示について"
+  },
+  {
+    "textID": "template.project_summary",
+    "KR": "프로젝트 요약",
+    "US": "Project summary",
+    "JP": "プロジェクト概要"
+  },
+  {
+    "textID": "template.shows_the_total_duration_of_the",
+    "KR": "템플릿 작업들의 전체 기간을 표시합니다.",
+    "US": "Shows the total duration of the template's tasks.",
+    "JP": "テンプレート内の作業の全期間を表示します。"
+  },
+  {
+    "textID": "template.connections_lead_from_predecessors_to_successors",
+    "KR": "선행 작업에서 후행 작업으로 이어지는 관계입니다.",
+    "US": "Connections lead from predecessors to successors.",
+    "JP": "先行作業から後続作業への関係です。"
+  },
+  {
+    "textID": "template.d_is_the_project_s_first",
+    "KR": "D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다.",
+    "US": "D is the project's first workday; D+1 is the next workday. A 5-day week excludes Saturday and Sunday. Drag a bar or its ends to adjust its dates.",
+    "JP": "Dはプロジェクトの最初の作業日、D+1は次の作業日です。週5日では土日を除きます。バーと両端をドラッグして開始日と期間を調整できます。"
+  },
+  {
+    "textID": "template.template_calendar_help",
+    "KR": "템플릿 일정 기준",
+    "US": "Template calendar help",
+    "JP": "テンプレートの日程基準"
+  },
+  {
+    "textID": "template.d_is_the_project_s_first_2",
+    "KR": "D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다. 저장한 템플릿은 새 배치에 적용됩니다.",
+    "US": "D is the project's first workday; D+1 is the next workday. A 5-day week excludes Saturday and Sunday. Drag a bar or its ends to adjust its dates. Saved templates apply to new batches.",
+    "JP": "Dはプロジェクトの最初の作業日、D+1は次の作業日です。週5日では土日を除きます。バーと両端をドラッグして開始日と期間を調整できます。保存したテンプレートは新しいバッチに適用されます。"
+  },
+  {
+    "textID": "template.template_properties",
+    "KR": "템플릿 속성",
+    "US": "Template properties",
+    "JP": "テンプレートのプロパティ"
+  },
+  {
+    "textID": "template.inspector",
+    "KR": "INSPECTOR",
+    "US": "INSPECTOR",
+    "JP": "インスペクター"
+  },
+  {
+    "textID": "template.properties",
+    "KR": "속성",
+    "US": "Properties",
+    "JP": "プロパティ"
+  },
+  {
+    "textID": "template.template_save_after_editing",
+    "KR": "템플릿 · 편집 후 저장",
+    "US": "Template · save after editing",
+    "JP": "テンプレート · 編集後に保存"
+  },
+  {
+    "textID": "template.project_properties",
+    "KR": "프로젝트 속성",
+    "US": "Project properties",
+    "JP": "プロジェクトのプロパティ"
+  },
+  {
+    "textID": "template.template_name",
+    "KR": "템플릿 이름",
+    "US": "Template name",
+    "JP": "テンプレート名"
+  },
+  {
+    "textID": "template.description",
+    "KR": "설명",
+    "US": "Description",
+    "JP": "説明"
+  },
+  {
+    "textID": "template.default_template_project_color",
+    "KR": "템플릿 기본 프로젝트 색상",
+    "US": "Default template project color",
+    "JP": "テンプレートの既定のプロジェクト色"
+  },
+  {
+    "textID": "template.task_properties",
+    "KR": "작업 속성",
+    "US": "Task properties",
+    "JP": "作業のプロパティ"
+  },
+  {
+    "textID": "template.add_a_task",
+    "KR": "작업을 추가하세요.",
+    "US": "Add a task.",
+    "JP": "作業を追加してください。"
+  },
+  {
+    "textID": "template.predecessors_and_successors",
+    "KR": "선행 및 후행 작업 · {p0} / {p1}",
+    "US": "Predecessors and successors · {p0} / {p1}",
+    "JP": "先行作業と後続作業 · {p0} / {p1}"
+  },
+  {
+    "textID": "template.duration",
+    "KR": "기간",
+    "US": "Duration",
+    "JP": "期間"
+  },
+  {
+    "textID": "template.duration_unit",
+    "KR": "기간 단위",
+    "US": "Duration unit",
+    "JP": "期間の単位"
+  },
+  {
+    "textID": "template.template_predecessors_and_successors",
+    "KR": "템플릿 선행 및 후행 작업",
+    "US": "Template predecessors and successors",
+    "JP": "テンプレートの先行作業と後続作業"
+  },
+  {
+    "textID": "template.predecessor",
+    "KR": "선행",
+    "US": "Predecessor",
+    "JP": "先行"
+  },
+  {
+    "textID": "template.delete_task",
+    "KR": "작업 삭제",
+    "US": "Delete task",
+    "JP": "作業を削除"
+  },
+  {
+    "textID": "template.check_the_start_and_finish_d",
+    "KR": "시작·종료 D+범위를 확인하세요.",
+    "US": "Check the start and finish D+ range.",
+    "JP": "開始・終了のD+範囲を確認してください。"
+  },
+  {
+    "textID": "template.enter_a_template_name",
+    "KR": "템플릿 이름을 입력하세요.",
+    "US": "Enter a template name.",
+    "JP": "テンプレート名を入力してください。"
+  },
+  {
+    "textID": "template.add_at_least_one_task",
+    "KR": "작업을 한 개 이상 추가하세요.",
+    "US": "Add at least one task.",
+    "JP": "作業を1件以上追加してください。"
+  },
+  {
+    "textID": "template.enter_a_task_name",
+    "KR": "작업명을 입력하세요.",
+    "US": "Enter a task name.",
+    "JP": "作業名を入力してください。"
+  },
+  {
+    "textID": "template.template_saved_existing_project_schedules_are",
+    "KR": "템플릿을 저장했습니다. 기존 프로젝트 일정은 유지됩니다.",
+    "US": "Template saved. Existing project schedules are unchanged.",
+    "JP": "テンプレートを保存しました。既存のプロジェクトの予定は維持されます。"
+  },
+  {
+    "textID": "template.new_schedule_template",
+    "KR": "새 일정 템플릿",
+    "US": "New schedule template",
+    "JP": "新しいスケジュールテンプレート"
+  },
+  {
+    "textID": "template.task_1",
+    "KR": "작업 1",
+    "US": "Task 1",
+    "JP": "作業 1"
+  },
+  {
+    "textID": "template.close",
+    "KR": "닫기",
+    "US": "Close",
+    "JP": "閉じる"
+  },
+  {
+    "textID": "template.create_a_schedule_template_first",
+    "KR": "먼저 일정 템플릿을 만들어주세요.",
+    "US": "Create a schedule template first.",
+    "JP": "先にスケジュールテンプレートを作成してください。"
+  },
+  {
+    "textID": "project.new_project_color",
+    "KR": "새 프로젝트 색상",
+    "US": "New project color",
+    "JP": "新しいプロジェクトの色"
+  },
+  {
+    "textID": "project.project_production_batch_name",
+    "KR": "프로젝트 / 생산 배치 이름",
+    "US": "Project / production batch name",
+    "JP": "プロジェクト / 生産バッチ名"
+  },
+  {
+    "textID": "project.e_g_markos_main_board_50ea",
+    "KR": "예: MARKOS MAIN보드 50EA",
+    "US": "e.g. MARKOS MAIN board 50EA",
+    "JP": "例：MARKOS MAINボード 50EA"
+  },
+  {
+    "textID": "project.template_to_apply",
+    "KR": "적용할 템플릿",
+    "US": "Template to apply",
+    "JP": "適用するテンプレート"
+  },
+  {
+    "textID": "project.project_start",
+    "KR": "프로젝트 시작일",
+    "US": "Project start",
+    "JP": "プロジェクト開始日"
+  },
+  {
+    "textID": "project.scheduling_calendar",
+    "KR": "일정 계산 기준",
+    "US": "Scheduling calendar",
+    "JP": "日程計算の基準"
+  },
+  {
+    "textID": "project.scheduling_calendar_help",
+    "KR": "일정 계산 기준 설명",
+    "US": "Scheduling calendar help",
+    "JP": "日程計算の基準について"
+  },
+  {
+    "textID": "project.successors_start_on_the_workday_after",
+    "KR": "작업 완료일 다음 작업일에 후속 공정을 시작합니다. 주 5일은 주말·공휴일을 건너뛰고, 주 7일은 날짜를 그대로 더합니다.",
+    "US": "Successors start on the workday after completion. A 5-day week skips weekends and holidays; a 7-day week counts every day.",
+    "JP": "作業完了日の次の作業日に後続工程を開始します。週5日では週末・祝日を除き、週7日では暦日をそのまま加算します。"
+  },
+  {
+    "textID": "project.create_project_with_all_tasks",
+    "KR": "모든 작업으로 프로젝트 생성",
+    "US": "Create project with all tasks",
+    "JP": "すべての作業でプロジェクトを作成"
+  },
+  {
+    "textID": "project.create_project_from_template",
+    "KR": "템플릿으로 프로젝트 만들기",
+    "US": "Create project from template",
+    "JP": "テンプレートからプロジェクトを作成"
+  },
+  {
+    "textID": "project.create_project_from_template_help",
+    "KR": "템플릿으로 프로젝트 만들기 설명",
+    "US": "Create project from template help",
+    "JP": "テンプレートからのプロジェクト作成について"
+  },
+  {
+    "textID": "project.copy_the_selected_template_s_tasks",
+    "KR": "선택한 템플릿의 작업과 의존 관계를 한 번에 복사합니다.",
+    "US": "Copy the selected template's tasks and dependencies together.",
+    "JP": "選択したテンプレートの作業と依存関係をまとめてコピーします。"
+  },
+  {
+    "textID": "project.tasks_copies_task_colors_and_dependencies",
+    "KR": "{p0}: {p1}개 작업 · 작업 색상과 의존 관계를 복사하고 일정은 시작일로부터 자동 계산합니다.",
+    "US": "{p0}: {p1} tasks · Copies task colors and dependencies and schedules dates from the start date.",
+    "JP": "{p0}：作業{p1}件 · 作業の色と依存関係をコピーし、開始日から予定を自動計算します。"
+  },
+  {
+    "textID": "project.created_tasks",
+    "KR": "{p0} · {p1}개 작업을 생성했습니다.",
+    "US": "{p0} · Created {p1} tasks.",
+    "JP": "{p0} · 作業を{p1}件作成しました。"
+  },
+  {
+    "textID": "project.add_another_task_to_create_a",
+    "KR": "다른 작업을 추가하면 연결할 수 있습니다.",
+    "US": "Add another task to create a connection.",
+    "JP": "他の作業を追加すると接続できます。"
+  },
+  {
+    "textID": "project.department_or_vendor",
+    "KR": "담당 부서 또는 업체",
+    "US": "Department or vendor",
+    "JP": "担当部署または会社"
+  },
+  {
+    "textID": "project.move_connected_successors",
+    "KR": "연결된 후행 작업 같이 변경",
+    "US": "Move connected successors",
+    "JP": "接続された後続作業も変更"
+  },
+  {
+    "textID": "project.shift_all_successor_planned_dates_by",
+    "KR": "더 늦은 예정·실제 종료일의 변경량만큼 모든 후행 작업의 예정 날짜를 이동합니다. 실제 기록은 유지됩니다.",
+    "US": "Shift all successor planned dates by the change in the later of the planned and actual finish dates. Actual records remain unchanged.",
+    "JP": "予定・実績終了日のうち遅い方の変更量に合わせて、すべての後続作業の予定日を移動します。実績記録は維持されます。"
+  },
+  {
+    "textID": "project.all_selected_predecessors_must_finish_before",
+    "KR": "· 복수 선택 시 모든 선행 작업이 끝나야 시작",
+    "US": "· All selected predecessors must finish before this task starts",
+    "JP": "· 複数選択時はすべての先行作業の完了後に開始"
+  },
+  {
+    "textID": "project.actual_completion_date",
+    "KR": "실제 완료일",
+    "US": "Actual completion date",
+    "JP": "実績完了日"
+  },
+  {
+    "textID": "project.save_changes",
+    "KR": "변경 저장",
+    "US": "Save changes",
+    "JP": "変更を保存"
+  },
+  {
+    "textID": "project.planned",
+    "KR": "{p0} · 예정 {p1} – {p2}",
+    "US": "{p0} · Planned {p1} – {p2}",
+    "JP": "{p0} · 予定 {p1} – {p2}"
+  },
+  {
+    "textID": "project.actual_completion_date_recorded",
+    "KR": "실제 완료일을 기록했습니다.",
+    "US": "Actual completion date recorded.",
+    "JP": "実績完了日を記録しました。"
+  },
+  {
+    "textID": "project.task_dates_and_properties_saved",
+    "KR": "작업 날짜와 속성을 저장했습니다.",
+    "US": "Task dates and properties saved.",
+    "JP": "作業日とプロパティを保存しました。"
+  },
+  {
+    "textID": "project.changing_the_start_date_or_calendar",
+    "KR": "시작일과 달력 기준을 바꾸어도 저장된 작업 날짜는 그대로 유지됩니다.",
+    "US": "Changing the start date or calendar keeps saved task dates unchanged.",
+    "JP": "開始日とカレンダーの基準を変更しても、保存済みの作業日は変わりません。"
+  },
+  {
+    "textID": "project.save_project_info",
+    "KR": "프로젝트 정보 저장",
+    "US": "Save project info",
+    "JP": "プロジェクト情報を保存"
+  },
+  {
+    "textID": "project.project_settings",
+    "KR": "프로젝트 설정",
+    "US": "Project settings",
+    "JP": "プロジェクト設定"
+  },
+  {
+    "textID": "project.tasks",
+    "KR": "{p0}개 작업 · {p1}",
+    "US": "{p0} tasks · {p1}",
+    "JP": "作業{p0}件 · {p1}"
+  },
+  {
+    "textID": "project.project_info_saved_task_dates_are",
+    "KR": "프로젝트 정보를 저장했습니다. 작업 날짜는 그대로 유지됩니다.",
+    "US": "Project info saved. Task dates are unchanged.",
+    "JP": "プロジェクト情報を保存しました。作業日は維持されます。"
+  },
+  {
+    "textID": "project.insert_at_position",
+    "KR": "{p0}번째에 삽입",
+    "US": "Insert at position {p0}",
+    "JP": "{p0}番目に挿入"
+  },
+  {
+    "textID": "project.default_task_order_saved",
+    "KR": "기본 작업 순서를 저장했습니다.",
+    "US": "Default task order saved.",
+    "JP": "標準の作業順序を保存しました。"
+  },
+  {
+    "textID": "common.switch_to_list_view",
+    "KR": "목록 보기로 전환",
+    "US": "Switch to list view",
+    "JP": "一覧表示に切り替え"
+  },
+  {
+    "textID": "common.switch_to_gantt_view",
+    "KR": "간트 보기로 전환",
+    "US": "Switch to Gantt view",
+    "JP": "ガント表示に切り替え"
+  },
+  {
+    "textID": "common.cannot_connect_to_the_local_backend",
+    "KR": "로컬 백엔드에 연결할 수 없습니다: {p0}",
+    "US": "Cannot connect to the local backend: {p0}",
+    "JP": "ローカルバックエンドに接続できません：{p0}"
+  },
+  {
+    "textID": "common.check_that_the_server_is_running",
+    "KR": "서버가 실행 중인지 확인하세요",
+    "US": "Check that the server is running",
+    "JP": "サーバーが起動しているか確認してください"
+  },
+  {
+    "textID": "common.mygantt_production_schedule",
+    "KR": "MyGantt · 생산 일정",
+    "US": "MyGantt · Production Schedule",
+    "JP": "MyGantt · 生産スケジュール"
+  },
+  {
+    "textID": "common.when_the_later_of_the_planned",
+    "KR": "예정·실제 종료일 중 더 늦은 날짜가 바뀌면, 변경된 날짜 수만큼 모든 후행 작업의 예정 시작일과 종료일을 함께 이동합니다. 실제 기록은 유지됩니다.",
+    "US": "When the later of the planned and actual finish dates changes, shift every successor's planned start and finish by the same number of days. Actual records remain unchanged.",
+    "JP": "予定・実績終了日のうち遅い方が変わると、変更日数に合わせてすべての後続作業の予定開始日・終了日を移動します。実績記録は維持されます。"
+  },
+  {
+    "textID": "common.close_panel",
+    "KR": "패널 닫기",
+    "US": "Close panel",
+    "JP": "パネルを閉じる"
+  },
+  {
+    "textID": "common.search_schedules",
+    "KR": "일정 검색",
+    "US": "Search schedules",
+    "JP": "予定を検索"
+  },
+  {
+    "textID": "common.close_search",
+    "KR": "검색 닫기",
+    "US": "Close search",
+    "JP": "検索を閉じる"
+  },
+  {
+    "textID": "common.batch_task_owner_tags",
+    "KR": "배치, 작업, 담당, 태그",
+    "US": "Batch, task, owner, tags",
+    "JP": "バッチ、作業、担当、タグ"
+  },
+  {
+    "textID": "common.enter_search_terms",
+    "KR": "검색어를 입력하세요",
+    "US": "Enter search terms",
+    "JP": "検索語を入力してください"
+  },
+  {
+    "textID": "common.clear_search",
+    "KR": "검색 초기화",
+    "US": "Clear search",
+    "JP": "検索をクリア"
+  },
+  {
+    "textID": "common.show_results",
+    "KR": "결과 보기",
+    "US": "Show results",
+    "JP": "結果を表示"
+  },
+  {
+    "textID": "common.main_menu",
+    "KR": "메인 메뉴",
+    "US": "Main menu",
+    "JP": "メインメニュー"
+  },
+  {
+    "textID": "common.close_menu",
+    "KR": "메뉴 닫기",
+    "US": "Close menu",
+    "JP": "メニューを閉じる"
+  },
+  {
+    "textID": "common.mygantt_home",
+    "KR": "MyGantt 홈",
+    "US": "MyGantt home",
+    "JP": "MyGantt ホーム"
+  },
+  {
+    "textID": "common.mygantt",
+    "KR": "MyGantt",
+    "US": "MyGantt",
+    "JP": "MyGantt"
+  },
+  {
+    "textID": "navigation.production_scheduling",
+    "KR": "생산 일정 관리",
+    "US": "Production scheduling",
+    "JP": "生産スケジュール管理"
+  },
+  {
+    "textID": "navigation.workspace",
+    "KR": "워크스페이스",
+    "US": "Workspace",
+    "JP": "ワークスペース"
+  },
+  {
+    "textID": "navigation.main_navigation",
+    "KR": "주 메뉴",
+    "US": "Main navigation",
+    "JP": "メインナビゲーション"
+  },
+  {
+    "textID": "navigation.production_batches",
+    "KR": "생산 배치",
+    "US": "Production batches",
+    "JP": "生産バッチ"
+  },
+  {
+    "textID": "navigation.my_templates",
+    "KR": "내 템플릿",
+    "US": "My templates",
+    "JP": "マイテンプレート"
+  },
+  {
+    "textID": "navigation.add_template",
+    "KR": "템플릿 추가",
+    "US": "Add template",
+    "JP": "テンプレートを追加"
+  },
+  {
+    "textID": "navigation.checking_storage_location",
+    "KR": "저장 위치 확인 중",
+    "US": "Checking storage location",
+    "JP": "保存先を確認中"
+  },
+  {
+    "textID": "navigation.sqlite_database",
+    "KR": "SQLite 데이터베이스",
+    "US": "SQLite database",
+    "JP": "SQLiteデータベース"
+  },
+  {
+    "textID": "navigation.local_production_schedule",
+    "KR": "로컬 생산 일정",
+    "US": "Local production schedule",
+    "JP": "ローカル生産スケジュール"
+  },
+  {
+    "textID": "navigation.open_menu",
+    "KR": "메뉴 열기",
+    "US": "Open menu",
+    "JP": "メニューを開く"
+  },
+  {
+    "textID": "navigation.production_management",
+    "KR": "생산 관리",
+    "US": "Production management",
+    "JP": "生産管理"
+  },
+  {
+    "textID": "navigation.page_help",
+    "KR": "화면 설명",
+    "US": "Page help",
+    "JP": "画面の説明"
+  },
+  {
+    "textID": "navigation.export_ics",
+    "KR": ".ics 내보내기",
+    "US": "Export .ics",
+    "JP": ".ics エクスポート"
+  },
+  {
+    "textID": "navigation.add_batch",
+    "KR": "배치 추가",
+    "US": "Add batch",
+    "JP": "バッチを追加"
+  },
+  {
+    "textID": "navigation.schedule_view",
+    "KR": "일정 보기",
+    "US": "Schedule view",
+    "JP": "スケジュール表示"
+  },
+  {
+    "textID": "timeline.gantt",
+    "KR": "간트",
+    "US": "Gantt",
+    "JP": "ガント"
+  },
+  {
+    "textID": "timeline.list",
+    "KR": "목록",
+    "US": "List",
+    "JP": "一覧"
+  },
+  {
+    "textID": "timeline.search_batches_tasks_owners_tags",
+    "KR": "배치, 작업, 담당, 태그 검색",
+    "US": "Search batches, tasks, owners, tags",
+    "JP": "バッチ、作業、担当、タグを検索"
+  },
+  {
+    "textID": "timeline.filter",
+    "KR": "필터",
+    "US": "Filter",
+    "JP": "フィルター"
+  },
+  {
+    "textID": "timeline.task_order",
+    "KR": "작업 정렬",
+    "US": "Task order",
+    "JP": "作業の並べ替え"
+  },
+  {
+    "textID": "timeline.sort",
+    "KR": "정렬",
+    "US": "Sort",
+    "JP": "並べ替え"
+  },
+  {
+    "textID": "timeline.start_date",
+    "KR": "시작일순",
+    "US": "Start date",
+    "JP": "開始日順"
+  },
+  {
+    "textID": "timeline.name",
+    "KR": "이름순",
+    "US": "Name",
+    "JP": "名前順"
+  },
+  {
+    "textID": "timeline.progress",
+    "KR": "진행률순",
+    "US": "Progress",
+    "JP": "進捗率順"
+  },
+  {
+    "textID": "timeline.group_view",
+    "KR": "그룹별 보기",
+    "US": "Group view",
+    "JP": "グループ別表示"
+  },
+  {
+    "textID": "timeline.shift_every_successor_s_planned_start",
+    "KR": "예정·실제 종료일 중 더 늦은 날짜의 변경량만큼 모든 후행 작업의 예정 시작·종료일을 이동합니다.",
+    "US": "Shift every successor's planned start and finish by the change in the later of the planned and actual finish dates.",
+    "JP": "予定・実績終了日のうち遅い方の変更量に合わせて、すべての後続作業の予定開始日・終了日を移動します。"
+  },
+  {
+    "textID": "timeline.today",
+    "KR": "오늘",
+    "US": "Today",
+    "JP": "今日"
+  },
+  {
+    "textID": "timeline.saturday",
+    "KR": "토요일",
+    "US": "Saturday",
+    "JP": "土曜日"
+  },
+  {
+    "textID": "timeline.sunday",
+    "KR": "일요일",
+    "US": "Sunday",
+    "JP": "日曜日"
+  },
+  {
+    "textID": "timeline.public_holiday",
+    "KR": "공휴일",
+    "US": "Public holiday",
+    "JP": "祝日"
+  },
+  {
+    "textID": "timeline.the_upper_bar_is_planned_and",
+    "KR": "같은 작업의 위 막대는 예정, 아래 막대는 실제 작업 기간이며 같은 작업은 같은 색상입니다.",
+    "US": "The upper bar is planned and the lower bar is actual. Both use the same task color.",
+    "JP": "同じ作業の上のバーは予定、下のバーは実績期間を表します。同じ作業は同じ色です。"
+  },
+  {
+    "textID": "timeline.below_actual",
+    "KR": "아래: 실제",
+    "US": "Below: actual",
+    "JP": "下：実績"
+  },
+  {
+    "textID": "timeline.predecessor_finishes_successor_starts",
+    "KR": "선행 작업 완료 → 후행 작업 시작",
+    "US": "Predecessor finishes → successor starts",
+    "JP": "先行作業の完了 → 後続作業の開始"
+  },
+  {
+    "textID": "timeline.loading",
+    "KR": "불러오는 중",
+    "US": "Loading",
+    "JP": "読み込み中"
+  },
+  {
+    "textID": "timeline.calendar_help",
+    "KR": "일정 기준 도움말",
+    "US": "Calendar help",
+    "JP": "日程基準のヘルプ"
+  },
+  {
+    "textID": "timeline.new_projects_using_a_5_day",
+    "KR": "새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.",
+    "US": "New projects using a 5-day week exclude weekends and public holidays. Duration includes the finish date.",
+    "JP": "新しいプロジェクトの週5日の日程は、週末・祝日を除いて計算します。期間には完了日を含みます。"
+  },
+  {
+    "textID": "timeline.no_matching_schedules",
+    "KR": "조건에 맞는 일정이 없습니다",
+    "US": "No matching schedules",
+    "JP": "条件に一致する予定がありません"
+  },
+  {
+    "textID": "timeline.try_a_different_search_or_status",
+    "KR": "검색어나 상태 필터를 바꿔보세요.",
+    "US": "Try a different search or status filter.",
+    "JP": "検索語または状態フィルターを変更してください。"
+  },
+  {
+    "textID": "timeline.selected_item_properties",
+    "KR": "선택 항목 속성",
+    "US": "Selected item properties",
+    "JP": "選択項目のプロパティ"
+  },
+  {
+    "textID": "timeline.selected_item",
+    "KR": "선택 항목",
+    "US": "Selected item",
+    "JP": "選択項目"
+  },
+  {
+    "textID": "timeline.close_properties",
+    "KR": "속성 닫기",
+    "US": "Close properties",
+    "JP": "プロパティを閉じる"
+  },
+  {
+    "textID": "settings.app_info",
+    "KR": "앱 정보",
+    "US": "App info",
+    "JP": "アプリ情報"
+  },
+  {
+    "textID": "settings.app",
+    "KR": "앱",
+    "US": "App",
+    "JP": "アプリ"
+  },
+  {
+    "textID": "settings.version",
+    "KR": "버전",
+    "US": "Version",
+    "JP": "バージョン"
+  },
+  {
+    "textID": "settings.checking",
+    "KR": "확인 중",
+    "US": "Checking",
+    "JP": "確認中"
+  },
+  {
+    "textID": "settings.public_holiday_data",
+    "KR": "공휴일 자료",
+    "US": "Public holiday data",
+    "JP": "祝日データ"
+  },
+  {
+    "textID": "settings.data_used_to_display_south_korean",
+    "KR": "대한민국 공휴일을 일정 달력에 표시하는 데 사용하는 자료입니다.",
+    "US": "Data used to display South Korean public holidays on the calendar.",
+    "JP": "韓国の祝日をスケジュールカレンダーに表示するためのデータです。"
+  },
+  {
+    "textID": "settings.checking_public_holiday_data",
+    "KR": "공휴일 자료 확인 중",
+    "US": "Checking public holiday data",
+    "JP": "祝日データを確認中"
+  },
+  {
+    "textID": "settings.new_projects_use_public_holiday_data",
+    "KR": "새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.",
+    "US": "New projects use public holiday data for 5-day scheduling. Existing task dates stay unchanged.",
+    "JP": "新しいプロジェクトの週5日の日程計算に祝日データを使用します。既存の作業日は維持されます。"
+  },
+  {
+    "textID": "help.chart_legend",
+    "KR": "간트 표시 설명",
+    "US": "Chart legend",
+    "JP": "ガント表示について"
+  },
+  {
+    "textID": "help.shows_the_overall_schedule_and_progress",
+    "KR": "프로젝트에 속한 작업들의 전체 일정과 진행률을 표시합니다.",
+    "US": "Shows the overall schedule and progress of the project tasks.",
+    "JP": "プロジェクト内の作業の全日程と進捗率を表示します。"
+  },
+  {
+    "textID": "help.planned_actual_tasks",
+    "KR": "예정·실제 작업",
+    "US": "Planned / actual tasks",
+    "JP": "予定・実績作業"
+  },
+  {
+    "textID": "help.the_upper_bar_is_planned_and",
+    "KR": "위 막대는 예정, 아래 막대는 실제 작업 기간입니다. 같은 작업은 같은 색상입니다.",
+    "US": "The upper bar is planned and the lower bar is actual. Both use the same task color.",
+    "JP": "上のバーは予定、下のバーは実績期間です。同じ作業は同じ色です。"
+  },
+  {
+    "textID": "help.connections_show_the_relationship_from_a",
+    "KR": "선행 작업에서 후행 작업으로 이어지는 관계를 나타냅니다.",
+    "US": "Connections show the relationship from a predecessor to a successor.",
+    "JP": "先行作業から後続作業への関係を表します。"
+  },
+  {
+    "textID": "error.request_body_is_too_large",
+    "KR": "요청 본문이 너무 큽니다.",
+    "US": "Request body is too large.",
+    "JP": "リクエスト本文が大きすぎます。"
+  },
+  {
+    "textID": "error.a_json_object_is_required",
+    "KR": "JSON object 요청이 필요합니다.",
+    "US": "A JSON object is required.",
+    "JP": "JSONオブジェクト形式のリクエストが必要です。"
+  },
+  {
+    "textID": "error.route_not_found",
+    "KR": "경로를 찾을 수 없습니다.",
+    "US": "Route not found.",
+    "JP": "パスが見つかりません。"
+  },
+  {
+    "textID": "error.file_not_found",
+    "KR": "파일을 찾을 수 없습니다.",
+    "US": "File not found.",
+    "JP": "ファイルが見つかりません。"
+  },
+  {
+    "textID": "error.no_tasks_to_preview",
+    "KR": "미리 볼 작업이 없습니다.",
+    "US": "No tasks to preview.",
+    "JP": "プレビューする作業がありません。"
+  },
+  {
+    "textID": "error.specify_the_task_and_insertion_direction",
+    "KR": "삽입할 작업과 방향을 지정하세요.",
+    "US": "Specify the task and insertion direction.",
+    "JP": "挿入する作業と方向を指定してください。"
+  },
+  {
+    "textID": "error.specify_the_destination_project",
+    "KR": "이동할 프로젝트를 지정하세요.",
+    "US": "Specify the destination project.",
+    "JP": "移動先のプロジェクトを指定してください。"
+  },
+  {
+    "textID": "error.invalid_insertion_position",
+    "KR": "삽입 위치가 올바르지 않습니다.",
+    "US": "Invalid insertion position.",
+    "JP": "挿入位置が正しくありません。"
+  },
+  {
+    "textID": "error.colors_must_use_rrggbb_format",
+    "KR": "색상은 #RRGGBB 형식이어야 합니다.",
+    "US": "Colors must use #RRGGBB format.",
+    "JP": "色は#RRGGBB形式で指定してください。"
+  },
+  {
+    "textID": "error.a_template_name_and_at_least_one",
+    "KR": "템플릿 이름과 1개 이상의 작업이 필요합니다.",
+    "US": "A template name and at least one task are required.",
+    "JP": "テンプレート名と1件以上の作業が必要です。"
+  },
+  {
+    "textID": "error.a_predecessor_is_missing_from_the_template",
+    "KR": "선행 작업이 템플릿에 없습니다.",
+    "US": "A predecessor is missing from the template.",
+    "JP": "先行作業がテンプレートにありません。"
+  },
+  {
+    "textID": "error.a_project_name_and_start_date_are",
+    "KR": "프로젝트 이름과 시작일이 필요합니다.",
+    "US": "A project name and start date are required.",
+    "JP": "プロジェクト名と開始日が必要です。"
+  },
+  {
+    "textID": "error.calendar_type_must_be_working_or_calendar",
+    "KR": "달력 유형은 working 또는 calendar여야 합니다.",
+    "US": "Calendar type must be working or calendar.",
+    "JP": "カレンダーの種類はworkingまたはcalendarにしてください。"
+  },
+  {
+    "textID": "error.properties_of_the_no_project_group_cannot",
+    "KR": "프로젝트 없음 그룹의 속성은 변경할 수 없습니다.",
+    "US": "Properties of the No project group cannot be changed.",
+    "JP": "プロジェクトなしグループのプロパティは変更できません。"
+  },
+  {
+    "textID": "error.this_project_field_cannot_be_edited",
+    "KR": "수정할 수 없는 프로젝트 필드입니다.",
+    "US": "This project field cannot be edited.",
+    "JP": "変更できないプロジェクトフィールドです。"
+  },
+  {
+    "textID": "error.this_task_field_cannot_be_added",
+    "KR": "추가할 수 없는 작업 필드입니다.",
+    "US": "This task field cannot be added.",
+    "JP": "追加できない作業フィールドです。"
+  },
+  {
+    "textID": "error.invalid_project",
+    "KR": "프로젝트가 올바르지 않습니다.",
+    "US": "Invalid project.",
+    "JP": "プロジェクトが正しくありません。"
+  },
+  {
+    "textID": "error.this_task_field_cannot_be_edited",
+    "KR": "수정할 수 없는 작업 필드입니다.",
+    "US": "This task field cannot be edited.",
+    "JP": "変更できない作業フィールドです。"
+  },
+  {
+    "textID": "error.invalid_task_status",
+    "KR": "작업 상태가 올바르지 않습니다.",
+    "US": "Invalid task status.",
+    "JP": "作業の状態が正しくありません。"
+  },
+  {
+    "textID": "error.invalid_successor_adjustment_option",
+    "KR": "후행 작업 일정 조정 옵션이 올바르지 않습니다.",
+    "US": "Invalid successor adjustment option.",
+    "JP": "後続作業の日程調整オプションが正しくありません。"
+  },
+  {
+    "textID": "error.tasks_can_only_be_reordered_within_the",
+    "KR": "같은 프로젝트 안의 작업에만 순서를 지정할 수 있습니다.",
+    "US": "Tasks can only be reordered within the same project.",
+    "JP": "同じプロジェクト内の作業のみ順序を指定できます。"
+  },
+  {
+    "textID": "error.tags_must_be_a_comma_separated_string",
+    "KR": "태그는 쉼표로 구분한 문자열 또는 배열이어야 합니다.",
+    "US": "Tags must be a comma-separated string or an array.",
+    "JP": "タグはカンマ区切りの文字列または配列にしてください。"
+  },
+  {
+    "textID": "error.duplicate_template_task_key",
+    "KR": "템플릿 작업 key가 중복되었습니다.",
+    "US": "Duplicate template task key.",
+    "JP": "テンプレートの作業キーが重複しています。"
+  },
+  {
+    "textID": "error.template_not_found",
+    "KR": "템플릿을 찾을 수 없습니다.",
+    "US": "Template not found.",
+    "JP": "テンプレートが見つかりません。"
+  },
+  {
+    "textID": "error.progress_must_be_from_0_to_100",
+    "KR": "진행률은 0부터 100까지 10 단위여야 합니다.",
+    "US": "Progress must be from 0 to 100 in increments of 10.",
+    "JP": "進捗率は0から100までの10刻みにしてください。"
+  },
+  {
+    "textID": "error.invalid_predecessor_format",
+    "KR": "선행 작업 형식이 올바르지 않습니다.",
+    "US": "Invalid predecessor format.",
+    "JP": "先行作業の形式が正しくありません。"
+  },
+  {
+    "textID": "error.cannot_schedule_a_5_day_week_because",
+    "KR": "{p0}년 공휴일 자료가 없어 주 5일 일정을 계산할 수 없습니다.",
+    "US": "Cannot schedule a 5-day week because holiday data for {p0} is unavailable.",
+    "JP": "{p0}年の祝日データがないため、週5日の日程を計算できません。"
+  },
+  {
+    "textID": "error.invalid_scheduling_calendar",
+    "KR": "일정 기준이 올바르지 않습니다.",
+    "US": "Invalid scheduling calendar.",
+    "JP": "日程の基準が正しくありません。"
+  },
+  {
+    "textID": "error.project_not_found",
+    "KR": "프로젝트를 찾을 수 없습니다.",
+    "US": "Project not found.",
+    "JP": "プロジェクトが見つかりません。"
+  },
+  {
+    "textID": "error.invalid_successor_format",
+    "KR": "후행 작업 형식이 올바르지 않습니다.",
+    "US": "Invalid successor format.",
+    "JP": "後続作業の形式が正しくありません。"
+  },
+  {
+    "textID": "error.successors_must_be_other_tasks_in_the",
+    "KR": "후행 작업은 같은 프로젝트의 다른 작업이어야 합니다.",
+    "US": "Successors must be other tasks in the same project.",
+    "JP": "後続作業は同じプロジェクト内の別の作業にしてください。"
+  },
+  {
+    "textID": "error.enter_actual_dates_in_yyyy_mm_dd",
+    "KR": "실제 날짜를 YYYY-MM-DD 형식으로 입력하세요.",
+    "US": "Enter actual dates in YYYY-MM-DD format.",
+    "JP": "実績日をYYYY-MM-DD形式で入力してください。"
+  },
+  {
+    "textID": "error.duration_must_be_at_least_1",
+    "KR": "기간은 1 이상이어야 합니다.",
+    "US": "Duration must be at least 1.",
+    "JP": "期間は1以上にしてください。"
+  },
+  {
+    "textID": "error.duration_unit_must_be_days_or_weeks",
+    "KR": "기간 단위는 days 또는 weeks여야 합니다.",
+    "US": "Duration unit must be days or weeks.",
+    "JP": "期間の単位はdaysまたはweeksにしてください。"
+  },
+  {
+    "textID": "error.template_start_must_be_an_integer_from",
+    "KR": "템플릿 시작일은 D+1부터 D+10000 사이의 정수여야 합니다.",
+    "US": "Template start must be an integer from D+1 through D+10000.",
+    "JP": "テンプレートの開始日はD+1からD+10000の範囲の整数にしてください。"
+  },
+  {
+    "textID": "error.enter_both_start_and_finish_dates",
+    "KR": "시작일과 종료일을 모두 입력하세요.",
+    "US": "Enter both start and finish dates.",
+    "JP": "開始日と終了日の両方を入力してください。"
+  },
+  {
+    "textID": "error.enter_dates_in_yyyy_mm_dd_format",
+    "KR": "날짜를 YYYY-MM-DD 형식으로 입력하세요.",
+    "US": "Enter dates in YYYY-MM-DD format.",
+    "JP": "日付をYYYY-MM-DD形式で入力してください。"
+  },
+  {
+    "textID": "error.finish_cannot_be_earlier_than_start",
+    "KR": "종료일은 시작일보다 빠를 수 없습니다.",
+    "US": "Finish cannot be earlier than start.",
+    "JP": "終了日は開始日より前にはできません。"
+  },
+  {
+    "textID": "error.duplicate_task_id",
+    "KR": "작업 ID가 중복되었습니다.",
+    "US": "Duplicate task ID.",
+    "JP": "作業IDが重複しています。"
+  },
+  {
+    "textID": "error.task_not_found",
+    "KR": "작업을 찾을 수 없습니다.",
+    "US": "Task not found.",
+    "JP": "作業が見つかりません。"
+  },
+  {
+    "textID": "error.duration_must_be_a_positive_integer",
+    "KR": "기간은 양의 정수여야 합니다.",
+    "US": "Duration must be a positive integer.",
+    "JP": "期間は正の整数にしてください。"
+  },
+  {
+    "textID": "error.unknown_predecessor_p0",
+    "KR": "알 수 없는 선행 작업: {p0}",
+    "US": "Unknown predecessor: {p0}",
+    "JP": "不明な先行作業：{p0}"
+  },
+  {
+    "textID": "error.a_task_cannot_depend_on_itself",
+    "KR": "작업이 자기 자신에 의존할 수 없습니다.",
+    "US": "A task cannot depend on itself.",
+    "JP": "作業を自分自身に依存させることはできません。"
+  },
+  {
+    "textID": "error.successor_dates_are_outside_the_supported_range",
+    "KR": "후행 작업 날짜가 지원 범위를 벗어납니다.",
+    "US": "Successor dates are outside the supported range.",
+    "JP": "後続作業の日付が対応範囲外です。"
+  },
+  {
+    "textID": "settings.language",
+    "KR": "언어",
+    "US": "Language",
+    "JP": "言語"
+  },
+  {
+    "textID": "language.KR",
+    "KR": "한국어 (KR)",
+    "US": "한국어 (KR)",
+    "JP": "한국어 (KR)"
+  },
+  {
+    "textID": "language.US",
+    "KR": "English (US)",
+    "US": "English (US)",
+    "JP": "English (US)"
+  },
+  {
+    "textID": "settings.languageHelp",
+    "KR": "이 기기의 UI 언어를 선택합니다. 작업명과 메모 등 사용자 입력은 변경하지 않습니다.",
+    "US": "Choose the UI language for this browser. Task names, notes, and other user content stay unchanged.",
+    "JP": "このブラウザーの表示言語を選択します。作業名やメモなどのユーザー入力は変更しません。"
+  },
+  {
+    "textID": "weekday.sun",
+    "KR": "일",
+    "US": "Sun",
+    "JP": "日"
+  },
+  {
+    "textID": "error.unknown",
+    "KR": "처리하지 못했습니다. 다시 시도해 주세요.",
+    "US": "Unable to complete the request. Please try again.",
+    "JP": "処理できませんでした。もう一度お試しください。"
+  },
+  {
+    "textID": "source.kasi",
+    "KR": "KASI / 관세청 2026 기본 자료",
+    "US": "KASI / Korea Customs Service 2026 baseline",
+    "JP": "KASI / 韓国関税庁 2026年基本データ"
+  },
+  {
+    "textID": "source.nager",
+    "KR": "Nager.Date Community API v4",
+    "US": "Nager.Date Community API v4",
+    "JP": "Nager.Date Community API v4"
+  },
+  {
+    "textID": "holiday.01",
+    "KR": "신정",
+    "US": "New Year's Day",
+    "JP": "元日"
+  },
+  {
+    "textID": "holiday.02",
+    "KR": "연말",
+    "US": "New Year's Eve",
+    "JP": "年末"
+  },
+  {
+    "textID": "holiday.03",
+    "KR": "설날",
+    "US": "Seollal",
+    "JP": "旧正月"
+  },
+  {
+    "textID": "holiday.04",
+    "KR": "설날 연휴",
+    "US": "Seollal Holiday",
+    "JP": "旧正月連休"
+  },
+  {
+    "textID": "holiday.05",
+    "KR": "삼일절",
+    "US": "Independence Movement Day",
+    "JP": "三一節"
+  },
+  {
+    "textID": "holiday.06",
+    "KR": "노동절",
+    "US": "Labor Day",
+    "JP": "労働節"
+  },
+  {
+    "textID": "holiday.07",
+    "KR": "어린이날",
+    "US": "Children's Day",
+    "JP": "こどもの日"
+  },
+  {
+    "textID": "holiday.08",
+    "KR": "부처님오신날",
+    "US": "Buddha's Birthday",
+    "JP": "釈迦誕生日"
+  },
+  {
+    "textID": "holiday.09",
+    "KR": "현충일",
+    "US": "Memorial Day",
+    "JP": "顕忠日"
+  },
+  {
+    "textID": "holiday.10",
+    "KR": "제헌절",
+    "US": "Constitution Day",
+    "JP": "制憲節"
+  },
+  {
+    "textID": "holiday.11",
+    "KR": "광복절",
+    "US": "Liberation Day",
+    "JP": "光復節"
+  },
+  {
+    "textID": "holiday.12",
+    "KR": "추석",
+    "US": "Chuseok",
+    "JP": "秋夕"
+  },
+  {
+    "textID": "holiday.13",
+    "KR": "추석 연휴",
+    "US": "Chuseok Holiday",
+    "JP": "秋夕連休"
+  },
+  {
+    "textID": "holiday.14",
+    "KR": "개천절",
+    "US": "National Foundation Day",
+    "JP": "開天節"
+  },
+  {
+    "textID": "holiday.15",
+    "KR": "한글날",
+    "US": "Hangul Day",
+    "JP": "ハングルの日"
+  },
+  {
+    "textID": "holiday.16",
+    "KR": "성탄절",
+    "US": "Christmas Day",
+    "JP": "クリスマス"
+  },
+  {
+    "textID": "holiday.17",
+    "KR": "선거일",
+    "US": "Election Day",
+    "JP": "選挙日"
+  },
+  {
+    "textID": "holiday.18",
+    "KR": "임시공휴일",
+    "US": "Temporary Public Holiday",
+    "JP": "臨時祝日"
+  },
+  {
+    "textID": "holiday.19",
+    "KR": "삼일절 대체공휴일",
+    "US": "Independence Movement Day (substitute)",
+    "JP": "三一節の振替休日"
+  },
+  {
+    "textID": "holiday.20",
+    "KR": "부처님오신날 대체공휴일",
+    "US": "Buddha’s Birthday (substitute)",
+    "JP": "釈迦誕生日の振替休日"
+  },
+  {
+    "textID": "holiday.21",
+    "KR": "전국동시지방선거일",
+    "US": "Local election day",
+    "JP": "全国同時地方選挙日"
+  },
+  {
+    "textID": "holiday.22",
+    "KR": "광복절 대체공휴일",
+    "US": "Liberation Day (substitute)",
+    "JP": "光復節の振替休日"
+  },
+  {
+    "textID": "holiday.23",
+    "KR": "개천절 대체공휴일",
+    "US": "National Foundation Day (substitute)",
+    "JP": "開天節の振替休日"
+  },
+  {
+    "textID": "language.JP",
+    "KR": "日本語 (JP)",
+    "US": "日本語 (JP)",
+    "JP": "日本語 (JP)"
+  },
+  {
+    "textID": "settings.general",
+    "KR": "일반",
+    "US": "General",
+    "JP": "一般"
+  },
+  {
+    "textID": "help.progress_knob_stop",
+    "KR": "슬라이더 노브 클릭하면 중지로 변경됩니다",
+    "US": "Click the slider knob to stop the task.",
+    "JP": "スライダーのつまみをクリックすると中止に切り替わります。"
+  },
+  {
+    "textID": "timeline.predecessor_successor_legend",
+    "KR": "선⋅후행 작업",
+    "US": "Predecessors · Successors",
+    "JP": "先行・後続作業"
+  },
+  {
+    "textID": "project.delete",
+    "KR": "프로젝트 삭제",
+    "US": "Delete project",
+    "JP": "プロジェクトを削除"
+  },
+  {
+    "textID": "task.delete",
+    "KR": "작업 삭제",
+    "US": "Delete task",
+    "JP": "作業を削除"
+  },
+  {
+    "textID": "project.delete_confirm",
+    "KR": "“{p0}” 프로젝트와 소속 작업을 DB에서 영구 삭제합니다. 삭제하시겠습니까?",
+    "US": "Permanently delete project “{p0}” and all its tasks from the database?",
+    "JP": "「{p0}」プロジェクトとすべての所属作業をデータベースから完全に削除しますか？"
+  },
+  {
+    "textID": "task.delete_confirm",
+    "KR": "“{p0}” 작업을 DB에서 영구 삭제합니다. 연결된 선·후행 관계도 해제됩니다. 삭제하시겠습니까?",
+    "US": "Permanently delete task “{p0}” from the database and remove its dependency links?",
+    "JP": "「{p0}」作業をデータベースから完全に削除し、先行・後続関係を解除しますか？"
+  },
+  {
+    "textID": "common.deleted",
+    "KR": "삭제했습니다.",
+    "US": "Deleted.",
+    "JP": "削除しました。"
+  },
+  {
+    "textID": "error.delete_unassigned",
+    "KR": "프로젝트 없음 그룹은 삭제할 수 없습니다.",
+    "US": "The unassigned group cannot be deleted.",
+    "JP": "プロジェクトなしグループは削除できません。"
+  },
+  {
+    "textID": "project.complete",
+    "KR": "프로젝트 완료 처리",
+    "US": "Complete project",
+    "JP": "プロジェクトを完了"
+  },
+  {
+    "textID": "task.complete",
+    "KR": "작업 완료 처리",
+    "US": "Complete task",
+    "JP": "作業を完了"
+  },
+  {
+    "textID": "project.completed",
+    "KR": "프로젝트의 모든 작업을 완료 처리했습니다.",
+    "US": "All project tasks are now complete.",
+    "JP": "プロジェクトのすべての作業を完了にしました。"
+  },
+  {
+    "textID": "timeline.add_single_task",
+    "KR": "＋ 단일 작업 추가",
+    "US": "＋ Add single task",
+    "JP": "＋ 単独の作業を追加"
+  },
+  {
+    "textID": "project.hide",
+    "KR": "{p0} 숨기기",
+    "US": "Hide {p0}",
+    "JP": "{p0}を非表示"
+  },
+  {
+    "textID": "project.show",
+    "KR": "{p0} 숨기기 해제",
+    "US": "Show {p0}",
+    "JP": "{p0}を表示"
+  },
+  {
+    "textID": "project.add_row",
+    "KR": "＋ 프로젝트 추가",
+    "US": "＋ Add project",
+    "JP": "＋ プロジェクトを追加"
+  },
+  {
+    "textID": "project.add_title",
+    "KR": "프로젝트 추가",
+    "US": "Add project",
+    "JP": "プロジェクトを追加"
+  },
+  {
+    "textID": "project.empty_description",
+    "KR": "빈 프로젝트를 만들고 필요한 작업을 직접 추가합니다.",
+    "US": "Create an empty project and add the tasks you need.",
+    "JP": "空のプロジェクトを作成し、必要なタスクを追加します。"
+  },
+  {
+    "textID": "project.empty_created",
+    "KR": "프로젝트를 추가했습니다.",
+    "US": "Project added.",
+    "JP": "プロジェクトを追加しました。"
+  },
+  {
+    "textID": "common.color",
+    "KR": "색상",
+    "US": "Color",
+    "JP": "色"
+  },
+  {
+    "textID": "directory.root_drop",
+    "KR": "프로젝트 없음 · 작업을 놓아 프로젝트 밖으로 이동",
+    "US": "No project · Drop tasks here to move out of a project",
+    "JP": "プロジェクトなし · ここにドロップしてプロジェクトから移動"
+  },
+  {
+    "textID": "directory.drag_task",
+    "KR": "드래그하여 순서 변경 또는 다른 프로젝트로 이동",
+    "US": "Drag to reorder or move to another project",
+    "JP": "ドラッグして並べ替え、または別のプロジェクトへ移動"
+  },
+  {
+    "textID": "directory.move_into",
+    "KR": "{p0}(으)로 이동",
+    "US": "Move to {p0}",
+    "JP": "{p0}へ移動"
+  },
+  {
+    "textID": "directory.root_name",
+    "KR": "상위 디렉토리",
+    "US": "Root directory",
+    "JP": "ルートディレクトリ"
+  }
+]

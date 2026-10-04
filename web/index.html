@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f4f6fa">
   <meta name="apple-mobile-web-app-title" content="MyGantt">
-  <title>MyGantt · 생산 일정</title>
+  <title data-i18n="common.mygantt_production_schedule">MyGantt · 생산 일정</title>
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
   <link rel="icon" type="image/svg+xml" href="/icons/app-icon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -13,50 +13,50 @@
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-  <template id="chart-info-template"><span class="info-tip chart-header-info"><button type="button" class="info-tip-button" aria-label="간트 표시 설명" aria-describedby="mobile-chart-tooltip">i</button><span id="mobile-chart-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><i class="legend-swatch project-swatch" aria-hidden="true"></i>프로젝트 요약</b><br>프로젝트에 속한 작업들의 전체 일정과 진행률을 표시합니다.<br><br><b class="tooltip-legend-heading"><i class="legend-swatch actual-swatch" aria-hidden="true"></i>예정·실제 작업</b><br>위 막대는 예정, 아래 막대는 실제 작업 기간입니다. 같은 작업은 같은 색상입니다.<br><br><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>작업 연결</b><br>선행 작업에서 후행 작업으로 이어지는 관계를 나타냅니다.<br><br><b>일정 기준</b><br>새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></template>
-  <div id="cascade-help" popover="auto" role="tooltip">예정·실제 종료일 중 더 늦은 날짜가 바뀌면, 변경된 날짜 수만큼 모든 후행 작업의 예정 시작일과 종료일을 함께 이동합니다. 실제 기록은 유지됩니다.</div>
-  <button id="drawer-backdrop" class="drawer-backdrop" aria-label="패널 닫기" hidden></button>
+  <template id="chart-info-template"><span class="info-tip chart-header-info"><button type="button" class="info-tip-button" aria-label="간트 표시 설명" aria-describedby="floating-help" data-i18n-attrs="aria-label:help.chart_legend">i</button><span id="mobile-chart-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><i class="legend-swatch actual-swatch" aria-hidden="true"></i><span data-i18n="help.planned_actual_tasks">예정·실제 작업</span></b><br><span data-i18n="help.the_upper_bar_is_planned_and">위 막대는 예정, 아래 막대는 실제 작업 기간입니다. 같은 작업은 같은 색상입니다.</span><br><br><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg><span data-i18n="timeline.predecessor_successor_legend">선⋅후행 작업</span></b><br><span data-i18n="help.connections_show_the_relationship_from_a">선행 작업에서 후행 작업으로 이어지는 관계를 나타냅니다.</span><br><br><b><span data-i18n="inspector.calendar">일정 기준</span></b><br><span data-i18n="timeline.new_projects_using_a_5_day">새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></span></template>
+  <div id="cascade-help" popover="auto" role="tooltip"><span data-i18n="common.when_the_later_of_the_planned">예정·실제 종료일 중 더 늦은 날짜가 바뀌면, 변경된 날짜 수만큼 모든 후행 작업의 예정 시작일과 종료일을 함께 이동합니다. 실제 기록은 유지됩니다.</span></div>
+  <button id="drawer-backdrop" class="drawer-backdrop" aria-label="패널 닫기" hidden data-i18n-attrs="aria-label:common.close_panel"></button>
   <dialog id="mobile-search-dialog" aria-labelledby="mobile-search-title">
-    <form method="dialog"><header><strong id="mobile-search-title">일정 검색</strong><button class="icon-button" value="close" aria-label="검색 닫기">×</button></header>
-    <label for="mobile-search-input">배치, 작업, 담당, 태그</label>
-    <input id="mobile-search-input" type="search" placeholder="검색어를 입력하세요" autocomplete="off">
-    <footer><button id="mobile-search-clear" type="button" class="button">검색 초기화</button><button class="button button-primary" value="apply">결과 보기</button></footer></form>
+    <form method="dialog"><header><strong id="mobile-search-title"><span data-i18n="common.search_schedules">일정 검색</span></strong><button class="icon-button" value="close" aria-label="검색 닫기" data-i18n-attrs="aria-label:common.close_search">×</button></header>
+    <label for="mobile-search-input"><span data-i18n="common.batch_task_owner_tags">배치, 작업, 담당, 태그</span></label>
+    <input id="mobile-search-input" type="search" placeholder="검색어를 입력하세요" autocomplete="off" data-i18n-attrs="placeholder:common.enter_search_terms">
+    <footer><button id="mobile-search-clear" type="button" class="button"><span data-i18n="common.clear_search">검색 초기화</span></button><button class="button button-primary" value="apply"><span data-i18n="common.show_results">결과 보기</span></button></footer></form>
   </dialog>
   <div class="app-shell">
-    <aside class="sidebar" id="mobile-navigation" aria-label="메인 메뉴">
-      <button class="mobile-only drawer-close" data-close-drawer aria-label="메뉴 닫기">×</button>
-      <a class="brand" href="#" aria-label="MyGantt 홈">
+    <aside class="sidebar" id="mobile-navigation" aria-label="메인 메뉴" data-i18n-attrs="aria-label:common.main_menu">
+      <button class="mobile-only drawer-close" data-close-drawer aria-label="메뉴 닫기" data-i18n-attrs="aria-label:common.close_menu">×</button>
+      <a class="brand" href="#" aria-label="MyGantt 홈" data-i18n-attrs="aria-label:common.mygantt_home">
         <img class="brand-mark" src="/icons/app-icon.svg" width="32" height="32" alt="">
-        <span><strong>MyGantt</strong><small>생산 일정 관리</small></span>
+        <span><strong><span data-i18n="common.mygantt">MyGantt</span></strong><small><span data-i18n="navigation.production_scheduling">생산 일정 관리</span></small></span>
       </a>
-      <div class="workspace-label">워크스페이스 <span class="tiny-dot"></span></div>
-      <nav class="primary-nav" aria-label="주 메뉴">
-        <button class="nav-item active" data-view="timeline"><span class="nav-icon">▤</span> 전체 일정 <span class="nav-count" id="project-count">0</span></button>
-        <button class="nav-item" data-view="templates"><span class="nav-icon">▦</span> 일정 템플릿</button>
-        <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span> 설정</button>
+      <div class="workspace-label"><span data-i18n="navigation.workspace">워크스페이스</span> <span class="tiny-dot"></span></div>
+      <nav class="primary-nav" aria-label="주 메뉴" data-i18n-attrs="aria-label:navigation.main_navigation">
+        <button class="nav-item active" data-view="timeline"><span class="nav-icon">▤</span> <span data-i18n="navigation.all_schedules">전체 일정</span> <span class="nav-count" id="project-count">0</span></button>
+        <button class="nav-item" data-view="templates"><span class="nav-icon">▦</span> <span data-i18n="navigation.schedule_templates">일정 템플릿</span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span> <span data-i18n="navigation.settings">설정</span></button>
       </nav>
       <section id="sidebar-project-section">
-        <div class="sidebar-section-head"><span>생산 배치</span><button id="new-project-side" class="icon-button" title="새 프로젝트">＋</button></div>
+        <div class="sidebar-section-head"><span><span data-i18n="navigation.production_batches">생산 배치</span></span><button id="new-project-side" class="icon-button" title="새 프로젝트" data-i18n-attrs="title:template.new_project">＋</button></div>
         <div id="sidebar-projects" class="sidebar-projects"></div>
       </section>
       <section id="sidebar-template-section" class="hidden">
-        <div class="sidebar-section-head"><span>내 템플릿 <span id="template-count">0</span></span><button id="create-template" class="icon-button" title="템플릿 추가" aria-label="템플릿 추가">＋</button></div>
+        <div class="sidebar-section-head"><span><span data-i18n="navigation.my_templates">내 템플릿</span> <span id="template-count">0</span></span><button id="create-template" class="icon-button" title="템플릿 추가" aria-label="템플릿 추가" data-i18n-attrs="title:navigation.add_template;aria-label:navigation.add_template">＋</button></div>
         <div id="template-list"></div>
       </section>
       <div class="sidebar-bottom">
-        <div class="local-card" id="storage-location"><span class="local-lock">▣</span><span><b id="storage-location-name">저장 위치 확인 중</b><small>SQLite 데이터베이스</small></span><i></i></div>
-        <div class="sidebar-foot">MyGantt <span>로컬 생산 일정</span></div>
+        <div class="local-card" id="storage-location"><span class="local-lock">▣</span><span><b id="storage-location-name"><span data-i18n="navigation.checking_storage_location">저장 위치 확인 중</span></b><small><span data-i18n="navigation.sqlite_database">SQLite 데이터베이스</span></small></span><i></i></div>
+        <div class="sidebar-foot">MyGantt <span><span data-i18n="navigation.local_production_schedule">로컬 생산 일정</span></span></div>
       </div>
     </aside>
 
     <main class="main-area">
       <header class="topbar">
-        <button id="mobile-menu-toggle" class="mobile-only icon-button" aria-label="메뉴 열기" aria-controls="mobile-navigation" aria-expanded="false">☰</button>
-        <div class="breadcrumbs"><span>생산 관리</span><b>›</b><strong id="breadcrumb-title">전체 일정</strong><span class="info-tip page-info"><button type="button" class="info-tip-button" aria-label="화면 설명" aria-describedby="page-description">i</button><span id="page-description" class="info-tip-text" role="tooltip">프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.</span></span></div>
+        <button id="mobile-menu-toggle" class="mobile-only icon-button" aria-label="메뉴 열기" aria-controls="mobile-navigation" aria-expanded="false" data-i18n-attrs="aria-label:navigation.open_menu">☰</button>
+        <div class="breadcrumbs"><span><span data-i18n="navigation.production_management">생산 관리</span></span><b>›</b><strong id="breadcrumb-title"><span data-i18n="navigation.all_schedules">전체 일정</span></strong><span class="info-tip page-info"><button type="button" class="info-tip-button" aria-label="화면 설명" aria-describedby="page-description" data-i18n-attrs="aria-label:navigation.page_help">i</button><span id="page-description" class="info-tip-text" role="tooltip"><span data-i18n="navigation.view_each_project_s_daily_schedule">프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.</span></span></span></div>
         <div class="topbar-actions">
-          <span class="saved-indicator" id="storage-indicator"><i></i> <span id="storage-indicator-name">저장 위치 확인 중</span></span>
-          <button id="export-calendar" class="button button-quiet"><span>↗</span> .ics 내보내기</button>
-          <button id="new-project" class="button button-primary"><span>＋</span> 배치 추가</button>
+          <span class="saved-indicator" id="storage-indicator"><i></i> <span id="storage-indicator-name"><span data-i18n="navigation.checking_storage_location">저장 위치 확인 중</span></span></span>
+          <button id="export-calendar" class="button button-quiet"><span>↗</span> <span data-i18n="navigation.export_ics">.ics 내보내기</span></button>
+          <button id="new-project" class="button button-primary"><span>＋</span> <span data-i18n="navigation.add_batch">배치 추가</span></button>
         </div>
       </header>
 
@@ -66,33 +66,33 @@
             <div class="schedule-card">
               <div class="toolbar">
                 <div class="toolbar-left">
-                  <button id="mobile-layout-toggle" class="mobile-only" type="button" aria-label="목록 보기로 전환" title="목록 보기로 전환" data-current-layout="gantt"><svg class="layout-gantt-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16h16M7 7h7M10 12h9M7 17h5"/></svg><svg class="layout-list-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg></button><div class="segmented" aria-label="일정 보기"><button class="selected" data-layout="gantt">간트</button><button data-layout="list">목록</button></div>
-                  <button id="mobile-search-button" class="mobile-only icon-button" type="button" aria-label="일정 검색" aria-haspopup="dialog"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg></button>
-                  <label class="search-box"><span>⌕</span><input id="search-filter" type="search" placeholder="배치, 작업, 담당, 태그 검색"></label>
-                  <select id="status-filter" class="select-control"><option value="all">필터</option><option value="doing">진행 중</option><option value="blocked">중지</option><option value="todo">예정</option><option value="done">완료</option></select>
-                  <select id="sort-select" class="select-control" aria-label="작업 정렬"><option value="manual">정렬</option><option value="start">시작일순</option><option value="name">이름순</option><option value="progress">진행률순</option><option value="group">그룹별 보기</option></select>
+                  <button id="mobile-layout-toggle" class="mobile-only" type="button" aria-label="목록 보기로 전환" title="목록 보기로 전환" data-current-layout="gantt" data-i18n-attrs="aria-label:common.switch_to_list_view;title:common.switch_to_list_view"><svg class="layout-gantt-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 4v16h16M7 7h7M10 12h9M7 17h5"/></svg><svg class="layout-list-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></svg></button><div class="segmented" aria-label="일정 보기" data-i18n-attrs="aria-label:navigation.schedule_view"><button class="selected" data-layout="gantt"><span data-i18n="timeline.gantt">간트</span></button><button data-layout="list"><span data-i18n="timeline.list">목록</span></button></div>
+                  <button id="mobile-search-button" class="mobile-only icon-button" type="button" aria-label="일정 검색" aria-haspopup="dialog" data-i18n-attrs="aria-label:common.search_schedules"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg></button>
+                  <label class="search-box"><span>⌕</span><input id="search-filter" type="search" placeholder="배치, 작업, 담당, 태그 검색" data-i18n-attrs="placeholder:timeline.search_batches_tasks_owners_tags"></label>
+                  <select id="status-filter" class="select-control"><option value="all" data-i18n="timeline.filter">필터</option><option value="doing" data-i18n="status.in_progress">진행 중</option><option value="blocked" data-i18n="status.stopped">중지</option><option value="todo" data-i18n="status.planned">예정</option><option value="done" data-i18n="status.complete">완료</option></select>
+                  <select id="sort-select" class="select-control" aria-label="작업 정렬" data-i18n-attrs="aria-label:timeline.task_order"><option value="manual" data-i18n="timeline.sort">정렬</option><option value="start" data-i18n="timeline.start_date">시작일순</option><option value="name" data-i18n="timeline.name">이름순</option><option value="progress" data-i18n="timeline.progress">진행률순</option><option value="group" data-i18n="timeline.group_view">그룹별 보기</option></select>
                 </div>
                 <div class="toolbar-right">
-                  <label class="cascade-toggle" title="예정·실제 종료일 중 더 늦은 날짜의 변경량만큼 모든 후행 작업의 예정 시작·종료일을 이동합니다."><input id="cascade-setting" aria-describedby="cascade-help" data-cascade-dependents type="checkbox"><span class="cascade-label-full">후행 같이 조정</span><span class="cascade-label-short">후행</span></label>
-                  <div class="zoom-slider-control"><label for="zoom-slider" class="zoom-label">축척</label><span aria-hidden="true">−</span><input id="zoom-slider" type="range" min="24" max="62" step="1" value="46" aria-valuetext="100%"><span aria-hidden="true">＋</span><output id="zoom-value" for="zoom-slider">100%</output></div>
-                  <button id="today-button" class="button button-small">오늘</button>
+                  <label class="cascade-toggle" title="예정·실제 종료일 중 더 늦은 날짜의 변경량만큼 모든 후행 작업의 예정 시작·종료일을 이동합니다." data-i18n-attrs="title:timeline.shift_every_successor_s_planned_start"><input id="cascade-setting" aria-describedby="cascade-help" data-cascade-dependents type="checkbox"><span class="cascade-label-full"><span data-i18n="template.move_successors">후행 같이 조정</span></span><span class="cascade-label-short"><span data-i18n="template.successors">후행</span></span></label>
+                  <div class="zoom-slider-control"><label for="zoom-slider" class="zoom-label"><span data-i18n="template.zoom">축척</span></label><span aria-hidden="true">−</span><input id="zoom-slider" type="range" min="24" max="62" step="1" value="46" aria-valuetext="100%"><span aria-hidden="true">＋</span><output id="zoom-value" for="zoom-slider">100%</output></div>
+                  <button id="today-button" class="button button-small"><span data-i18n="timeline.today">오늘</span></button>
                 </div>
               </div>
-              <div class="schedule-legend"><span><i class="legend-swatch saturday-swatch"></i>토요일</span><span><i class="legend-swatch sunday-swatch"></i>일요일</span><span><i class="legend-swatch holiday-swatch"></i>공휴일</span><span><i class="legend-swatch project-swatch"></i>프로젝트 요약</span><span class="period-legend" title="같은 작업의 위 막대는 예정, 아래 막대는 실제 작업 기간이며 같은 작업은 같은 색상입니다."><i class="legend-swatch actual-swatch"></i>아래: 실제</span><span class="dependency-legend-label" title="선행 작업 완료 → 후행 작업 시작"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>작업 연결</span><span id="range-label" class="legend-date-range">불러오는 중</span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="일정 기준 도움말" aria-describedby="schedule-rules-tooltip">i</button><span id="schedule-rules-tooltip" class="info-tip-text" role="tooltip"><b>일정 기준</b><br>새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></div>
+              <div class="schedule-legend"><span><i class="legend-swatch saturday-swatch"></i><span data-i18n="timeline.saturday">토요일</span></span><span><i class="legend-swatch sunday-swatch"></i><span data-i18n="timeline.sunday">일요일</span></span><span><i class="legend-swatch holiday-swatch"></i><span data-i18n="timeline.public_holiday">공휴일</span></span><span class="dependency-legend-label" title="선행 작업 완료 → 후행 작업 시작" data-i18n-attrs="title:timeline.predecessor_finishes_successor_starts"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg><span data-i18n="timeline.predecessor_successor_legend">선⋅후행 작업</span></span><span id="range-label" class="legend-date-range"><span data-i18n="timeline.loading">불러오는 중</span></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="일정 기준 도움말" aria-describedby="schedule-rules-tooltip" data-i18n-attrs="aria-label:timeline.calendar_help">i</button><span id="schedule-rules-tooltip" class="info-tip-text" role="tooltip"><b><span data-i18n="inspector.calendar">일정 기준</span></b><br><span data-i18n="timeline.new_projects_using_a_5_day">새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></span></div>
               <div id="gantt-wrap" class="gantt-wrap"><div id="gantt" class="gantt"></div></div>
               <div id="list-wrap" class="list-wrap hidden"></div>
-              <div id="empty-state" class="empty-state hidden"><div class="empty-icon">▤</div><strong>조건에 맞는 일정이 없습니다</strong><span>검색어나 상태 필터를 바꿔보세요.</span></div>
+              <div id="empty-state" class="empty-state hidden"><div class="empty-icon">▤</div><strong><span data-i18n="timeline.no_matching_schedules">조건에 맞는 일정이 없습니다</span></strong><span><span data-i18n="timeline.try_a_different_search_or_status">검색어나 상태 필터를 바꿔보세요.</span></span></div>
             </div>
           </div>
 
-          <aside class="inspector" id="mobile-inspector" aria-label="선택 항목 속성">
-            <div class="inspector-title"><div><span class="eyebrow">INSPECTOR</span><h2>속성</h2></div><span class="inspector-state" id="inspector-save-state">선택 항목</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="속성 닫기">×</button></div>
+          <aside class="inspector" id="mobile-inspector" aria-label="선택 항목 속성" data-i18n-attrs="aria-label:timeline.selected_item_properties">
+            <div class="inspector-title"><div><span class="eyebrow"><span data-i18n="template.inspector">INSPECTOR</span></span><h2><span data-i18n="template.properties">속성</span></h2></div><span class="inspector-state" id="inspector-save-state"><span data-i18n="timeline.selected_item">선택 항목</span></span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="속성 닫기" data-i18n-attrs="aria-label:timeline.close_properties">×</button></div>
             <section class="inspector-section" id="project-inspector-section">
-              <div class="inspector-project-heading"><button class="inspector-accordion" id="project-accordion" type="button" aria-expanded="true"><span class="accordion-chevron">⌄</span><span>프로젝트 속성</span></button><button id="project-context-label" type="button" aria-haspopup="menu" aria-expanded="false" disabled>선택 필요</button></div>
+              <div class="inspector-project-heading"><button class="inspector-accordion" id="project-accordion" type="button" aria-expanded="true"><span class="accordion-chevron">⌄</span><span><span data-i18n="template.project_properties">프로젝트 속성</span></span></button><button id="project-context-label" type="button" aria-haspopup="menu" aria-expanded="false" disabled><span data-i18n="inspector.select_an_item">선택 필요</span></button></div>
               <div class="inspector-content" id="project-inspector"></div>
             </section>
             <section class="inspector-section" id="task-inspector-section">
-              <button class="inspector-accordion" id="task-accordion" type="button" aria-expanded="false"><span class="accordion-chevron">⌄</span><span>작업 속성</span><small id="task-context-label">선택되지 않음</small></button>
+              <button class="inspector-accordion" id="task-accordion" type="button" aria-expanded="false"><span class="accordion-chevron">⌄</span><span><span data-i18n="template.task_properties">작업 속성</span></span><small id="task-context-label"><span data-i18n="inspector.not_selected">선택되지 않음</span></small></button>
               <div class="inspector-content hidden" id="task-inspector"></div>
             </section>
           </aside>
@@ -104,17 +104,22 @@
           <div id="template-editor" class="template-editor"></div>
         </div>
       </section>
-      <section class="view-panel hidden" id="settings-view" aria-label="설정">
+      <section class="view-panel hidden" id="settings-view" aria-label="설정" data-i18n-attrs="aria-label:navigation.settings">
         <div class="settings-sections">
+          <section class="settings-card" aria-labelledby="general-title">
+            <h2 id="general-title" data-i18n="settings.general">일반</h2>
+            <dl class="settings-details"><div><dt><label for="language-select" data-i18n="settings.language">언어</label></dt><dd><select id="language-select" class="select-input"><option value="KR" data-i18n="language.KR">한국어 (KR)</option><option value="US" data-i18n="language.US">English (US)</option><option value="JP" data-i18n="language.JP">日本語 (JP)</option></select></dd></div></dl>
+            <p class="settings-note" data-i18n="settings.languageHelp">이 기기의 UI 언어를 선택합니다. 작업명과 메모 등 사용자 입력은 변경하지 않습니다.</p>
+          </section>
           <section class="settings-card" aria-labelledby="app-info-title">
-            <h2 id="app-info-title">앱 정보</h2>
-            <dl class="settings-details"><div><dt>앱</dt><dd>MyGantt · 생산 일정</dd></div><div><dt>버전</dt><dd id="app-version">확인 중</dd></div></dl>
+            <h2 id="app-info-title"><span data-i18n="settings.app_info">앱 정보</span></h2>
+            <dl class="settings-details"><div><dt><span data-i18n="settings.app">앱</span></dt><dd><span data-i18n="common.mygantt_production_schedule">MyGantt · 생산 일정</span></dd></div><div><dt><span data-i18n="settings.version">버전</span></dt><dd id="app-version"><span data-i18n="settings.checking">확인 중</span></dd></div></dl>
           </section>
           <section class="settings-card" aria-labelledby="holiday-info-title">
-            <h2 id="holiday-info-title">공휴일 자료</h2>
-            <p class="settings-description">대한민국 공휴일을 일정 달력에 표시하는 데 사용하는 자료입니다.</p>
-            <div id="holiday-settings" aria-live="polite">공휴일 자료 확인 중</div>
-            <p class="settings-note">새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.</p>
+            <h2 id="holiday-info-title"><span data-i18n="settings.public_holiday_data">공휴일 자료</span></h2>
+            <p class="settings-description"><span data-i18n="settings.data_used_to_display_south_korean">대한민국 공휴일을 일정 달력에 표시하는 데 사용하는 자료입니다.</span></p>
+            <div id="holiday-settings" aria-live="polite"><span data-i18n="settings.checking_public_holiday_data">공휴일 자료 확인 중</span></div>
+            <p class="settings-note"><span data-i18n="settings.new_projects_use_public_holiday_data">새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.</span></p>
           </section>
         </div>
       </section>
@@ -122,6 +127,8 @@
   </div>
   <div id="modal-root"></div>
   <div id="toast" class="toast" role="status"></div>
+  <script src="/i18n.js" defer></script>
+  <script src="/project-motion.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

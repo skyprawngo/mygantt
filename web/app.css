@@ -188,9 +188,9 @@
 .gantt-right.project-timeline{background-color:transparent}
 .project-duration-band{position:absolute;z-index:0;overflow:hidden;pointer-events:none;border:1px solid var(--bar-border);border-radius:5px;background:var(--bar-surface)}
 .project-duration-band:before{content:'';position:absolute;inset:0 auto 0 0;width:var(--progress);background:var(--bar-light)}
-.project-summary-bar.expanded-project-label{background:transparent!important;color:var(--bar-dark);box-shadow:none;border-left:3px solid var(--bar-color);border-radius:0;padding-left:6px;overflow:visible}
+.project-summary-bar.expanded-project-label{background:transparent!important;color:var(--bar-dark);box-shadow:none;border-left:3px solid var(--bar-color);border-radius:0;padding-left:4px;overflow:visible}
 .project-summary-bar.expanded-project-label>i{display:none}
-.project-summary-bar.expanded-project-label>span{color:inherit;text-shadow:0 1px #fff}
+.project-summary-bar.expanded-project-label>span{color:inherit;text-shadow:none}
 .task-bar{touch-action:none}
 .resize-handle{position:absolute;top:0;bottom:0;width:9px;z-index:5;cursor:ew-resize;touch-action:none;opacity:.45}
 .resize-handle:after{content:'';position:absolute;top:5px;bottom:5px;width:2px;border-radius:2px;background:#fff;box-shadow:0 0 1px rgba(22,34,51,.4)}
@@ -310,7 +310,7 @@
 .info-tip-button{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;padding:0;border:1px solid #8d99ab;border-radius:50%;background:transparent;color:#718099;font-family:Georgia,serif;font-size:10px;font-weight:700;line-height:1;cursor:help}
 .info-tip-button:focus-visible{outline:2px solid #7385e4;outline-offset:2px}
 .info-tip-text{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);right:8px;width:240px;max-width:calc(100% - 16px);padding:9px 11px;background:#273347;color:#fff;border-radius:5px;box-shadow:0 3px 12px #18223026;font-size:10px;font-weight:400;line-height:1.6;z-index:30;pointer-events:none}
-.info-tip:hover .info-tip-text,.info-tip:focus-within .info-tip-text{visibility:visible;opacity:1}
+.info-tip .info-tip-text{display:none}
 
 .project-autosave-state{display:block;padding:3px 1px;color:#8290a1;font-size:8px;line-height:1.5}
 .project-autosave-state.save-error{color:#bd535e}
@@ -480,7 +480,8 @@
 /* The upper tier ends at 7 + 22px; the actual tier starts on that same edge. */
 .has-actual .actual-task-bar{top:29px}
 
-.task-label .task-state.task-order{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;min-width:18px;flex:0 0 18px;margin:0;padding:0;border-radius:50%;background:var(--task-color);color:var(--task-ink);font-size:9px;font-weight:600;font-style:normal;line-height:1;font-variant-numeric:tabular-nums}
+/* Keep the order text and accessible label; display only a compact color dot. */
+.task-label .task-state.task-order{display:inline-flex;align-items:center;justify-content:center;width:8px;height:8px;min-width:8px;flex:0 0 8px;margin:0;padding:0;border-radius:50%;background:var(--task-color);color:transparent;font-size:0;font-weight:600;font-style:normal;line-height:1;font-variant-numeric:tabular-nums}
 
 /* Body dragging translates the range; edge handles retain resize cursors. */
 .project-timeline .task-bar,.project-timeline .actual-task-bar{cursor:grab;touch-action:none}
@@ -625,15 +626,12 @@
 .blocked-task-outline{fill:none;stroke:#d34e58;stroke-width:2;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}
 .project-timeline .task-bar.blocked:is(.svg-backed,.unified-task-backed){outline:none}
 
-@media(max-width:760px){
  #timeline-view .gantt-left{width:var(--label-width,132px);flex-basis:var(--label-width,132px)}
  #timeline-view .gantt-head-left{cursor:pointer;gap:4px}
  .gantt-label-toggle{border:0;background:transparent;color:inherit;padding:0;font:inherit;font-weight:inherit;white-space:nowrap;text-align:left;align-self:stretch;display:flex;align-items:flex-end;gap:3px;flex:none}
  .gantt-label-toggle>span{font-size:13px;line-height:1}
  .gantt-label-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:2px}
-}
 
-@media(max-width:760px){
  .gantt-label-toggle>.gantt-label-title{font-size:inherit;line-height:inherit}
  #timeline-view .labels-collapsed .gantt-head-left{padding:0;justify-content:center}
  .labels-collapsed .gantt-label-toggle{width:100%;justify-content:center;padding-bottom:5px}
@@ -646,12 +644,93 @@
  #timeline-view .labels-collapsed .project-select{justify-content:center;padding-left:0;padding-right:0;gap:0}
  #timeline-view .labels-collapsed .gantt-add-button{padding:0;text-align:center;font-size:0}
  #timeline-view .labels-collapsed .gantt-add-button::before{content:'＋';font-size:14px}
-}
+
+#timeline-view .labels-collapsed .task-owner,#timeline-view .labels-collapsed .project-meta{display:none}
 
 /* Allow tighter day columns without adding horizontal calendar padding. */
 .date-header{padding-left:0;padding-right:0;min-width:0}
 
 /* Native sticky positioning stays synchronized with compositor scrolling.
    clip trims bar paint without creating an intermediate scroll container. */
-#gantt .task-bar,#gantt .actual-task-bar{overflow:clip}
-#gantt .bar-text{position:sticky;left:calc(var(--label-width,254px) + 6px);flex-shrink:1;min-width:0}
+#gantt .task-bar,#gantt .actual-task-bar,#gantt .project-summary-bar{overflow:clip}
+#gantt .bar-text,#gantt .project-summary-bar>span{position:sticky;left:calc(var(--label-width,254px) + 6px);flex-shrink:1;min-width:0}
+
+/* Render chart/status help in the browser top layer, outside chart clipping. */
+.chart-header-info .info-tip-text{display:none}
+.floating-help{position:fixed;inset:auto;margin:0;width:320px;max-width:calc(100vw - 16px);max-height:calc(100dvh - 16px);overflow:auto;padding:12px;border:0;border-radius:8px;background:#273347;color:#fff;box-shadow:0 4px 18px #18223033;font-size:12px;font-weight:400;line-height:1.6;white-space:normal}
+.floating-help .tooltip-legend-heading{display:inline-flex;align-items:center;gap:7px}
+.floating-help .legend-swatch{display:inline-block;width:11px;height:11px;flex:none;border-radius:2px;box-shadow:0 0 0 1px #ffffff40}
+
+.inspector-actions{display:flex;gap:8px;align-items:stretch}
+.inspector-actions>.button{flex:1;justify-content:center;min-width:0}
+.button.delete-button{background:#cf4653;border-color:#cf4653;color:#fff}
+.button.delete-button:hover{background:#b63744;border-color:#b63744;color:#fff}
+
+.side-project-row{display:flex;align-items:center;min-width:0}
+.side-project-row>.side-project{flex:0 1 auto;min-width:0;padding-right:3px}
+.project-visibility{display:inline-flex;align-items:center;justify-content:center;flex:0 0 20px;width:20px;height:24px;padding:0;border:0;background:transparent;color:#8993a2;cursor:pointer}
+.project-visibility:hover{background:transparent;color:#566274}
+.project-visibility:focus-visible{outline:2px solid var(--blue);outline-offset:1px;border-radius:4px}
+
+.side-project-row>.side-progress{margin-left:auto;padding:0 10px 0 6px;color:#9aa3b0;font-size:9px;flex:none}
+
+.project-completion-ghost{position:fixed;z-index:110;pointer-events:none;background:var(--paper);box-shadow:0 8px 24px #18223026;transform-origin:top left;overflow:hidden}
+.project-completion-ghost .project-summary-bar>span{position:relative;left:auto}
+
+.project-duration-band.project-band-morphing:before{background:var(--morph-progress-color)}
+
+/* Fade a solid cover above the calendar without changing the real band stacking. */
+.gantt-row.project-row.project-row-morphing{z-index:auto}
+.project-duration-band.project-morph-cover{z-index:2;background:var(--bar-color)}
+.project-duration-band.project-morph-cover:before{background:var(--bar-dark)}
+.gantt-left.project-motion-label{min-height:0;height:100%;overflow:clip;opacity:1;transform:none}
+
+.status-help-trigger{border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:0;cursor:help}
+.status-help-trigger:focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:2px}
+
+/* Shared creation dialogs: consistent controls, clear spacing, anchored actions. */
+.creation-modal{width:min(580px,100%);display:flex;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 40px)}
+.creation-modal .modal-head{padding:22px 24px 18px;align-items:flex-start;flex:none}
+.creation-modal .modal-head h2{display:flex;align-items:center;gap:4px;font-size:17px;line-height:1.5;margin:0}
+.creation-modal .modal-head p{margin-top:6px;font-size:12px;line-height:1.6;color:#778293}
+.creation-modal .modal-body{padding:24px;overflow:auto;min-height:0}
+.creation-modal .form-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px 16px}
+.creation-modal .form-field{min-width:0}
+.creation-modal .field-label{display:flex;align-items:center;min-height:18px;margin-bottom:7px;font-size:11px;color:#596679;font-weight:600}
+.creation-modal :is(.text-input,.select-input){height:42px;min-height:42px;box-sizing:border-box;min-width:0;width:100%;padding:9px 11px;border-radius:8px;font-size:13px;line-height:22px;background-color:#fff}
+.creation-modal .select-input{padding-right:28px}
+.creation-modal .project-identity-row{gap:12px}
+.creation-modal .project-identity-row #project-name{height:42px}
+.creation-modal .project-identity-row #project-color{width:42px;height:42px;padding:4px;border-radius:8px}
+.creation-modal .project-template-summary{padding:12px 14px;font-size:11px;line-height:1.7;border:1px solid #e8edf3;border-radius:8px;background:#f7f9fc}
+.creation-modal .modal-footer{flex:none;padding:16px 24px;background:#fafbfd;align-items:center}
+.creation-modal .modal-footer .button{min-height:40px;padding:9px 16px;font-size:12px;justify-content:center}
+.creation-modal .inline-error:empty{display:none}
+.creation-modal .inline-error:not(:empty){padding:12px 24px 0;font-size:12px;line-height:1.5}
+@media(max-width:600px){
+ .modal-backdrop:has(.creation-modal){padding:12px}
+ .creation-modal{max-height:calc(100dvh - 24px)}
+ .creation-modal .modal-head,.creation-modal .modal-body{padding:18px}
+ .creation-modal .form-grid{grid-template-columns:minmax(0,1fr);gap:16px}
+ .creation-modal .project-color-field>.field-label{display:none}
+ .creation-modal :is(.text-input,.select-input),.creation-modal .project-identity-row #project-name{font-size:16px}
+ .creation-modal .modal-footer{padding:14px 18px;gap:10px}
+ .creation-modal .modal-footer-right{min-width:0}
+ .creation-modal .modal-footer .button{white-space:normal}
+}
+
+.project-select-field{position:relative;display:block}
+.project-select-swatch{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:12px;height:12px;border-radius:2px;box-shadow:inset 0 0 0 1px #18223014;pointer-events:none;z-index:1}
+.creation-modal .project-select-field>.select-input{padding-left:34px}
+
+#gantt .project-left .group-dot{position:relative;width:12px;height:9px;flex-basis:12px;border-radius:1px 2px 2px 2px}
+#gantt .project-left .group-dot:before{content:'';position:absolute;left:0;top:-3px;width:6px;height:4px;background:inherit;border-radius:2px 2px 0 0}
+.directory-drop-target>.gantt-left{box-shadow:inset 0 0 0 2px var(--blue);background:#edf0ff!important}
+.directory-drop-target>.gantt-left::after{content:attr(data-preview);position:absolute;left:8px;top:100%;padding:3px 6px;background:#5267e8;color:white;font-size:10px;border-radius:4px;white-space:nowrap;z-index:21;pointer-events:none}
+
+/* Animate the shared column geometry without making its sticky surface translucent. */
+#gantt.labels-width-animating .gantt-left{overflow:clip}
+#gantt.labels-width-animating :is(.task-name,.project-name,.task-owner,.project-meta,.gantt-label-title,.chart-header-info,.group-header-label){opacity:var(--label-content-opacity,1)}
+#gantt.labels-width-animating .task-label{padding-left:calc(14px + 15px * var(--label-content-opacity));padding-right:calc(7px * var(--label-content-opacity));gap:calc(7px * var(--label-content-opacity))}
+#gantt.labels-width-animating .unassigned-task-row .task-label{padding-left:calc(14px - 2px * var(--label-content-opacity))}
+@media(max-width:760px){#gantt.labels-width-animating .task-label{padding-left:calc(14px - 8px * var(--label-content-opacity))}}

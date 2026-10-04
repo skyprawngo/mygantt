@@ -88,6 +88,8 @@ class Database:
       connection.close()
 
   def initialize(self) -> None:
+    from .directory_schema import backup_before_migration, migrate
+    backup_before_migration(self.path)
     with self.connection() as db:
       db.executescript("""
         CREATE TABLE IF NOT EXISTS templates (
@@ -161,6 +163,7 @@ class Database:
         );
       """)
       self._migrate(db)
+      migrate(db, now_iso())
       self._seed_holiday_fallback(db)
       count = db.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
       if count == 0 and self.seed_samples:
@@ -391,7 +394,7 @@ class Database:
     with self.connection() as db:
       templates = [self._template(db, row[0]) for row in db.execute("SELECT id FROM templates ORDER BY name")]
       projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY start_date, name")]
-      return {"templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]]}
+      return {"templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
 
   def holidays(self, start: str | None = None, end: str | None = None, *, now: datetime | None = None, fetcher=None) -> dict[str, Any]:
     from .holiday_calendar import calendar_payload
@@ -518,6 +521,32 @@ class Database:
         db.execute("INSERT INTO project_creation_requests VALUES (?, ?)", (request_id, project_id))
       return self._project(db, project_id)
 
+  def create_project(self, payload: dict[str, Any]) -> dict[str, Any]:
+    name = str(payload.get("name", "")).strip()
+    start_date = str(payload.get("start_date", ""))
+    calendar_type = str(payload.get("calendar_type", "working"))
+    request_id = str(payload.get("request_id", "")).strip()
+    if not name or not start_date:
+      raise ScheduleError("프로젝트 이름과 시작일이 필요합니다.")
+    date.fromisoformat(start_date)
+    if calendar_type not in {"working", "calendar"}:
+      raise ScheduleError("달력 유형은 working 또는 calendar여야 합니다.")
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      if request_id:
+        prior = db.execute("SELECT project_id FROM project_creation_requests WHERE request_id=?", (request_id,)).fetchone()
+        if prior:
+          return self._project(db, prior[0])
+      color = self._validate_color(payload.get("color"))
+      used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
+      if not color or color in used:
+        color = self._next_project_color(db)
+      project_id, stamp = new_id(), now_iso()
+      db.execute("INSERT INTO projects (id, name, template_id, template_name, start_date, calendar_type, color, group_name, tags, created_at, updated_at) VALUES (?, ?, NULL, '', ?, ?, ?, '', '[]', ?, ?)", (project_id, name, start_date, calendar_type, color, stamp, stamp))
+      if request_id:
+        db.execute("INSERT INTO project_creation_requests VALUES (?, ?)", (request_id, project_id))
+      return self._project(db, project_id)
+
   def get_project(self, project_id: str) -> dict[str, Any] | None:
     with self.connection() as db:
       return self._project(db, project_id)
@@ -555,6 +584,10 @@ class Database:
     validate_date_range(fields.get("planned_start"), fields.get("planned_finish"))
     with self.connection() as db:
       db.execute("BEGIN IMMEDIATE")
+      if project_id == UNASSIGNED_PROJECT_ID:
+        stamp = now_iso()
+        db.execute("INSERT OR IGNORE INTO projects (id,name,template_name,start_date,calendar_type,color,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                   (project_id, "프로젝트 없음", "", fields["planned_start"], "calendar", "#94a3b8", stamp, stamp))
       project = self._project(db, project_id)
       if not project:
         return None
@@ -567,7 +600,18 @@ class Database:
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)
 
-  def move_task(self, task_id: str, project_id: str | None) -> dict[str, Any] | None:
+  def place_task(self, task_id: str, directory_id: str, anchor_id: str | None = None, after: bool = False) -> dict[str, Any] | None:
+    """Resolve a folder node; files can never become parents of other files."""
+    if not isinstance(directory_id, str):
+      raise ScheduleError("이동할 프로젝트를 지정하세요.")
+    with self.connection() as db:
+      folder = db.execute("SELECT kind,project_id FROM directory_entries WHERE id=?", (directory_id,)).fetchone()
+      if not folder or folder["kind"] not in {"root", "project"}:
+        raise ScheduleError("프로젝트를 찾을 수 없습니다.")
+      project_id = folder["project_id"]
+    return self.move_task(task_id, project_id, anchor_id, after)
+
+  def move_task(self, task_id: str, project_id: str | None, anchor_id: str | None = None, after: bool = False) -> dict[str, Any] | None:
     """Keep task records intact; remove links that would cross project boundaries.
 
     A reserved storage container keeps unassigned tasks editable without changing
@@ -575,13 +619,25 @@ class Database:
     """
     if project_id is not None and (not isinstance(project_id, str) or not project_id):
       raise ScheduleError("프로젝트가 올바르지 않습니다.")
+    if (anchor_id is not None and not isinstance(anchor_id, str)) or type(after) is not bool:
+      raise ScheduleError("삽입 위치가 올바르지 않습니다.")
     destination = project_id or UNASSIGNED_PROJECT_ID
     with self.connection() as db:
       db.execute("BEGIN IMMEDIATE")
       task = db.execute("SELECT * FROM project_tasks WHERE id=?", (task_id,)).fetchone()
       if not task:
         return None
+      if anchor_id is not None:
+        anchor = db.execute("SELECT project_id FROM project_tasks WHERE id=?", (anchor_id,)).fetchone()
+        if not anchor or anchor["project_id"] != destination:
+          raise ScheduleError("삽입 위치가 올바르지 않습니다.")
       if destination == task["project_id"]:
+        if anchor_id and anchor_id != task_id:
+          ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (destination,)) if row[0] != task_id]
+          ids.insert(ids.index(anchor_id) + int(after), task_id)
+          for index, ident in enumerate(ids, 1):
+            db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
+          db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), destination))
         return self._project(db, destination)
       stamp = now_iso()
       if destination == UNASSIGNED_PROJECT_ID:
@@ -598,7 +654,45 @@ class Database:
       db.execute("UPDATE projects SET updated_at=? WHERE id IN (?,?)", (stamp, task["project_id"], destination))
       self._normalize_task_order(db, task["project_id"])
       self._normalize_task_order(db, destination)
+      if anchor_id:
+        ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (destination,)) if row[0] != task_id]
+        ids.insert(ids.index(anchor_id) + int(after), task_id)
+        for index, ident in enumerate(ids, 1):
+          db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
       return self._project(db, destination)
+
+  def complete_project(self, project_id: str) -> dict[str, Any] | None:
+    """Complete all tasks atomically without inventing or shifting date records."""
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      if not db.execute("SELECT id FROM projects WHERE id=?", (project_id,)).fetchone():
+        return None
+      db.execute("UPDATE project_tasks SET status='done',progress=100 WHERE project_id=?", (project_id,))
+      db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
+      return self._project(db, project_id)
+
+  def delete_project(self, project_id: str) -> bool:
+    if project_id == UNASSIGNED_PROJECT_ID:
+      raise ScheduleError("프로젝트 없음 그룹은 삭제할 수 없습니다.")
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      return db.execute("DELETE FROM projects WHERE id=?", (project_id,)).rowcount > 0
+
+  def delete_task(self, task_id: str) -> bool:
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      row = db.execute("SELECT project_id FROM project_tasks WHERE id=?", (task_id,)).fetchone()
+      if not row:
+        return False
+      project_id = row["project_id"]
+      for task in db.execute("SELECT id,dependencies FROM project_tasks WHERE project_id=?", (project_id,)).fetchall():
+        deps = json_load(task["dependencies"], [])
+        if task_id in deps:
+          db.execute("UPDATE project_tasks SET dependencies=? WHERE id=?", (json.dumps([dep for dep in deps if dep != task_id]), task["id"]))
+      db.execute("DELETE FROM project_tasks WHERE id=?", (task_id,))
+      self._normalize_task_order(db, project_id)
+      db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
+      return True
 
   def update_task(self, task_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
     allowed = {"name", "dependencies", "successors", "owner", "handoff", "blocker", "status", "planned_start", "planned_finish", "actual_start", "actual_finish", "notes", "color", "group_name", "tags", "cascade_dependents", "progress"}

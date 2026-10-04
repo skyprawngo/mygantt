@@ -1,5 +1,6 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test'), assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
-const s=fs.readFileSync('web/app.js','utf8'),c={};vm.createContext(c);
+const s=fs.readFileSync('web/app.js','utf8'),c={};withI18n(vm.createContext(c));
 vm.runInContext(s.slice(s.indexOf('const paletteCache'),s.indexOf('function esc('))+s.slice(s.indexOf('function taskProgress('),s.indexOf('function bindTaskProgress(')),c);
 test('arbitrary hex colors retain base, darken and lighten monotonically with valid ink',()=>{
  for(const hex of ['#000000','#ffffff','#ff0000','#00ff00','#0000ff','#eeee00','#101010','#5872d9','#abcdef']){

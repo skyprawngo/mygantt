@@ -1,8 +1,9 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('web/app.js','utf8');
-const c={getComputedStyle:()=>({borderTopLeftRadius:'4px',borderTopRightRadius:'4px',borderBottomRightRadius:'4px',borderBottomLeftRadius:'4px'}),esc:String,taskProgress:t=>t.progress,colorPalette:()=>({dark:'#111111',base:'#888888'})};vm.createContext(c);
+const c={getComputedStyle:()=>({borderTopLeftRadius:'4px',borderTopRightRadius:'4px',borderBottomRightRadius:'4px',borderBottomLeftRadius:'4px'}),esc:String,taskProgress:t=>t.progress,colorPalette:()=>({dark:'#111111',base:'#888888'})};withI18n(vm.createContext(c));
 vm.runInContext(source.slice(source.indexOf('function unifiedTaskShape('),source.indexOf('function renderDependencyLinks(')),c);
 vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc('))+source.slice(source.indexOf('function attachmentProgress('),source.indexOf('function unifiedTaskShape(')),c);
 const p={left:0,right:100,top:7,bottom:29,width:100};

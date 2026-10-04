@@ -48,6 +48,59 @@ class HttpApiTests(unittest.TestCase):
       content_type = response.headers.get("Content-Type", "")
       return raw.decode("utf-8") if "text/calendar" in content_type else json.loads(raw)
 
+  def test_empty_project_creation_and_restart(self):
+    payload = {'name': 'Empty project', 'start_date': '2026-10-04', 'calendar_type': 'working', 'request_id': 'empty-http'}
+    project = self.call('/api/projects', 'POST', payload)
+    self.assertEqual(project['tasks'], [])
+    self.assertEqual(self.call('/api/projects', 'POST', payload)['id'], project['id'])
+    self.stop_server()
+    self.start_server()
+    self.assertEqual(self.call('/api/projects/' + project['id'])['name'], 'Empty project')
+    updated = self.call('/api/projects/' + project['id'] + '/tasks', 'POST', {'name': 'First task', 'planned_start': '2026-10-05', 'planned_finish': '2026-10-06'})
+    self.assertEqual(len(updated['tasks']), 1)
+
+  def test_directory_placement_moves_into_folder_and_back_to_root(self):
+    source, target = self.call('/api/state')['projects'][:2]
+    task, anchor = source['tasks'][0], target['tasks'][0]
+    moved = self.call('/api/tasks/' + task['id'] + '/placement', 'PATCH', {'directory_id': 'project:' + target['id'], 'anchor_id': anchor['id'], 'after': False})
+    self.assertEqual(moved['tasks'][0]['id'], task['id'])
+    root = self.call('/api/tasks/' + task['id'] + '/placement', 'PATCH', {'directory_id': 'root'})
+    self.assertTrue(root['is_unassigned'])
+    node = next(n for n in self.call('/api/state')['directory'] if n['task_id'] == task['id'])
+    self.assertEqual(node['parent_id'], 'root')
+
+  def test_delete_task_cleans_links_and_project_cascades(self):
+    template = self.call('/api/templates', 'POST', {'name': 'Delete test', 'tasks': [
+      {'key': 'a', 'name': 'A', 'duration_value': 1, 'duration_unit': 'days', 'dependencies': []},
+      {'key': 'b', 'name': 'B', 'duration_value': 1, 'duration_unit': 'days', 'dependencies': ['a']},
+    ]})
+    project = self.call('/api/instantiate', 'POST', {'template_id': template['id'], 'name': 'Delete test', 'start_date': '2026-10-01', 'calendar_type': 'calendar'})
+    a, b = project['tasks']
+    completed = self.call('/api/projects/' + project['id'] + '/complete', 'POST', {})
+    self.assertEqual(completed['progress'], 100)
+    for before, after in zip(project['tasks'], completed['tasks']):
+      self.assertEqual(after['status'], 'done')
+      self.assertEqual(after['progress'], 100)
+      for field in ('planned_start', 'planned_finish', 'actual_start', 'actual_finish'):
+        self.assertEqual(after[field], before[field])
+    self.assertEqual(self.call('/api/tasks/' + a['id'], 'DELETE'), {'deleted': True})
+    remaining = self.call('/api/projects/' + project['id'])['tasks']
+    self.assertEqual(len(remaining), 1)
+    self.assertEqual(remaining[0]['dependencies'], [])
+    self.assertEqual(remaining[0]['sort_order'], 1)
+    self.assertEqual(remaining[0]['planned_start'], b['planned_start'])
+    self.assertEqual(self.call('/api/projects/' + project['id'], 'DELETE'), {'deleted': True})
+    with self.database.connection() as db:
+      self.assertEqual(db.execute('SELECT COUNT(*) FROM project_tasks WHERE project_id=?', (project['id'],)).fetchone()[0], 0)
+      self.assertIsNotNone(db.execute('SELECT id FROM templates WHERE id=?', (template['id'],)).fetchone())
+    from urllib.error import HTTPError
+    with self.assertRaises(HTTPError) as missing:
+      self.call('/api/tasks/' + b['id'], 'DELETE')
+    self.assertEqual(missing.exception.code, 404)
+    with self.assertRaises(HTTPError) as protected:
+      self.call('/api/projects/__unassigned__', 'DELETE')
+    self.assertEqual(protected.exception.code, 400)
+
   def test_storage_location_reports_mac_account_and_actual_database(self):
     with patch("mygantt.server.platform.system", return_value="Darwin"), \
          patch("mygantt.server.platform.node", return_value="mac-host.local"), \
@@ -178,7 +231,21 @@ class HttpApiTests(unittest.TestCase):
     self.assertIn("일정 템플릿", html)
     self.assertIn("프로젝트 속성", html)
     self.assertIn("작업 속성", html)
-    self.assertIn('value="group">그룹별 보기', html)
+    self.assertRegex(html, r'value="group"[^>]*data-i18n="timeline.group_view"')
+    self.assertIn('/i18n.js', html)
+
+  def test_translations_and_language_specific_manifest(self):
+    rows = self.call('/translations.json')
+    language = next(row for row in rows if row['textID'] == 'settings.language')
+    self.assertEqual(language, {'textID': 'settings.language', 'KR': '언어', 'US': 'Language', 'JP': '言語'})
+    english = self.call('/manifest.webmanifest?language=US')
+    korean = self.call('/manifest.webmanifest?language=KR')
+    self.assertEqual(english['lang'], 'en-US')
+    japanese = self.call('/manifest.webmanifest?language=JP')
+    self.assertEqual(japanese['lang'], 'ja-JP')
+    self.assertEqual(japanese['name'], 'MyGantt · 生産スケジュール')
+    self.assertEqual(english['name'], 'MyGantt · Production Schedule')
+    self.assertEqual(korean['name'], 'MyGantt · 생산 일정')
 
   def test_korean_holiday_data_has_explicit_coverage_and_range_filter(self):
     payload = self.call("/api/holidays?start=2026-10-01&end=2026-10-31")

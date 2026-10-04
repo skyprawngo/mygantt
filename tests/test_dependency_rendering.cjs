@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 // Run with: node --test tests/test_dependency_rendering.cjs
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -30,7 +31,7 @@ function harness({ actual = false, below = true, gap = true, openSide = '', barW
       borderBottomLeftRadius: b.classes.has('dependency-join-left') ? '0px' : '4px',
       borderTopRightRadius: b.classes.has('dependency-join-right') ? '0px' : '4px',
       borderBottomRightRadius: b.classes.has('dependency-join-right') ? '0px' : '4px' }) };
-  vm.createContext(context);
+  withI18n(vm.createContext(context));
   vm.runInContext(source.slice(source.indexOf('function dependencyRibbon('), source.indexOf('function renderTimeline(')), context);
   vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc('))+source.slice(source.indexOf('function taskProgress('),source.indexOf('function bindTaskProgress(')),context);
   context.renderDependencyLinks();

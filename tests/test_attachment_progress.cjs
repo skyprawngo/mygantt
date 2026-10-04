@@ -1,8 +1,9 @@
+const withI18n = require('./i18n_context.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('web/app.js','utf8');
-const c={};vm.createContext(c);
+const c={};withI18n(vm.createContext(c));
 vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc('))+source.slice(source.indexOf('function attachmentProgress('),source.indexOf('function renderDependencyLinks('))+source.slice(source.indexOf('function taskProgress('),source.indexOf('function bindTaskProgress(')),c);
 test('outgoing joins stay at base color through 90%, then blend to complete',()=>{
   const task={color:'#5872d9'};

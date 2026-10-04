@@ -1,10 +1,12 @@
+I18n.ready.then(() => {
+const t = (textID, params) => I18n.t(textID, params);
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let savedUi = {};
 try { savedUi = JSON.parse(localStorage.getItem('mygantt-ui') || '{}'); } catch { savedUi = {}; }
-const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', zoom: 46, filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
-const statusNames = { todo: '예정', doing: '진행 중', blocked: '중지', done: '완료' };
-const durationNames = { days: '일', weeks: '주' };
+const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', zoom: 46, filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
+const statusNames = { get todo() { return t("status.planned"); }, get doing() { return t("status.in_progress"); }, get blocked() { return t("status.stopped"); }, get done() { return t("status.complete"); } };
+const durationNames = { get days() { return t("common.days"); }, get weeks() { return t("common.weeks"); } };
 const projectColors = ['#5872d9', '#b96749', '#27897f', '#a45ca8', '#b48527', '#3978a8', '#c45670', '#5a8d45', '#765bb2', '#368a9b', '#c06f2d', '#657386'];
 const taskColors = [...projectColors];
 let previewTimer;
@@ -63,7 +65,7 @@ function updateCurrentTimeMarker() {
   const cell = $('.date-header.today', chart);
   if (cell) {
     cell.style.setProperty('--time-progress', `${fraction * 100}%`);
-    cell.title = `${dateKey(now)} · 갱신 시각 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} (왼쪽 00시 · 오른쪽 24시)`;
+    cell.title = t("common.updated_at_left_00_00_right", {p0:dateKey(now),p1:String(now.getHours()).padStart(2,'0'),p2:String(now.getMinutes()).padStart(2,'0')});
   }
 }
 function dateFrom(value) { return new Date(`${value}T00:00:00`); }
@@ -72,10 +74,11 @@ function dayDiff(start, end) { return Math.round((dateFrom(end) - dateFrom(start
 function fmtDate(value, year = false) {
   if (!value) return '—';
   const d = dateFrom(value);
+  if (I18n.language !== 'KR') return new Intl.DateTimeFormat(I18n.locale, {month:'numeric',day:'numeric',...(year?{year:'numeric'}:{})}).format(d);
   return year ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : `${d.getMonth() + 1}/${d.getDate()}`;
 }
 function dateRangeLabel(start, end) {
-  if (!start || !end) return '일정 없음';
+  if (!start || !end) return t("common.no_schedule");
   return `${fmtDate(start, true)} — ${fmtDate(end, true)}`;
 }
 function toast(message) {
@@ -90,7 +93,7 @@ async function api(path, options = {}) {
   if (path === '/api/state') state.appVersion = response.headers.get('server')?.match(/MyGantt\/([^\s]+)/)?.[1] || null;
   const type = response.headers.get('content-type') || '';
   const data = type.includes('application/json') ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(data?.error || `요청 실패 (${response.status})`);
+  if (!response.ok) throw new Error(data?.error ? I18n.serverError(data) : t("common.request_failed", {p0:response.status}));
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes((options.method || 'GET').toUpperCase())) {
     document.dispatchEvent(new Event('chart-data-changed'));
   }
@@ -114,7 +117,7 @@ async function loadState() {
   renderAll();
 }
 function persistUi() {
-  localStorage.setItem('mygantt-ui', JSON.stringify({ selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], cascadeDependents: state.cascadeDependents }));
+  localStorage.setItem('mygantt-ui', JSON.stringify({ selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
 }
 function setCascadeSetting(value) {
   state.cascadeDependents = Boolean(value);
@@ -140,8 +143,8 @@ function switchView(view) {
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
   $('#export-calendar').classList.toggle('hidden', view !== 'timeline');
   $('#new-project').classList.toggle('hidden', view !== 'timeline');
-  $('#breadcrumb-title').textContent = { timeline: '전체 일정', templates: '일정 템플릿', settings: '설정' }[view];
-  $('#page-description').textContent = { timeline: '프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.', templates: '업무 흐름을 한 번 구성하고, 각 배치에 전체 작업과 일정을 함께 적용합니다. 템플릿을 수정해도 이미 만든 프로젝트 일정은 그대로 유지됩니다.', settings: '앱 버전과 공휴일 자료 정보를 확인합니다.' }[view];
+  $('#breadcrumb-title').textContent = { timeline: t("navigation.all_schedules"), templates: t("navigation.schedule_templates"), settings: t("navigation.settings") }[view];
+  $('#page-description').textContent = { timeline: t("navigation.view_each_project_s_daily_schedule"), templates: t("navigation.define_a_workflow_once_and_apply"), settings: t("navigation.view_the_app_version_and_public") }[view];
   renderAll();
 }
 function renderAll() {
@@ -153,7 +156,7 @@ function renderAll() {
 }
 function renderStorageLocation() {
   const storage = state.data.storage;
-  const label = storage?.label || '저장 위치 확인 불가';
+  const label = storage?.label || t("navigation.storage_location_unavailable");
   const detail = storage?.database_path ? `${label}\nSQLite: ${storage.database_path}` : label;
   $('#storage-location-name').textContent = label;
   $('#storage-indicator-name').textContent = label;
@@ -165,17 +168,27 @@ function renderSidebar() {
   $('#sidebar-template-section').classList.toggle('hidden', state.view !== 'templates');
   $('#project-count').textContent = state.data.projects.filter(project => !project.is_unassigned).length;
   $('#sidebar-projects').innerHTML = state.data.projects.map((project) => `
-    <button class="side-project ${state.selection?.type === 'project' && state.selection.id === project.id ? 'selected' : ''}" data-project="${esc(project.id)}" title="${esc(project.name)}">
-      <i style="background:${colorPalette(project.color).base}"></i><span>${esc(project.name)}</span><span class="side-progress">${project.progress}%</span>
-    </button>`).join('');
+    <div class="side-project-row"><button class="side-project ${state.selection?.type === 'project' && state.selection.id === project.id ? 'selected' : ''}" data-project="${esc(project.id)}" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">
+      <i style="background:${colorPalette(project.color).base}"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span>
+    </button><button type="button" class="project-visibility" data-visibility-project="${esc(project.id)}" aria-pressed="${!state.hiddenProjects.has(project.id)}" aria-label="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}" title="${esc(t(state.hiddenProjects.has(project.id) ? "project.show" : "project.hide", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}))}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>${state.hiddenProjects.has(project.id) ? '<path d="M3 3 21 21"/>' : ''}</svg></button><span class="side-progress">${project.progress}%</span></div>`).join('');
+  $$('.project-visibility').forEach(button => button.addEventListener('click', () => {
+    const id = button.dataset.visibilityProject;
+    if (state.hiddenProjects.has(id)) state.hiddenProjects.delete(id);
+    else state.hiddenProjects.add(id);
+    persistUi();
+    renderSidebar();
+    renderTimeline({preserveInspector:true});
+  }));
   $$('.side-project').forEach((button) => button.addEventListener('click', () => {
+    const projectId = button.dataset.project;
+    if (state.hiddenProjects.delete(projectId)) persistUi();
+    state.filterProject = projectId;
     switchView('timeline');
-    state.filterProject = button.dataset.project;
-    selectItem('project', button.dataset.project);
+    selectItem('project', projectId);
   }));
 }
 function filteredProjects() {
-  let projects = [...state.data.projects];
+  let projects = state.data.projects.filter(project => !state.hiddenProjects?.has(project.id));
   if (state.filterProject) projects = projects.filter((project) => project.id === state.filterProject);
   const query = ($('#search-filter')?.value || '').trim().toLocaleLowerCase();
   const status = $('#status-filter')?.value || 'all';
@@ -186,54 +199,55 @@ function filteredProjects() {
       const taskMatch = !query || [task.name, task.owner, task.handoff, task.blocker, task.group_name, ...(task.tags || [])].some((value) => String(value || '').toLocaleLowerCase().includes(query));
       return (projectMatch || taskMatch) && (status === 'all' || task.status === status);
     }),
-  })).filter((project) => project.tasks.length);
+  })).filter((project) => project.tasks.length || (!project.is_unassigned && status === 'all' && !state.data.projects.find(item => item.id === project.id)?.tasks.length && (!query || [project.name, project.group_name, ...(project.tags || [])].some(value => String(value || '').toLocaleLowerCase().includes(query)))));
   const sort = $('#sort-select')?.value || 'manual';
-  projects.forEach(project => project.tasks.sort((a,b) => sort === 'name' ? a.name.localeCompare(b.name,'ko') : sort === 'progress' ? taskProgress(b)-taskProgress(a) : sort === 'start' ? a.planned_start.localeCompare(b.planned_start) : (a.sort_order || 0)-(b.sort_order || 0)));
-  if (sort !== 'manual') projects.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, 'ko') : sort === 'progress' ? b.progress - a.progress : (a.tasks[0]?.planned_start || a.start_date).localeCompare(b.tasks[0]?.planned_start || b.start_date));
+  projects.forEach(project => project.tasks.sort((a,b) => sort === 'name' ? a.name.localeCompare(b.name,I18n.locale) : sort === 'progress' ? taskProgress(b)-taskProgress(a) : sort === 'start' ? a.planned_start.localeCompare(b.planned_start) : (a.sort_order || 0)-(b.sort_order || 0)));
+  if (sort !== 'manual') projects.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, I18n.locale) : sort === 'progress' ? b.progress - a.progress : (a.tasks[0]?.planned_start || a.start_date).localeCompare(b.tasks[0]?.planned_start || b.start_date));
   return projects;
 }
 function flatten(projects) { return projects.flatMap((project) => project.tasks.map((task) => ({ ...task, projectName: project.name, projectId: project.id }))); }
-const weekdayNames = ['일', '월', '화', '수', '목', '금', '토'];
+const weekdayIDs = ["weekday.sun", "calendar.mon", "calendar.tue", "calendar.wed", "calendar.thu", "calendar.fri", "calendar.sat"];
 function dateColumns(start, days, perDay) {
   const first = dateFrom(start);
   return Array.from({ length: days }, (_, index) => {
     const current = new Date(first);
     current.setDate(first.getDate() + index);
     const key = dateKey(current);
-    const holiday = state.holidays[key];
+    const holiday = I18n.systemText(state.holidays[key], 'holiday.');
     const isWeekend = current.getDay() === 0 || current.getDay() === 6;
     const today = key === dateKey(timelineReferenceTime);
     const dateText = current.getDate() === 1 || index === 0 ? `${current.getMonth() + 1}.${current.getDate()}` : String(current.getDate());
-    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, weekday: weekdayNames[current.getDay()], x: index * perDay };
+    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, weekday: t(weekdayIDs[current.getDay()]), x: index * perDay };
   });
 }
 function renderHolidayStatus() {
   const node = $('#holiday-settings');
   if (!node) return;
   const holidayData = state.holidayData || {};
-  const source = holidayData.source_label || holidayData.source || 'Nager.Date Community API v4';
-  const updated = holidayData.last_updated ? holidayData.last_updated.slice(0, 10) : '갱신일 기록 없음';
+  const source = (holidayData.source_label || holidayData.source || 'Nager.Date Community API v4').split(' + ').map(part => I18n.systemText(part,'source.')).join(' + ');
+  const updated = holidayData.last_updated ? holidayData.last_updated.slice(0, 10) : t("calendar.no_update_recorded");
   const years = holidayData.coverage_years || [];
   const unverifiedSubstituteYears = (holidayData.requested_years || years).filter((year) => Number(year) !== 2026);
-  const coverage = years.length ? years.join(', ') : `자료 없음 · 지원 ${holidayData.supported_years?.from || '현재'}–${holidayData.supported_years?.through || '현재+5년'}`;
-  const freshness = holidayData.status === 'fresh' ? '최신' : holidayData.status === 'stale' ? (holidayData.last_error ? '갱신 실패 · 저장 자료 표시' : '저장 자료 표시') : '자료 없음';
-  node.innerHTML = `<dl class="settings-details"><div><dt>출처</dt><dd>${esc(source)}</dd></div><div><dt>최근 갱신</dt><dd>${esc(updated)}</dd></div><div><dt>자료 범위</dt><dd>${esc(coverage)}</dd></div><div><dt>상태</dt><dd><span class="holiday-freshness">${esc(freshness)}</span></dd></div></dl>`;
+  const coverage = years.length ? years.join(', ') : t("calendar.no_data_supported", {p0:holidayData.supported_years?.from || t("calendar.current"),p1:holidayData.supported_years?.through || t("calendar.current_5_years")});
+  const freshness = holidayData.status === 'fresh' ? t("calendar.up_to_date") : holidayData.status === 'stale' ? (holidayData.last_error ? t("calendar.update_failed_showing_saved_data") : t("calendar.showing_saved_data")) : t("calendar.no_data");
+  node.innerHTML = `<dl class="settings-details"><div><dt>${t("calendar.source")}</dt><dd>${esc(source)}</dd></div><div><dt>${t("calendar.last_updated")}</dt><dd>${esc(updated)}</dd></div><div><dt>${t("calendar.coverage")}</dt><dd>${esc(coverage)}</dd></div><div><dt>${t("calendar.status")}</dt><dd><span class="holiday-freshness">${esc(freshness)}</span></dd></div></dl>`;
   node.dataset.status = holidayData.status || 'unavailable';
   node.dataset.substituteWarning = String(unverifiedSubstituteYears.length > 0);
   const warnings = [];
-  if (unverifiedSubstituteYears.length) warnings.push(`2026년 외 연도(${unverifiedSubstituteYears.join(', ')})는 Nager.Date 자료만 사용합니다. 대체공휴일이 누락될 수 있으니 공식 달력을 확인하세요.`);
-  if (holidayData.last_error) warnings.push(holidayData.last_error);
-  if (holidayData.unsupported_years?.length) warnings.push(`자동 제공 범위 밖: ${holidayData.unsupported_years.join(', ')}`);
+  if (unverifiedSubstituteYears.length) warnings.push(t("calendar.years_other_than_2026_use_nager", {p0:unverifiedSubstituteYears.join(', ')}));
+  if (holidayData.last_error) warnings.push(I18n.serverError({error:holidayData.last_error}));
+  if (holidayData.unsupported_years?.length) warnings.push(t("calendar.outside_automatic_coverage", {p0:holidayData.unsupported_years.join(', ')}));
   if (warnings.length) node.insertAdjacentHTML('beforeend', `<p class="settings-warning">${warnings.map(esc).join('<br>')}</p>`);
 }
 function renderSettings() {
-  $('#app-version').textContent = state.appVersion || '버전 정보 없음';
+  $('#app-version').textContent = state.appVersion || t("calendar.version_unavailable");
   renderHolidayStatus();
 }
 function projectBounds(projects) {
   const tasks = flatten(projects);
-  const starts = tasks.flatMap((task) => [task.planned_start, task.actual_start, task.actual_finish]).filter(Boolean).sort();
-  const ends = tasks.flatMap((task) => [task.planned_finish, task.actual_start, task.actual_finish]).filter(Boolean).sort();
+  const emptyDates = projects.filter(project => !project.tasks.length).map(project => project.start_date).filter(Boolean);
+  const starts = [...emptyDates, ...tasks.flatMap((task) => [task.planned_start, task.actual_start, task.actual_finish])].filter(Boolean).sort();
+  const ends = [...emptyDates, ...tasks.flatMap((task) => [task.planned_finish, task.actual_start, task.actual_finish])].filter(Boolean).sort();
   if (!starts.length) return { start: todayInput(), end: todayInput() };
   return { start: starts[0], end: ends[ends.length - 1] };
 }
@@ -245,7 +259,7 @@ function actualTaskRange(task) {
     finish: task.actual_finish || [task.planned_finish, task.actual_start].filter(Boolean).sort().at(-1),
     openSide: !task.actual_start ? "left" : !task.actual_finish ? "right" : null,
     partial: !task.actual_start || !task.actual_finish,
-    label: '실제',
+    label: t("timeline.actual"),
   };
 }
 function actualOpenStyle(range, width) {
@@ -503,8 +517,8 @@ function renderDependencyLinks(options = null) {
   $$('.has-dependency', body).forEach((bar) => bar.classList.remove('has-dependency', 'dependency-join-left', 'dependency-join-right', 'svg-backed'));
   if (!options && state.layout !== 'gantt') return;
   const origin = body.getBoundingClientRect();
-  const bars = new Map($$('.task-bar', body).map((bar) => [bar.dataset.taskSelect, bar]));
-  const actualBars = new Map($$('.actual-task-bar', body).map((bar) => [bar.dataset.taskSelect, bar]));
+  const bars = new Map($$('.task-bar', body).filter(bar => bar.getBoundingClientRect().height > 0.1).map((bar) => [bar.dataset.taskSelect, bar]));
+  const actualBars = new Map($$('.actual-task-bar', body).filter(bar => bar.getBoundingClientRect().height > 0.1).map((bar) => [bar.dataset.taskSelect, bar]));
   const projects = options?.projects || filteredProjects();
   const edges = [];
   const attachmentPorts = new Map();
@@ -584,7 +598,7 @@ function renderDependencyLinks(options = null) {
           ? {side:'left',direction:'incoming'}
           : {side:below?'top':'bottom',x:to.surfaceX-(target.left-origin.left),width:to.width,direction:'incoming'});
         const related = state.selection?.type === 'task' && [task.id, predecessorId].includes(state.selection.id);
-        const label = `${project.name} · ${predecessor.name} → ${task.name} (완료 후 시작)`;
+        const label = t("timeline.finish_to_start", {p0:project.name,p1:predecessor.name,p2:task.name});
         connectedBars.add(sourceBar);
         connectedBars.add(targetBar);
         edges.push({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label });
@@ -624,49 +638,95 @@ function renderDependencyLinks(options = null) {
       const path = `M ${start.join(' ')}${dependencyBarOutline(rect,style,origin,0,start,start)} Z`;
       return `<path class="blocked-task-outline" d="${path}"/>`;
     }).join('');
-  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="선행 작업과 후행 작업 연결"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}</svg>`);
+  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="${t("timeline.predecessor_and_successor_connections")}"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}</svg>`);
   connectedBars.forEach((bar) => bar.classList.add('svg-backed'));
 
 }
 
-function ganttAddRow(id, width) {
-  return `<div class="gantt-row gantt-add-row"><div class="gantt-left"><button type="button" id="${id}" class="gantt-add-button">＋ 작업 추가</button></div><div class="gantt-right" style="width:${width}px"></div></div>`;
+function ganttAddRow(id, width, label = t("timeline.add_single_task"), rootDrop = false) {
+  return `<div class="gantt-row gantt-add-row"><div class="gantt-left" ${rootDrop ? 'data-drop-project="__unassigned__" data-directory-id="root"' : ''}><button type="button" id="${id}" class="gantt-add-button" aria-label="${esc(label)}">${esc(label)}</button></div><div class="gantt-right" style="width:${width}px"></div></div>`;
 }
 function addTemplateTask() {
   syncDraftFromEditor();
   const draft = state.draft;
-  draft.tasks.push({ key: `task_${crypto.randomUUID().slice(0,8)}`, name: `새 작업 ${draft.tasks.length+1}`, duration_value:1, duration_unit:'days', dependencies:[], owner:'', handoff:'', color:taskColors[draft.tasks.length % taskColors.length], sort_order:draft.tasks.length });
+  draft.tasks.push({ key: `task_${crypto.randomUUID().slice(0,8)}`, name: t("timeline.new_task", {p0:draft.tasks.length+1}), duration_value:1, duration_unit:'days', dependencies:[], owner:'', handoff:'', color:taskColors[draft.tasks.length % taskColors.length], sort_order:draft.tasks.length });
   state.templateTaskKey=draft.tasks.at(-1).key;
   state.preview=null;
   renderTemplateEditor();
   $('.template-task-name')?.focus();
 }
 function openAddProjectTask() {
-  const projects = state.data.projects;
-  if (!projects.length) { openInstantiate(); return; }
-  const selected = state.filterProject || (state.selection?.type === 'project' ? state.selection.id : projects.find(p=>p.tasks.some(t=>t.id===state.selection?.id))?.id) || projects[0].id;
-  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">프로젝트</span><select id="new-task-project" class="select-input">${projects.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('')}</select></label><label class="form-field full"><span class="field-label">작업명</span><input id="new-task-name" class="text-input" required placeholder="새 작업 이름"></label><label class="form-field"><span class="field-label">예정 시작일</span><input id="new-task-start" class="text-input" type="date" value="${todayInput()}" required></label><label class="form-field"><span class="field-label">예정 종료일</span><input id="new-task-finish" class="text-input" type="date" value="${todayInput()}" required></label></div>`;
-  openModal('작업 추가', '선택한 프로젝트에 개별 작업을 추가합니다.', body, '<button id="cancel-new-task" class="button">취소</button><button id="save-new-task" class="button button-primary">추가</button>', () => {
+  const selected = '__unassigned__';
+  const projects = [{id:selected, name:t("inspector.no_project"), color:'#94a3b8'}, ...state.data.projects.filter(project => !project.is_unassigned && project.id !== selected)];
+  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">${t("timeline.project")}</span><span class="project-select-field"><span id="new-task-project-color" class="project-select-swatch" aria-hidden="true"></span><select id="new-task-project" class="select-input">${projects.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span></label><label class="form-field full"><span class="field-label">${t("timeline.task_name")}</span><input id="new-task-name" class="text-input" required placeholder="${t("timeline.new_task_name")}"></label><label class="form-field"><span class="field-label">${t("timeline.planned_start")}</span><input id="new-task-start" class="text-input" type="date" value="${todayInput()}" required></label><label class="form-field"><span class="field-label">${t("timeline.planned_finish")}</span><input id="new-task-finish" class="text-input" type="date" value="${todayInput()}" required></label></div>`;
+  openModal(t("timeline.add_task_2"), t("timeline.add_an_individual_task_to_the"), body, `<button id="cancel-new-task" class="button">${t("timeline.cancel")}</button><button id="save-new-task" class="button button-primary">${t("timeline.add")}</button>`, () => {
+    $('.modal').classList.add('creation-modal');
+    const syncProjectColor = () => { $('#new-task-project-color').style.backgroundColor = colorPalette(projects.find(project => project.id === $('#new-task-project').value)?.color).base; };
+    $('#new-task-project').addEventListener('change', syncProjectColor);
+    syncProjectColor();
+    $('#new-task-name').focus();
     $('#cancel-new-task').addEventListener('click', closeModal);
     $('#save-new-task').addEventListener('click', async () => {
       const button=$('#save-new-task');
       if (button.disabled) return;
       const name=$('#new-task-name').value.trim(), start=$('#new-task-start').value, finish=$('#new-task-finish').value;
-      if (!name || !start || !finish || finish<start) { setModalError('작업명과 올바른 예정 시작·종료일을 입력하세요.'); return; }
+      if (!name || !start || !finish || finish<start) { setModalError(t("timeline.enter_a_task_name_and_valid")); return; }
       button.disabled=true;
       try {
         const project=await api(`/api/projects/${encodeURIComponent($('#new-task-project').value)}/tasks`, {method:'POST',body:JSON.stringify({name,planned_start:start,planned_finish:finish})});
         state.filterProject=project.id; state.collapsedProjects.delete(project.id);
         $('#search-filter').value=''; $('#status-filter').value='all';
         state.selection={type:'task',id:project.tasks.at(-1).id}; state.inspectorOpen='task'; persistUi();
-        closeModal(); await loadState(); toast('작업을 추가했습니다.');
+        closeModal(); await loadState(); toast(t("timeline.task_added"));
       } catch(error) { setModalError(error.message); button.disabled=false; }
     });
   });
 }
 
+let labelWidthFrame = null;
+function animateGanttLabelWidth(chart, from) {
+  const to = parseFloat(chart.style.getPropertyValue('--label-width'));
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to-from) < 1) return;
+  const collapsed = chart.classList.contains('labels-collapsed');
+  const head = $('.gantt-head-left', chart), body = $('.gantt-body', chart);
+  const bodyWidth = parseFloat(body.style.width);
+  const bands = $$('.project-duration-band', chart).map(el => ({el,left:parseFloat(el.style.left)}));
+  chart.classList.add('labels-width-animating');
+  chart.classList.remove('labels-collapsed');
+  const apply = progress => {
+    const width = from + (to-from)*progress;
+    chart.style.setProperty('--label-width', `${width}px`);
+    chart.style.setProperty('--label-content-opacity', String(collapsed ? 1-progress : progress));
+    head.style.width = `${width}px`;
+    body.style.width = `${bodyWidth+width-to}px`;
+    for (const {el,left} of bands) el.style.left = `${left+width-to}px`;
+    renderDependencyLinks();
+  };
+  apply(0);
+  const start = performance.now();
+  function frame(now) {
+    const progress = Math.min(1,(now-start)/240);
+    apply(1-Math.pow(1-progress,3));
+    if (progress < 1) labelWidthFrame = requestAnimationFrame(frame);
+    else {
+      labelWidthFrame = null;
+      chart.classList.remove('labels-width-animating');
+      chart.classList.toggle('labels-collapsed', collapsed);
+      chart.style.removeProperty('--label-content-opacity');
+      renderDependencyLinks();
+    }
+  }
+  labelWidthFrame = requestAnimationFrame(frame);
+}
+
 function renderTimeline({ preserveInspector = false } = {}) {
-  const projects = filteredProjects();
+  if (labelWidthFrame !== null) { cancelAnimationFrame(labelWidthFrame); labelWidthFrame = null; }
+  $('#gantt').classList.remove('labels-width-animating');
+  $('#gantt').style.removeProperty('--label-content-opacity');
+  if (typeof projectMotion !== 'undefined') projectMotion.observe();
+  const visibleProjects = filteredProjects();
+  const rootProject = visibleProjects.find(project => project.is_unassigned) || {id:'__unassigned__',is_unassigned:true,name:t("inspector.no_project"),color:'#94a3b8',tasks:[],progress:0};
+  const projects = [...visibleProjects.filter(project => !project.is_unassigned), rootProject];
   const tasks = flatten(projects);
   const bounds = projectBounds(projects);
   let start = bounds.start; let end = bounds.end;
@@ -676,9 +736,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
   const days = Math.max(1, dayDiff(start, end) + 1);
   $('#range-label').textContent = dateRangeLabel(bounds.start, bounds.end);
   const pxPerDay = state.zoom;
-  const labelWidth = mobileLayout() && !state.mobileLabelsExpanded ? 36 : 254;
+  const labelsExpanded = mobileLayout() ? Boolean(state.mobileLabelsExpanded) : state.desktopLabelsExpanded !== false;
+  const labelWidth = labelsExpanded ? 254 : 36;
   $('#gantt').style.setProperty('--label-width', `${labelWidth}px`);
-  $('#gantt').classList.toggle('labels-collapsed', mobileLayout() && !state.mobileLabelsExpanded);
+  $('#gantt').classList.toggle('labels-collapsed', !labelsExpanded);
   const timelineWidth = Math.max(720, days * pxPerDay);
   const dates = dateColumns(start, days, pxPerDay);
   renderHolidayStatus();
@@ -693,26 +754,26 @@ function renderTimeline({ preserveInspector = false } = {}) {
   let rows = '';
   let bodyHeight = 0;
   const projectBands = [];
-  const rowShading = dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? ' · 주말' : ''}"></div>`).join('');
+  const rowShading = dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
   const timelineCellStyle = `--day-width:${pxPerDay}px;`;
   const groupMode = $('#sort-select')?.value === 'group';
   const groupedProjects = groupMode ? [...projects.reduce((groups, project) => {
     if (project.is_unassigned) return groups;
-    const groupName = project.group_name?.trim() || '그룹 미지정';
+    const groupName = project.group_name?.trim() || t("timeline.ungrouped");
     if (!groups.has(groupName)) groups.set(groupName, []);
     groups.get(groupName).push(project);
     return groups;
-  }, new Map()).entries()].sort(([a], [b]) => a.localeCompare(b, 'ko')).map(([name, items]) => ({ name, projects: items })) : [{ name: '', projects }];
-  if (groupMode) groupedProjects.unshift({ name: '', projects: projects.filter(project => project.is_unassigned) });
+  }, new Map()).entries()].sort(([a], [b]) => a.localeCompare(b, I18n.locale)).map(([name, items]) => ({ name, projects: items })) : [{ name: '', projects }];
+  if (groupMode) groupedProjects.push({ name: '', projects: projects.filter(project => project.is_unassigned) });
   for (const projectGroup of groupedProjects) {
     if (groupMode && projectGroup.name) {
-      rows += `<div class="gantt-row group-header-row"><div class="gantt-left"><span class="group-header-label"><i></i>${esc(projectGroup.name)}<small>${projectGroup.projects.length}개 프로젝트</small></span></div><div class="gantt-right" style="width:${timelineWidth}px"></div></div>`;
+      rows += `<div class="gantt-row group-header-row"><div class="gantt-left"><span class="group-header-label"><i></i>${esc(projectGroup.name)}<small>${projectGroup.projects.length}${t("timeline.projects")}</small></span></div><div class="gantt-right" style="width:${timelineWidth}px"></div></div>`;
       bodyHeight += 30;
     }
     for (const project of projectGroup.projects) {
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
-    const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0];
+    const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
     const projectFinish = project.tasks.map((task) => task.planned_finish).filter(Boolean).sort().at(-1);
     const projectX = Math.max(0, dayDiff(start, projectStart || start)) * pxPerDay;
     const projectBarWidth = Math.max(pxPerDay, (dayDiff(projectStart || start, projectFinish || projectStart || start) + 1) * pxPerDay);
@@ -722,10 +783,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
     if (!collapsed) projectBands.push({ project, top: projectTop, height: projectHeight, left: labelWidth + projectX, width: projectBarWidth });
     const summaryClass = collapsed ? '' : ' expanded-project-label';
       rows += `<div class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
-      <div class="gantt-left project-left">
-        <button class="project-select" type="button" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.name)} ${collapsed ? '펼치기' : '접기'}"><i class="group-dot" style="background:${colorPalette(project.color).base}"></i><span class="project-name" title="${esc(project.name)}">${esc(project.name)}</span><span class="project-meta">${project.progress}%</span></button>
+      <div class="gantt-left project-left" data-drop-project="${esc(project.id)}" data-directory-id="project:${esc(project.id)}">
+        <button class="project-select" type="button" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot" style="background:${colorPalette(project.color).base}"></i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
       </div>
-      <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="프로젝트 기간 ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><i style="width:${project.progress}%"></i><span>${esc(project.name)} · ${project.progress}%</span></button></div>
+      <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="${t("timeline.project_duration")} ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><i style="width:${project.progress}%"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} · ${project.progress}%</span></button></div>
     </div>`;
     bodyHeight += 38;
     }
@@ -737,22 +798,23 @@ function renderTimeline({ preserveInspector = false } = {}) {
       const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
       const actualWidth = actual ? Math.max(pxPerDay, (dayDiff(actual.start, actual.finish) + 1) * pxPerDay) : 0;
       const actualTitle = actual ? `${task.name} · ${actual.label} · ${fmtDate(task.actual_start || task.actual_finish, true)}${actual.partial ? '' : `–${fmtDate(actual.finish, true)}`}` : '';
-      const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth)}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} 실제 시작일 조정"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(task.name)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} 실제 종료일 조정"></span>` : ''}</button>` : '';
+      const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth)}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(task.name)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
       const status = task.status;
       const isSelected = state.selection?.type === 'task' && state.selection.id === task.id;
       rows += `<div class="gantt-row task-row${project.is_unassigned ? ' unassigned-task-row' : ''}${actual ? ' has-actual' : ''} ${isSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
-        <div class="gantt-left task-left"><button class="task-label" type="button" draggable="${$('#sort-select').value === 'manual'}" title="${$('#sort-select').value === 'manual' ? '드래그하여 기본 순서 변경' : '기본 순서 보기에서 드래그할 수 있습니다.'}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-state task-order ${status}" style="${paletteStyle(task.color, 'task')}" title="${esc(statusNames[status] || status)}" aria-label="기본 순서 ${task.sort_order}">${task.sort_order}</span><span class="task-name" title="${esc(task.name)}">${esc(task.name)}</span><span class="task-owner">${esc(task.owner || '담당 미지정')}</span></button></div>
-        <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(task.name)} · 예정 ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} 시작일 조정"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? '예정 · ' : ''}${esc(task.name)} · ${taskProgress(task)}%${status === 'blocked' ? ' · 중지' : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} 종료일 조정"></span></button>${actualMarkup}</div>
+        <div class="gantt-left task-left"><button class="task-label" type="button" draggable="true" title="${t("directory.drag_task")}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-state task-order ${status}" style="${paletteStyle(task.color, 'task')}" title="${esc(statusNames[status] || status)}" aria-label="${t("timeline.default_order")} ${task.sort_order}">${task.sort_order}</span><span class="task-name" title="${esc(task.name)}">${esc(task.name)}</span><span class="task-owner">${esc(task.owner || t("timeline.unassigned"))}</span></button></div>
+        <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(task.name)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(task.name)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}</div>
       </div>`;
       bodyHeight += taskRowHeight(task);
     }
     }
   }
-  rows += ganttAddRow('add-project-task', timelineWidth);
-  bodyHeight += 38;
+  rows += ganttAddRow('add-empty-project', timelineWidth, t("project.add_row"), true);
+  rows += ganttAddRow('add-project-task', timelineWidth, t("timeline.add_single_task"), true);
+  bodyHeight += 76;
   const headerDates = dates.map((item) => `<div class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
-  const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
-  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${mobileLayout() ? `<button type="button" class="gantt-label-toggle" aria-expanded="${Boolean(state.mobileLabelsExpanded)}" aria-label="프로젝트 / 작업 열 ${state.mobileLabelsExpanded ? '축소' : '확장'}"><span class="gantt-label-title">프로젝트 / 작업</span><span aria-hidden="true">${state.mobileLabelsExpanded ? '‹' : '›'}</span></button>` : '<span>프로젝트 / 작업</span>'}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
+  const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" data-project-band="${esc(band.project.id)}" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
+  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${`<button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")} ${labelsExpanded ? t("timeline.collapse_2") : t("timeline.expand_2")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button>`}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
   if (mobileLayout() && state.mobileLabelsExpanded) {
     const textWidth = node => {
       const range = document.createRange();
@@ -774,92 +836,125 @@ function renderTimeline({ preserveInspector = false } = {}) {
       band.style.left = `${parseFloat(band.style.left) + width - labelWidth}px`;
     });
   }
-  if (mobileLayout()) $('.gantt-head-left', $('#gantt')).addEventListener('click', event => {
+  $('.gantt-head-left', $('#gantt')).addEventListener('click', event => {
     if (event.target.closest('.info-tip')) return;
     const keyboard = event.detail === 0;
-    state.mobileLabelsExpanded = !state.mobileLabelsExpanded;
+    const from = $('.gantt-head-left', $('#gantt')).getBoundingClientRect().width;
+    if (mobileLayout()) state.mobileLabelsExpanded = !labelsExpanded;
+    else state.desktopLabelsExpanded = !labelsExpanded;
     renderTimeline({ preserveInspector: true });
+    animateGanttLabelWidth($('#gantt'), from);
     if (keyboard) $('.gantt-label-toggle', $('#gantt'))?.focus();
   });
+  $('#add-empty-project').addEventListener('click', () => openProjectCreate(false));
   $('#add-project-task').addEventListener('click', openAddProjectTask);
   updateCurrentTimeMarker();
   renderDependencyLinks();
   if (!preserveInspector) renderInspector();
-  $('#list-wrap').innerHTML = `<table class="list-table"><thead><tr><th>프로젝트</th><th>작업</th><th>담당 / 협력사</th><th>예정</th><th>상태</th><th>중지 사유</th><th>다음 인계</th></tr></thead><tbody>${projects.flatMap((project) => project.tasks.map((task) => `<tr class="list-task-row" data-project="${esc(project.id)}" data-task="${esc(task.id)}"><td>${esc(project.name)}</td><td class="list-task">${esc(task.name)}</td><td>${esc(task.owner || '미지정')}</td><td>${fmtDate(task.planned_start, true)} – ${fmtDate(task.planned_finish, true)}</td><td><span class="status-pill ${task.status}">${statusNames[task.status] || task.status}</span></td><td>${esc(task.blocker || '—')}</td><td>${esc(task.handoff || '—')}</td></tr>`)).join('')}</tbody></table>`;
+  $('#list-wrap').innerHTML = `<table class="list-table"><thead><tr><th>${t("timeline.project")}</th><th>${t("timeline.task")}</th><th>${t("timeline.owner_vendor")}</th><th>${t("status.planned")}</th><th>${t("calendar.status")}</th><th>${t("timeline.stop_reason")}</th><th>${t("timeline.next_handoff")}</th></tr></thead><tbody>${projects.flatMap((project) => project.tasks.map((task) => `<tr class="list-task-row" data-project="${esc(project.id)}" data-task="${esc(task.id)}"><td>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</td><td class="list-task">${esc(task.name)}</td><td>${esc(task.owner || t("timeline.unassigned_2"))}</td><td>${fmtDate(task.planned_start, true)} – ${fmtDate(task.planned_finish, true)}</td><td><span class="status-pill ${task.status}">${statusNames[task.status] || task.status}</span></td><td>${esc(task.blocker || '—')}</td><td>${esc(task.handoff || '—')}</td></tr>`)).join('')}</tbody></table>`;
   $$('.list-task-row', $('#list-wrap')).forEach((row) => row.addEventListener('click', () => selectItem('task', row.dataset.task)));
 }
 
 function renderInspector() {
   const project = state.data.projects.find((item) => item.id === (state.selection?.type === 'project' ? state.selection.id : state.data.projects.find((p) => p.tasks.some((task) => task.id === state.selection?.id))?.id));
   const task = project?.tasks.find((item) => item.id === state.selection?.id && state.selection?.type === 'task');
-  $('#project-context-label').textContent = project ? project.name : '선택 필요';
+  $('#project-context-label').textContent = project ? project.name : t("inspector.select_an_item");
   $('#project-context-label').classList.toggle('task-color-tag', Boolean(project));
   applyPalette($('#project-context-label'), project?.color || '#5872d9');
-  $('#project-context-label').title = task ? '작업의 프로젝트 변경' : project?.name || '';
+  $('#project-context-label').title = task ? t("inspector.change_task_project") : project?.name || '';
   $('#project-context-label').disabled = !task;
-  $('#project-context-label').setAttribute('aria-label', task ? `작업 프로젝트 변경: ${project.name}` : project?.name || '선택 필요');
+  $('#project-context-label').setAttribute('aria-label', task ? t("inspector.change_task_project_2", {p0:project.name}) : project?.name || t("inspector.select_an_item"));
   $('#project-context-label').onclick = task ? () => openTaskProjectMenu(task.id) : null;
-  $('#task-context-label').textContent = task ? task.name : '선택되지 않음';
+  $('#task-context-label').textContent = task ? task.name : t("inspector.not_selected");
   $('#task-context-label').classList.toggle('task-color-tag', Boolean(task));
   applyPalette($('#task-context-label'), task?.color || project?.color || '#5872d9');
   $('#task-context-label').title = task?.name || '';
-  $('#inspector-save-state').textContent = state.selection ? '자동 저장' : '선택 항목 없음';
+  $('#inspector-save-state').textContent = state.selection ? t("inspector.auto_save") : t("inspector.nothing_selected");
   if (project && !project.is_unassigned) {
     $('#project-inspector').innerHTML = `<form id="project-inspector-form" class="inspector-form">
       <div class="property-grid">
-      <label class="inspector-field"><span>프로젝트 이름</span><input id="ins-project-name" class="text-input" autocomplete="off" value="${esc(project.name)}" required></label>
-      <div class="inspector-field"><span><label for="ins-project-color">프로젝트 색상</label></span><div class="color-field"><input id="ins-project-color" type="color" value="${esc(project.color || '#5872d9')}"><code>${esc(project.color || '#5872d9')}</code></div></div>
-      <label class="inspector-field"><span>시작일</span><input id="ins-project-start" type="date" class="text-input" value="${esc(project.start_date)}"></label>
-      <label class="inspector-field"><span>일정 기준</span><select id="ins-project-calendar" class="select-input"><option value="working" ${project.calendar_type === 'working' ? 'selected' : ''}>주 5일 (월–금)</option><option value="calendar" ${project.calendar_type === 'calendar' ? 'selected' : ''}>주 7일</option></select></label>
-      <div class="inspector-field property-readonly"><span>예정 범위 <span class="info-tip"><button type="button" class="info-tip-button" aria-label="예정 범위 도움말" aria-describedby="project-dates-tooltip">i</button><span id="project-dates-tooltip" class="info-tip-text" role="tooltip">배치 시작일과 달력을 수정해도 저장된 작업 날짜는 유지됩니다.</span></span></span><div class="derived-date"><small>${project.calendar_type === 'working' ? '주 5일 · 주말·공휴일 제외' : '주 7일'}</small><b>${fmtDate(project.tasks.map((item) => item.planned_start).filter(Boolean).sort()[0], true)} — ${fmtDate(project.tasks.map((item) => item.planned_finish).filter(Boolean).sort().at(-1), true)}</b></div></div>
-      <label class="inspector-field"><span>그룹</span><input id="ins-project-group" class="text-input" value="${esc(project.group_name || '')}" placeholder="예: MARKOS · 2026 4분기"></label>
-      <label class="inspector-field"><span>태그 <small>쉼표로 구분</small></span><input id="ins-project-tags" class="text-input" value="${esc((project.tags || []).join(', '))}" placeholder="예: MAIN보드, 긴급"></label>
+      <label class="inspector-field"><span>${t("inspector.project_name")}</span><input id="ins-project-name" class="text-input" autocomplete="off" value="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}" required></label>
+      <div class="inspector-field"><span><label for="ins-project-color">${t("inspector.project_color")}</label></span><div class="color-field"><input id="ins-project-color" type="color" value="${esc(project.color || '#5872d9')}"><code>${esc(project.color || '#5872d9')}</code></div></div>
+      <label class="inspector-field"><span>${t("inspector.start_date")}</span><input id="ins-project-start" type="date" class="text-input" value="${esc(project.start_date)}"></label>
+      <label class="inspector-field"><span>${t("inspector.calendar")}</span><select id="ins-project-calendar" class="select-input"><option value="working" ${project.calendar_type === 'working' ? 'selected' : ''}>${t("inspector.5_day_week_mon_fri")}</option><option value="calendar" ${project.calendar_type === 'calendar' ? 'selected' : ''}>${t("inspector.7_day_week")}</option></select></label>
+      <div class="inspector-field property-readonly"><span>${t("inspector.planned_range")} <span class="info-tip"><button type="button" class="info-tip-button" aria-label="${t("inspector.planned_range_help")}" aria-describedby="project-dates-tooltip">i</button><span id="project-dates-tooltip" class="info-tip-text" role="tooltip">${t("inspector.changing_the_batch_start_or_calendar")}</span></span></span><div class="derived-date"><small>${project.calendar_type === 'working' ? t("inspector.5_day_week_excludes_weekends_and") : t("inspector.7_day_week")}</small><b>${fmtDate(project.tasks.map((item) => item.planned_start).filter(Boolean).sort()[0], true)} — ${fmtDate(project.tasks.map((item) => item.planned_finish).filter(Boolean).sort().at(-1), true)}</b></div></div>
+      <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-project-group" class="text-input" value="${esc(project.group_name || '')}" placeholder="${t("inspector.e_g_markos_q4_2026")}"></label>
+      <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-project-tags" class="text-input" value="${esc((project.tags || []).join(', '))}" placeholder="${t("inspector.e_g_main_board_urgent")}"></label>
       </div>
       <small class="project-autosave-state" role="status" aria-live="polite"></small>
+      <div class="inspector-actions"><button class="button delete-button" id="ins-project-delete" type="button">${t("project.delete")}</button><button class="button complete-button" id="ins-project-complete" type="button" ${project.tasks.length ? '' : 'disabled'}>${t("project.complete")}</button></div>
     </form>`;
   } else if (project?.is_unassigned) {
-    $('#project-inspector').innerHTML = '<div class="inspector-empty"><b>프로젝트 없음</b><small>작업을 선택하고 위 프로젝트 버튼에서 소속을 지정하세요.</small></div>';
+    $('#project-inspector').innerHTML = `<div class="inspector-empty"><b>${t("inspector.no_project")}</b><small>${t("inspector.select_a_task_and_use_the")}</small></div>`;
   } else {
-    $('#project-inspector').innerHTML = `<div class="inspector-empty"><span>▤</span><b>프로젝트를 선택하세요</b><small>간트의 프로젝트 행 또는 왼쪽 목록을 선택하면 속성을 편집할 수 있습니다.</small></div>`;
+    $('#project-inspector').innerHTML = `<div class="inspector-empty"><span>▤</span><b>${t("inspector.select_a_project")}</b><small>${t("inspector.select_a_project_row_in_the")}</small></div>`;
   }
   if (task && project) {
     const relatedTasks = project.tasks.filter((item) => item.id !== task.id);
     $('#task-inspector').innerHTML = `
       <form id="task-inspector-form" class="inspector-form">
         <div class="property-grid">
-        <label class="inspector-field"><span>작업명</span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required></label>
-        <div class="inspector-field"><span><label for="ins-task-color">작업 색상</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code></div></div>
-        <table class="task-date-grid" aria-label="작업 일정"><colgroup><col class="date-row-label"><col><col></colgroup>
-          <thead><tr><th scope="col">작업일</th><th scope="col">시작일</th><th scope="col">종료일</th></tr></thead>
-          <tbody><tr><th scope="row">예정 작업일</th><td><input id="ins-task-planned-start" aria-label="예정 시작일" type="date" class="text-input" value="${esc(task.planned_start)}" required></td><td><input id="ins-task-planned-finish" aria-label="예정 종료일" type="date" class="text-input" value="${esc(task.planned_finish)}" required></td></tr>
-          <tr><th scope="row">실제 작업일</th><td><input id="ins-task-actual-start" aria-label="실제 시작일" type="date" class="text-input" value="${esc(task.actual_start || '')}"></td><td><input id="ins-task-actual-finish" aria-label="실제 종료일" type="date" class="text-input" value="${esc(task.actual_finish || '')}"></td></tr></tbody>
+        <label class="inspector-field"><span>${t("timeline.task_name")}</span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required></label>
+        <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code></div></div>
+        <table class="task-date-grid" aria-label="${t("inspector.task_schedule")}"><colgroup><col class="date-row-label"><col><col></colgroup>
+          <thead><tr><th scope="col">${t("inspector.dates")}</th><th scope="col">${t("inspector.start_date")}</th><th scope="col">${t("inspector.finish_date")}</th></tr></thead>
+          <tbody><tr><th scope="row">${t("inspector.planned_dates")}</th><td><input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required></td><td><input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required></td></tr>
+          <tr><th scope="row">${t("inspector.actual_dates")}</th><td><input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}"></td><td><input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}"></td></tr></tbody>
         </table>
-        <label class="inspector-field"><span>그룹</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="예: 외주 작업"></label>
-        <label class="inspector-field"><span>태그 <small>쉼표로 구분</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="예: 검사, 대기"></label>
-        <label class="inspector-field"><span>담당 / 협력사</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="부서 또는 업체"></label>
-        <div class="inspector-field"><span>상태</span><div class="task-progress-control" style="${paletteStyle(task.color)}"><div class="task-progress-track"><div class="task-progress-fill"></div><button type="button" id="task-progress-knob" class="task-progress-knob" role="slider" aria-label="작업 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${taskProgress(task)}"></button></div><output id="task-progress-label"></output></div></div>
-        <label id="ins-task-blocker-row" class="inspector-field${task.status === 'blocked' ? '' : ' hidden'}"><span>중지 / 대기 사유</span><input id="ins-task-blocker" class="text-input" value="${esc(task.blocker || '')}" placeholder="예: 부품 납기 확인 중"></label>
-        <div class="inspector-field property-relations"><span>작업 연결 <small>여러 작업 선택 가능</small></span><div class="inspector-relations"><table aria-label="선행 및 후행 작업"><thead><tr><th scope="col" class="relation-heading">작업 <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="선행·후행 작업 도움말" aria-describedby="task-relations-help">i</button><span id="task-relations-help" class="info-tip-text" role="tooltip">선행: 이 작업보다 먼저 · 후행: 이 작업 다음</span></span></th><th scope="col">선행 작업</th><th scope="col">후행 작업</th></tr></thead><tbody>${relatedTasks.map((item) => `<tr><th scope="row">${esc(item.name)}</th><td><input type="checkbox" class="ins-task-dependency" value="${esc(item.id)}" aria-label="${esc(item.name)} 선행 작업" ${task.dependencies.includes(item.id) ? 'checked' : ''}></td><td><input type="checkbox" class="ins-task-successor" value="${esc(item.id)}" aria-label="${esc(item.name)} 후행 작업" ${(item.dependencies || []).includes(task.id) ? 'checked' : ''}></td></tr>`).join('') || '<tr><td colspan="3">연결할 다른 작업이 없습니다.</td></tr>'}</tbody></table></div></div>
-        <label class="inspector-field"><span>메모</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="검사 결과, 연락 사항 등">${esc(task.notes || '')}</textarea></label>
+        <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.e_g_outsourced_work")}"></label>
+        <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="${t("inspector.e_g_inspection_waiting")}"></label>
+        <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.department_or_vendor")}"></label>
+        <div class="inspector-field task-status-help" data-hover-help="${esc(t("help.progress_knob_stop"))}"><span><button type="button" class="status-help-trigger" aria-describedby="floating-help">${t("calendar.status")}</button></span><div class="task-progress-control" style="${paletteStyle(task.color)}"><div class="task-progress-track"><div class="task-progress-fill"></div><button type="button" id="task-progress-knob" aria-describedby="floating-help" class="task-progress-knob" role="slider" aria-label="${t("inspector.task_progress")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${taskProgress(task)}"></button></div><output id="task-progress-label"></output></div></div>
+        <label id="ins-task-blocker-row" class="inspector-field${task.status === 'blocked' ? '' : ' hidden'}"><span>${t("inspector.stopped_waiting_reason")}</span><input id="ins-task-blocker" class="text-input" value="${esc(task.blocker || '')}" placeholder="${t("inspector.e_g_checking_component_delivery")}"></label>
+        <div class="inspector-field property-relations"><span>${t("inspector.task_connections")} <small>${t("inspector.select_multiple_tasks")}</small></span><div class="inspector-relations"><table aria-label="${t("inspector.predecessors_and_successors")}"><thead><tr><th scope="col" class="relation-heading">${t("timeline.task")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="task-relations-help">i</button><span id="task-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}</span></span></th><th scope="col">${t("inspector.predecessors")}</th><th scope="col">${t("inspector.successors")}</th></tr></thead><tbody>${relatedTasks.map((item) => `<tr><th scope="row">${esc(item.name)}</th><td><input type="checkbox" class="ins-task-dependency" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t("inspector.predecessors")}" ${task.dependencies.includes(item.id) ? 'checked' : ''}></td><td><input type="checkbox" class="ins-task-successor" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t("inspector.successors")}" ${(item.dependencies || []).includes(task.id) ? 'checked' : ''}></td></tr>`).join('') || `<tr><td colspan="3">${t("inspector.no_other_tasks_to_connect")}</td></tr>`}</tbody></table></div></div>
+        <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.inspection_results_contact_details_etc")}">${esc(task.notes || '')}</textarea></label>
         </div>
-        <small class="task-autosave-state" role="status" aria-live="polite">포커스를 이동하면 자동 저장됩니다.</small>
-        <button class="button complete-button inspector-complete" id="ins-task-complete" type="button">✓ 오늘 완료 처리</button>
+        <small class="task-autosave-state" role="status" aria-live="polite">${t("inspector.changes_are_saved_when_you_leave")}</small>
+        <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button complete-button" id="ins-task-complete" type="button">${t("task.complete")}</button></div>
       </form>`;
   } else {
-    $('#task-inspector').innerHTML = `<div class="inspector-empty"><span>⌁</span><b>작업을 선택하세요</b><small>작업 이름이나 간트 막대를 누르면 계획 날짜, 담당, 상태, 선행 관계와 인계 내용을 편집할 수 있습니다.</small></div>`;
+    $('#task-inspector').innerHTML = `<div class="inspector-empty"><span>⌁</span><b>${t("inspector.select_a_task")}</b><small>${t("inspector.click_a_task_name_or_bar")}</small></div>`;
   }
   bindInspector(project, task);
+  if (project && !project.is_unassigned) $('#ins-project-delete').onclick = () => deleteInspectorItem('projects', project.id, project.name);
+  if (project && !project.is_unassigned) $('#ins-project-complete').onclick = () => completeProject(project.id);
+  if (task) $('#ins-task-delete').onclick = () => deleteInspectorItem('tasks', task.id, task.name);
   syncAccordionVisibility();
+}
+
+async function completeProject(projectId) {
+  const button = $('#ins-project-complete');
+  button.disabled = true;
+  try {
+    await Promise.allSettled([taskSaveQueue, ...projectSaveQueues.values()]);
+    await api(`/api/projects/${encodeURIComponent(projectId)}/complete`, {method:'POST', body:'{}'});
+    await loadState();
+    toast(t("project.completed"));
+  } catch (error) { toast(error.message); }
+  finally { if (button.isConnected) button.disabled = false; }
+}
+
+async function deleteInspectorItem(kind, id, name) {
+  if (!window.confirm(t(kind === 'projects' ? "project.delete_confirm" : "task.delete_confirm", {p0:name}))) return;
+  try {
+    await Promise.allSettled([taskSaveQueue, ...projectSaveQueues.values()]);
+    await api(`/api/${kind}/${encodeURIComponent(id)}`, {method:'DELETE'});
+    state.selection = null;
+    if (kind === 'projects' && state.filterProject === id) state.filterProject = null;
+    persistUi();
+    await loadState();
+    toast(t("common.deleted"));
+  } catch (error) { toast(error.message); }
 }
 
 function openTaskProjectMenu(taskId) {
   document.querySelector('#task-project-menu')?.closeMenu();
   const trigger = $('#project-context-label');
   const current = state.data.projects.find(project => project.tasks.some(task => task.id === taskId));
-  const choices = [{id:null, name:'프로젝트 없음', color:'#94a3b8'}, ...state.data.projects.filter(project => !project.is_unassigned)];
+  const choices = [{id:null, name:t("inspector.no_project"), color:'#94a3b8'}, ...state.data.projects.filter(project => !project.is_unassigned)];
   const menu = document.createElement('div');
   menu.id = 'task-project-menu'; menu.className = 'task-context-menu project-picker'; menu.setAttribute('role','menu');
-  menu.innerHTML = choices.map((project, index) => `<button type="button" role="menuitemradio" aria-checked="${project.id === current?.id || (!project.id && current?.is_unassigned) ? 'true' : 'false'}" data-choice="${index}"><i style="background:${colorPalette(project.color).base}" aria-hidden="true"></i><span>${esc(project.name)}</span><small>${esc(project.color)}</small></button>`).join('') + '<p>소속 변경 시 기존 선행·후행 연결은 해제됩니다.</p>';
+  menu.innerHTML = choices.map((project, index) => `<button type="button" role="menuitemradio" aria-checked="${project.id === current?.id || (!project.id && current?.is_unassigned) ? 'true' : 'false'}" data-choice="${index}"><i style="background:${colorPalette(project.color).base}" aria-hidden="true"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><small>${esc(project.color)}</small></button>`).join('') + `<p>${t("inspector.moving_a_task_removes_its_existing")}</p>`;
   document.body.append(menu);
   const rect = trigger.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
@@ -888,7 +983,7 @@ function openTaskProjectMenu(taskId) {
         persistUi();
       }
       await loadState();
-      toast(`${destination.name}(으)로 작업을 이동했습니다.`);
+      toast(t("inspector.task_moved_to", {p0:destination.name}));
     });
     taskSaveQueue = request;
     try { await request; } catch(error) { toast(error.message); }
@@ -896,7 +991,7 @@ function openTaskProjectMenu(taskId) {
 }
 
 function syncAccordionVisibility() {
-  $('#inspector-save-state').textContent = state.selection ? '자동 저장' : '선택 항목 없음';
+  $('#inspector-save-state').textContent = state.selection ? t("inspector.auto_save") : t("inspector.nothing_selected");
   for (const section of ['project', 'task']) {
     const open = state.inspectorOpen === section;
     $(`#${section}-accordion`).setAttribute('aria-expanded', String(open));
@@ -924,7 +1019,7 @@ function bindProjectAutoSave(form, project) {
   const status = $('.project-autosave-state', form);
   let pending = 0;
   const showStatus = () => {
-    status.textContent = errors.size ? [...errors.values()][0] : pending ? '저장 중…' : inputs.some(input => input.value !== saved.get(input.id)) ? '수정 중 · 포커스를 이동하면 저장됩니다.' : '자동 저장됨';
+    status.textContent = errors.size ? [...errors.values()][0] : pending ? t("inspector.saving") : inputs.some(input => input.value !== saved.get(input.id)) ? t("inspector.editing_leave_the_field_to_save") : t("inspector.saved_automatically");
     status.classList.toggle('save-error', errors.size > 0);
   };
   async function save(input) {
@@ -934,7 +1029,7 @@ function bindProjectAutoSave(form, project) {
     if (value === (queued.has(input.id) ? queued.get(input.id) : saved.get(input.id))) return;
     const invalid = !input.checkValidity() || (key === 'name' && !value.trim()) || (key === 'start_date' && !value);
     if (invalid) {
-      errors.set(input.id, key === 'name' ? '프로젝트 이름을 입력하세요.' : '올바른 날짜를 입력하세요.');
+      errors.set(input.id, key === 'name' ? t("inspector.enter_a_project_name") : t("inspector.enter_a_valid_date"));
       input.setAttribute('aria-invalid', 'true');
       showStatus();
       return;
@@ -954,19 +1049,19 @@ function bindProjectAutoSave(form, project) {
       if (current) for (const field of [...Object.values(fieldNames), 'updated_at']) current[field] = updated[field];
       if (form.isConnected) {
         if (key === 'color') $('.color-field code', form).textContent = updated.color;
-        if (key === 'calendar_type') $('.derived-date small', form).textContent = updated.calendar_type === 'working' ? '주 5일 · 주말·공휴일 제외' : '주 7일';
+        if (key === 'calendar_type') $('.derived-date small', form).textContent = updated.calendar_type === 'working' ? t("inspector.5_day_week_excludes_weekends_and") : t("inspector.7_day_week");
         $('#project-context-label').textContent = updated.name;
         $('#project-context-label').title = updated.name;
         applyPalette($('#project-context-label'), updated.color || '#5872d9');
-        if (state.selection?.type === 'project' && state.selection.id === project.id) $('#task-context-label').textContent = '선택되지 않음';
+        if (state.selection?.type === 'project' && state.selection.id === project.id) $('#task-context-label').textContent = t("inspector.not_selected");
       }
       if (state.view === 'timeline' && !state.drag) {
         renderSidebar();
         renderTimeline({ preserveInspector: true });
       }
     } catch (error) {
-      errors.set(input.id, `저장 실패: ${error.message} 포커스를 다시 이동하면 재시도합니다.`);
-      if (!form.isConnected) toast(`프로젝트 저장 실패: ${error.message}`);
+      errors.set(input.id, t("inspector.save_failed_leave_the_field_again", {p0:error.message}));
+      if (!form.isConnected) toast(t("inspector.project_save_failed", {p0:error.message}));
       input.setAttribute('aria-invalid', 'true');
     } finally {
       if (queued.get(input.id) === value) queued.delete(input.id);
@@ -1009,14 +1104,14 @@ function bindTaskProgress(form, task) {
   function paint() {
     track.style.setProperty('--progress', `${progress}%`);
     knob.classList.toggle('stopped', stopped); knob.textContent = stopped ? '−' : '';
-    const text = stopped ? `중지 · ${progress}%` : progress === 0 ? '예정 · 0%' : progress === 100 ? '완료 · 100%' : `진행 중 · ${progress}%`;
+    const text = stopped ? t("task.stopped", {p0:progress}) : progress === 0 ? t("task.planned_0") : progress === 100 ? t("task.complete_100") : t("task.in_progress", {p0:progress});
     label.textContent = text; knob.setAttribute('aria-valuenow', progress); knob.setAttribute('aria-valuetext', text);
     $('#ins-task-blocker-row', form).classList.toggle('hidden', !stopped);
   }
   async function commit() {
     const status = stopped ? 'blocked' : progress === 0 ? 'todo' : progress === 100 ? 'done' : 'doing';
     try { await saveTaskFields(task.id, {progress, status}); }
-    catch(error) { toast(`진행률 저장 실패: ${error.message}`); }
+    catch(error) { toast(t("task.progress_save_failed", {p0:error.message})); }
   }
   knob.addEventListener('pointerdown', event => {
     if(event.button !== 0 || !event.isPrimary) return;
@@ -1075,7 +1170,7 @@ function bindInspector(project, task) {
     }));
     bindTaskAutoSave(taskForm, task);
     $('#ins-task-complete').addEventListener('click', async () => {
-      try { await completeTask(task.id); } catch (error) { toast(error.message); }
+      try { await saveTaskFields(task.id, {status:'done'}); renderInspector(); toast(t("task.marked_complete")); } catch (error) { toast(error.message); }
     });
   }
 }
@@ -1105,14 +1200,14 @@ function bindTaskAutoSave(form, task) {
   const status = $('.task-autosave-state', form);
   let pending = 0;
   function showStatus() {
-    status.textContent = pending ? '저장 중…' : errors.size ? [...errors.values()][0] : '자동 저장됨';
+    status.textContent = pending ? t("inspector.saving") : errors.size ? [...errors.values()][0] : t("inspector.saved_automatically");
     status.classList.toggle('save-error', errors.size > 0);
   }
   async function save(input) {
     const value = input.type === 'checkbox' ? input.checked : input.value;
     if (value === (queued.has(input) ? queued.get(input) : saved.get(input))) return;
     if (!input.checkValidity() || (input.id === 'ins-task-name' && !value.trim())) {
-      errors.set(input, '입력값을 확인하세요.'); input.setAttribute('aria-invalid', 'true'); showStatus(); return;
+      errors.set(input, t("task.check_the_input_value")); input.setAttribute('aria-invalid', 'true'); showStatus(); return;
     }
     const fields = { cascade_dependents: state.cascadeDependents };
     let affected = [input];
@@ -1140,7 +1235,7 @@ function bindTaskAutoSave(form, task) {
         }
       }
     } catch (error) {
-      errors.set(input, `저장 실패: ${error.message} 다시 포커스를 이동하면 재시도합니다.`);
+      errors.set(input, t("task.save_failed_leave_the_field_again", {p0:error.message}));
       input.setAttribute('aria-invalid', 'true');
       toast(error.message);
     } finally {
@@ -1153,7 +1248,7 @@ function bindTaskAutoSave(form, task) {
     input.addEventListener('blur', () => save(input));
     if (input.tagName === 'SELECT' || ['color', 'checkbox'].includes(input.type)) input.addEventListener('change', () => save(input));
     input.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && input.type === 'date' && !event.isComposing) {
+      if (['Escape', 'Backspace'].includes(event.key) && input.type === 'date' && !event.isComposing) {
         event.preventDefault();
         event.stopPropagation();
         input.value = '';
@@ -1161,7 +1256,7 @@ function bindTaskAutoSave(form, task) {
         errors.delete(input);
         input.removeAttribute('aria-invalid');
         if (!input.required) save(input);
-        else status.textContent = '예정일을 입력하면 자동 저장됩니다.';
+        else status.textContent = t("task.enter_a_planned_date_to_save");
         return;
       }
       if (event.key === 'Enter' && input.tagName !== 'TEXTAREA' && !event.isComposing) { event.preventDefault(); input.blur(); }
@@ -1174,7 +1269,7 @@ async function completeTask(taskId) {
   if (!task) return;
   await saveTaskFields(taskId, { status: 'done', actual_start: task.actual_start || todayInput(), actual_finish: task.actual_finish || (task.actual_start > todayInput() ? task.actual_start : todayInput()), cascade_dependents: state.cascadeDependents });
   if (state.selection?.id === taskId) renderInspector();
-  toast('완료로 전환했습니다.');
+  toast(t("task.marked_complete"));
 }
 function openTaskMenu(event) {
   const bar = event.target.closest('.task-bar, .actual-task-bar');
@@ -1184,7 +1279,7 @@ function openTaskMenu(event) {
   const taskId = bar.dataset.taskSelect;
   const menu = document.createElement('div');
   menu.id = 'task-context-menu'; menu.className = 'task-context-menu'; menu.setAttribute('role', 'menu');
-  menu.innerHTML = '<button type="button" role="menuitem" data-action="complete">완료로 전환</button><button type="button" role="menuitem" data-action="actual">실제 시작/종료일 표시하기</button>';
+  menu.innerHTML = `<button type="button" role="menuitem" data-action="complete">${t("task.mark_complete")}</button><button type="button" role="menuitem" data-action="actual">${t("task.show_actual_start_finish")}</button>`;
   document.body.append(menu);
   menu.style.left = `${Math.max(8, Math.min(event.clientX, innerWidth - menu.offsetWidth - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(event.clientY, innerHeight - menu.offsetHeight - 8))}px`;
@@ -1226,7 +1321,7 @@ async function saveDraggedTaskDates(taskId, fields, period) {
   state.inspectorOpen = 'task';
   persistUi();
   await loadState();
-  toast(period === 'actual' ? '실제 작업 날짜를 저장했습니다.' : cascade ? '작업 날짜와 연결된 후행 일정을 저장했습니다.' : '작업 날짜를 저장했습니다.');
+  toast(period === 'actual' ? t("task.actual_dates_saved") : cascade ? t("task.task_dates_and_connected_successor_schedules") : t("task.task_dates_saved"));
 }
 
 function shiftIsoDate(value, days) {
@@ -1242,7 +1337,7 @@ function normalizedTemplate(template) {
 function renderTemplates() {
   const templates = state.data.templates;
   $('#template-count').textContent = templates.length;
-  $('#template-list').innerHTML = templates.map((template) => `<div class="template-card ${template.id === state.selectedTemplateId ? 'selected' : ''}" data-template="${esc(template.id)}"><b>${esc(template.name)}</b><span>${template.tasks.length}개 작업 · ${(template.description || '설명 없음').slice(0, 36)}</span></div>`).join('');
+  $('#template-list').innerHTML = templates.map((template) => `<div class="template-card ${template.id === state.selectedTemplateId ? 'selected' : ''}" data-template="${esc(template.id)}"><b>${esc(template.name)}</b><span>${template.tasks.length}${t("task.tasks")} ${(template.description || t("task.no_description")).slice(0, 36)}</span></div>`).join('');
   $$('.template-card').forEach((card) => card.addEventListener('click', () => {
     state.selectedTemplateId = card.dataset.template;
     state.draft = normalizedTemplate(templates.find((item) => item.id === state.selectedTemplateId));
@@ -1259,11 +1354,11 @@ function templateSchedule(tasks, calendar = 'working') {
   const byKey = new Map(tasks.map(t => [t.key, t]));
   function visit(task) {
     if (result.has(task.key)) return result.get(task.key);
-    if (visiting.has(task.key)) throw new Error('선행 작업 연결에 순환이 있습니다.');
+    if (visiting.has(task.key)) throw new Error(t("task.task_dependencies_contain_a_cycle"));
     visiting.add(task.key);
     let earliest = 1;
     for (const key of task.dependencies || []) {
-      if (!byKey.has(key)) throw new Error('선행 작업을 찾을 수 없습니다.');
+      if (!byKey.has(key)) throw new Error(t("task.predecessor_not_found"));
       earliest = Math.max(earliest, visit(byKey.get(key)).end + 1);
     }
     const start = task.start_day ?? earliest;
@@ -1294,13 +1389,13 @@ function updateTemplateSchedule(taskKey, fields) {
     }
   }
   if (candidate.some(task => task.start_day != null && (!Number.isInteger(task.start_day) || task.start_day < 1 || task.start_day > 10000))) {
-    throw new Error('후행 작업을 포함한 시작일은 D부터 D+9999 사이여야 합니다.');
+    throw new Error(t("task.start_dates_including_successors_must_be"));
   }
   templateSchedule(candidate, state.templateCalendar);
   candidate.forEach((task, index) => Object.assign(tasks[index], task));
 }
 // Stored template days remain one-based for compatibility; the UI starts at D.
-function templateDayLabel(day) { return day === 1 ? 'D' : `D+${day - 1}`; }
+function templateDayLabel(day) { return day === 1 ? 'D' : t("template.d", {p0:day - 1}); }
 function renderTemplateGantt() {
   const chart = $('#template-gantt');
   if (!chart) return;
@@ -1310,9 +1405,9 @@ function renderTemplateGantt() {
   const px = state.templateZoom || 46, label = 254, days = Math.max(21, ...rows.map(r => r.end + 5));
   const projectStart = rows.length ? Math.min(...rows.map(r => r.start)) : 1;
   const projectEnd = Math.max(1, ...rows.map(r => r.end));
-  const projectRow = `<div class="gantt-row project-row ${state.templateTaskKey === '__project__' ? 'selected-row' : ''}"><div class="gantt-left project-left"><button class="project-select" data-template-project aria-pressed="${state.templateTaskKey === '__project__'}"><i class="group-dot" style="background:${colorPalette(state.draft.project_color || projectColors[0]).base}"></i><span class="project-name">${esc(state.draft.name || '새 프로젝트')}</span><span class="project-meta">${rows.length}개 작업</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="project-summary-bar" data-template-project style="left:${(projectStart-1)*px}px;width:${(projectEnd-projectStart+1)*px}px;${paletteStyle(state.draft.project_color || projectColors[0], 'bar')}"><span>${templateDayLabel(projectStart)}–${templateDayLabel(projectEnd)}</span></button></div></div>`;
+  const projectRow = `<div class="gantt-row project-row ${state.templateTaskKey === '__project__' ? 'selected-row' : ''}"><div class="gantt-left project-left"><button class="project-select" data-template-project aria-pressed="${state.templateTaskKey === '__project__'}"><i class="group-dot" style="background:${colorPalette(state.draft.project_color || projectColors[0]).base}"></i><span class="project-name">${esc(state.draft.name || t("template.new_project"))}</span><span class="project-meta">${rows.length}${t("template.tasks")}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="project-summary-bar" data-template-project style="left:${(projectStart-1)*px}px;width:${(projectEnd-projectStart+1)*px}px;${paletteStyle(state.draft.project_color || projectColors[0], 'bar')}"><span>${templateDayLabel(projectStart)}–${templateDayLabel(projectEnd)}</span></button></div></div>`;
   const scroll = chart.scrollLeft, scrollTop = chart.scrollTop;
-  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left">프로젝트 / 작업</div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day">${templateDayLabel(i+1)}</div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="기본 순서 ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left">${t("timeline.project_task")}</div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day">${templateDayLabel(i+1)}</div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
   $('#add-template-task').addEventListener('click', addTemplateTask);
   renderTemplateConnections();
   $('#template-range').textContent = `${templateDayLabel(projectStart)} — ${templateDayLabel(projectEnd)}`;
@@ -1373,7 +1468,7 @@ function attachTemplateDrag() {
   chart.addEventListener('pointercancel', () => { drag=null; renderTemplateGantt(); });
 }
 function templateTaskProperties(task, index, tasks) {
-  return `<section class="template-properties-card property-grid"><div class="template-day-fields" data-template-days="${esc(task.key)}"><label class="inspector-field"><span>시작 D+</span><input class="text-input template-start-day" type="number" min="0" max="9999" required></label><label class="inspector-field"><span>종료 D+</span><input class="text-input template-end-day" type="number" min="0" required></label><button class="button button-small template-auto-days">선행 기준 자동 배치</button></div>${templateTaskRow(task,index,tasks)}</section>`;
+  return `<section class="template-properties-card property-grid"><div class="template-day-fields" data-template-days="${esc(task.key)}"><label class="inspector-field"><span>${t("template.start_d")}</span><input class="text-input template-start-day" type="number" min="0" max="9999" required></label><label class="inspector-field"><span>${t("template.finish_d")}</span><input class="text-input template-end-day" type="number" min="0" required></label><button class="button button-small template-auto-days">${t("template.auto_schedule_from_predecessors")}</button></div>${templateTaskRow(task,index,tasks)}</section>`;
 }
 function attachTemplateDayFields() {
   $$('[data-template-days]').forEach(fields => {
@@ -1414,7 +1509,7 @@ function renderTemplateEditor() {
 function renderTemplateEditorContent() {
   const draft = state.draft;
   if (!draft) {
-    $('#template-editor').innerHTML = '<div class="no-template">템플릿을 만들거나 왼쪽 목록에서 선택하세요.</div>';
+    $('#template-editor').innerHTML = `<div class="no-template">${t("template.create_a_template_or_select_one")}</div>`;
     return;
   }
   const selectedTask = draft.tasks.find(t => t.key === state.templateTaskKey) || draft.tasks[0];
@@ -1425,17 +1520,17 @@ function renderTemplateEditorContent() {
   $('#template-editor').innerHTML = `
     <div class="timeline-layout">
       <div class="timeline-main"><div class="schedule-card">
-        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="템플릿 제목" value="${esc(draft.name)}" placeholder="템플릿 제목"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">후행 같이 조정</span><span class="cascade-label-short">후행</span></label><label class="template-calendar-label">기간 기준 <select id="template-calendar" class="select-control"><option value="working">주 5일</option><option value="calendar">주 7일</option></select></label><label class="zoom-slider-control">축척 <input id="template-zoom" type="range" min="24" max="62" value="${state.templateZoom || 46}" aria-label="템플릿 축척"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><button id="save-template" class="button button-primary">템플릿 저장</button><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="템플릿 간트 표시 설명" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><i class="legend-swatch project-swatch" aria-hidden="true"></i>프로젝트 요약</b><br>템플릿 작업들의 전체 기간을 표시합니다.<br><br><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>작업 연결</b><br>선행 작업에서 후행 작업으로 이어지는 관계입니다.<br><br>D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다.</span></span></div></div>
-        <div class="schedule-legend"><span><i class="legend-swatch project-swatch"></i>프로젝트 요약</span><span>작업 연결</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="템플릿 일정 기준" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다. 저장한 템플릿은 새 배치에 적용됩니다.</span></span></div>
+        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="${t("template.template_title")}" value="${esc(draft.name)}" placeholder="${t("template.template_title")}"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">${t("template.move_successors")}</span><span class="cascade-label-short">${t("template.successors")}</span></label><label class="template-calendar-label">${t("template.calendar")} <select id="template-calendar" class="select-control"><option value="working">${t("template.5_day_week")}</option><option value="calendar">${t("inspector.7_day_week")}</option></select></label><label class="zoom-slider-control">${t("template.zoom")} <input id="template-zoom" type="range" min="24" max="62" value="${state.templateZoom || 46}" aria-label="${t("template.template_zoom")}"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><button id="save-template" class="button button-primary">${t("template.save_template")}</button><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_chart_legend")}" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>${t("timeline.predecessor_successor_legend")}</b><br>${t("template.connections_lead_from_predecessors_to_successors")}<br><br>${t("template.d_is_the_project_s_first")}</span></span></div></div>
+        <div class="schedule-legend"><span>${t("timeline.predecessor_successor_legend")}</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
-      <aside class="inspector" aria-label="템플릿 속성"><div class="inspector-title"><div><span class="eyebrow">INSPECTOR</span><h2>속성</h2></div><span class="inspector-state">템플릿 · 편집 후 저장</span></div>
-        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>프로젝트 속성</span><small>${esc(draft.name)}</small></button><div class="inspector-content property-grid ${projectOpen?'':'hidden'}">
-          <label class="inspector-field"><span>템플릿 이름</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
-          <label class="inspector-field"><span>설명</span><input id="template-description" class="text-input" value="${esc(draft.description || '')}"></label>
-          <div class="inspector-field"><span>프로젝트 색상</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="템플릿 기본 프로젝트 색상"><code>${esc(draft.project_color || projectColors[0])}</code></div></div>
+      <aside class="inspector" aria-label="${t("template.template_properties")}"><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span class="inspector-state">${t("template.template_save_after_editing")}</span></div>
+        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.project_properties")}</span><small>${esc(draft.name)}</small></button><div class="inspector-content property-grid ${projectOpen?'':'hidden'}">
+          <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
+          <label class="inspector-field"><span>${t("template.description")}</span><input id="template-description" class="text-input" value="${esc(draft.description || '')}"></label>
+          <div class="inspector-field"><span>${t("inspector.project_color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.default_template_project_color")}"><code>${esc(draft.project_color || projectColors[0])}</code></div></div>
         </div></section>
-        <section class="inspector-section"><button type="button" id="template-task-accordion" class="inspector-accordion" aria-expanded="${taskOpen}"><span class="accordion-chevron">${taskOpen?'⌄':'›'}</span><span>작업 속성</span><small>${esc(projectOpen ? '선택되지 않음' : selectedTask?.name || '선택되지 않음')}</small></button><div id="template-tasks" class="inspector-content ${taskOpen?'':'hidden'}">${selectedTask ? templateTaskProperties(selectedTask,draft.tasks.indexOf(selectedTask),draft.tasks) : '<p>작업을 추가하세요.</p>'}</div></section>
+        <section class="inspector-section"><button type="button" id="template-task-accordion" class="inspector-accordion" aria-expanded="${taskOpen}"><span class="accordion-chevron">${taskOpen?'⌄':'›'}</span><span>${t("template.task_properties")}</span><small>${esc(projectOpen ? t("inspector.not_selected") : selectedTask?.name || t("inspector.not_selected"))}</small></button><div id="template-tasks" class="inspector-content ${taskOpen?'':'hidden'}">${selectedTask ? templateTaskProperties(selectedTask,draft.tasks.indexOf(selectedTask),draft.tasks) : `<p>${t("template.add_a_task")}</p>`}</div></section>
       </aside>
     </div>`;
   $('#template-project-accordion').addEventListener('click', () => { syncDraftFromEditor(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); });
@@ -1488,7 +1583,7 @@ function renderTemplateEditorContent() {
 }
 function templateRelationSummary(task, tasks) {
   const successors = tasks.filter(other => (other.dependencies || []).includes(task.key)).length;
-  return `선행 및 후행 작업 · ${task.dependencies.length} / ${successors}`;
+  return t("template.predecessors_and_successors", {p0:task.dependencies.length,p1:successors});
 }
 function setTemplateRelation(tasks, taskKey, otherKey, successor, checked) {
   const target = tasks.find(t => t.key === (successor ? otherKey : taskKey));
@@ -1500,13 +1595,13 @@ function setTemplateRelation(tasks, taskKey, otherKey, successor, checked) {
 }
 function templateTaskRow(task, index, tasks) {
   const field = (label, content) => `<label class="inspector-field"><span>${label}</span>${content}</label>`;
-  return `${field('작업명',`<input class="text-input template-task-name" data-key="${esc(task.key)}" value="${esc(task.name)}">`)}
-    <div class="inspector-field"><span>작업 색상</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="작업 색상"></div></div>
-    <div class="inspector-field"><span>기간</span><div class="duration-field"><input class="text-input template-task-duration" data-key="${esc(task.key)}" type="number" min="1" max="520" value="${esc(task.duration_value)}" aria-label="기간"><select class="select-input template-task-unit" data-key="${esc(task.key)}" aria-label="기간 단위"><option value="days" ${task.duration_unit==='days'?'selected':''}>일</option><option value="weeks" ${task.duration_unit==='weeks'?'selected':''}>주</option></select></div></div>
-    ${field('담당 / 협력사',`<input class="text-input template-task-owner" data-key="${esc(task.key)}" value="${esc(task.owner || '')}">`)}
-    <div class="property-relations-label">작업 연결</div><div class="inspector-relations"><table aria-label="템플릿 선행 및 후행 작업"><thead><tr><th class="relation-heading">작업 <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="선행·후행 작업 도움말" aria-describedby="template-relations-help">i</button><span id="template-relations-help" class="info-tip-text" role="tooltip">선행: 이 작업보다 먼저 · 후행: 이 작업 다음</span></span></th><th>선행</th><th>후행</th></tr></thead><tbody>${tasks.filter(other=>other.key!==task.key).map(other=>`<tr><th><span class="template-relation-name" data-key="${esc(other.key)}">${esc(other.name)}</span></th><td><input type="checkbox" class="template-dependency" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} 선행 작업" ${task.dependencies.includes(other.key)?'checked':''}></td><td><input type="checkbox" class="template-successor" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} 후행 작업" ${(other.dependencies||[]).includes(task.key)?'checked':''}></td></tr>`).join('') || '<tr><td colspan="3">연결할 다른 작업이 없습니다.</td></tr>'}</tbody></table></div>
-    ${field('메모',`<input class="text-input template-task-handoff" data-key="${esc(task.key)}" value="${esc(task.handoff || '')}">`)}
-    <button class="button button-small danger-button remove-task" data-index="${index}" type="button">작업 삭제</button>`;
+  return `${field(t("timeline.task_name"),`<input class="text-input template-task-name" data-key="${esc(task.key)}" value="${esc(task.name)}">`)}
+    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"></div></div>
+    <div class="inspector-field"><span>${t("template.duration")}</span><div class="duration-field"><input class="text-input template-task-duration" data-key="${esc(task.key)}" type="number" min="1" max="520" value="${esc(task.duration_value)}" aria-label="${t("template.duration")}"><select class="select-input template-task-unit" data-key="${esc(task.key)}" aria-label="${t("template.duration_unit")}"><option value="days" ${task.duration_unit==='days'?'selected':''}>${t("common.days")}</option><option value="weeks" ${task.duration_unit==='weeks'?'selected':''}>${t("common.weeks")}</option></select></div></div>
+    ${field(t("timeline.owner_vendor"),`<input class="text-input template-task-owner" data-key="${esc(task.key)}" value="${esc(task.owner || '')}">`)}
+    <div class="property-relations-label">${t("inspector.task_connections")}</div><div class="inspector-relations"><table aria-label="${t("template.template_predecessors_and_successors")}"><thead><tr><th class="relation-heading">${t("timeline.task")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="template-relations-help">i</button><span id="template-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}</span></span></th><th>${t("template.predecessor")}</th><th>${t("template.successors")}</th></tr></thead><tbody>${tasks.filter(other=>other.key!==task.key).map(other=>`<tr><th><span class="template-relation-name" data-key="${esc(other.key)}">${esc(other.name)}</span></th><td><input type="checkbox" class="template-dependency" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.predecessors")}" ${task.dependencies.includes(other.key)?'checked':''}></td><td><input type="checkbox" class="template-successor" data-task="${esc(task.key)}" data-dependency="${esc(other.key)}" aria-label="${esc(other.name)} ${t("inspector.successors")}" ${(other.dependencies||[]).includes(task.key)?'checked':''}></td></tr>`).join('') || `<tr><td colspan="3">${t("inspector.no_other_tasks_to_connect")}</td></tr>`}</tbody></table></div>
+    ${field(t("inspector.notes"),`<input class="text-input template-task-handoff" data-key="${esc(task.key)}" value="${esc(task.handoff || '')}">`)}
+    <button class="button button-small danger-button remove-task" data-index="${index}" type="button">${t("template.delete_task")}</button>`;
 }
 
 function syncDraftFromEditor() {
@@ -1549,39 +1644,51 @@ async function saveTemplate() {
   try {
     for (const fields of $$('[data-template-days]')) {
       const startField=$('.template-start-day',fields),endField=$('.template-end-day',fields);
-      if (!startField.checkValidity() || !endField.checkValidity() || Number(endField.value)<Number(startField.value)) throw new Error('시작·종료 D+범위를 확인하세요.');
+      if (!startField.checkValidity() || !endField.checkValidity() || Number(endField.value)<Number(startField.value)) throw new Error(t("template.check_the_start_and_finish_d"));
     }
     syncDraftFromEditor();
-    if (!state.draft.name.trim()) throw new Error('템플릿 이름을 입력하세요.');
-    if (!state.draft.tasks.length) throw new Error('작업을 한 개 이상 추가하세요.');
-    if (state.draft.tasks.some((task) => !String(task.name).trim())) throw new Error('작업명을 입력하세요.');
+    if (!state.draft.name.trim()) throw new Error(t("template.enter_a_template_name"));
+    if (!state.draft.tasks.length) throw new Error(t("template.add_at_least_one_task"));
+    if (state.draft.tasks.some((task) => !String(task.name).trim())) throw new Error(t("template.enter_a_task_name"));
     const payload = { name: state.draft.name.trim(), calendar_type: state.draft.calendar_type || 'working', description: state.draft.description || '', project_color: state.draft.project_color || projectColors[0], tasks: state.draft.tasks.map((task, index) => ({ key: task.key, name: task.name.trim(), duration_value: Number(task.duration_value), duration_unit: task.duration_unit, start_day: task.start_day ?? null, dependencies: task.dependencies, owner: task.owner || '', handoff: task.handoff || '', color: task.color || taskColors[index % taskColors.length], sort_order: index })) };
     const saved = state.draft.id ? await api(`/api/templates/${encodeURIComponent(state.draft.id)}`, { method: 'PUT', body: JSON.stringify(payload) }) : await api('/api/templates', { method: 'POST', body: JSON.stringify(payload) });
     state.selectedTemplateId = saved.id;
     state.draft = null; state.preview = null;
     await loadState();
-    toast('템플릿을 저장했습니다. 기존 프로젝트 일정은 유지됩니다.');
+    toast(t("template.template_saved_existing_project_schedules_are"));
   } catch (error) { toast(error.message); }
   finally { button.disabled = false; }
 }
 function createTemplate() {
   const key = `task_${crypto.randomUUID().slice(0, 8)}`;
   state.selectedTemplateId = null;
-  state.draft = { name: '새 일정 템플릿', description: '', project_color: projectColors[state.data.templates.length % projectColors.length], tasks: [{ key, name: '작업 1', duration_value: 1, duration_unit: 'days', dependencies: [], owner: '', handoff: '', color: taskColors[0] }] };
+  state.draft = { name: t("template.new_schedule_template"), description: '', project_color: projectColors[state.data.templates.length % projectColors.length], tasks: [{ key, name: t("template.task_1"), duration_value: 1, duration_unit: 'days', dependencies: [], owner: '', handoff: '', color: taskColors[0] }] };
   state.preview = null;
   switchView('templates');
 }
 
 function openModal(title, subtitle, body, footer, onOpen = null) {
-  $('#modal-root').innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><button class="icon-button modal-close" aria-label="닫기">×</button></header><div class="inline-error" id="modal-error"></div><div class="modal-body">${body}</div>${footer ? `<footer class="modal-footer">${footer}</footer>` : ''}</section></div>`;
+  $('#modal-root').innerHTML = `<div class="modal-backdrop"><section class="modal" role="dialog" aria-modal="true"><header class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><button class="icon-button modal-close" aria-label="${t("template.close")}">×</button></header><div class="inline-error" id="modal-error"></div><div class="modal-body">${body}</div>${footer ? `<footer class="modal-footer">${footer}</footer>` : ''}</section></div>`;
+  document.removeEventListener('keydown', modalEscape, true);
+  document.addEventListener('keydown', modalEscape, true);
   $('.modal-close').addEventListener('click', closeModal);
   $('.modal-backdrop').addEventListener('click', (event) => { if (event.target.classList.contains('modal-backdrop')) closeModal(); });
   if (onOpen) onOpen();
 }
-function closeModal() { $('#modal-root').innerHTML = ''; }
+function modalEscape(event) {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeModal();
+}
+function closeModal() {
+  document.removeEventListener('keydown', modalEscape, true);
+  $('#floating-help')?.hidePopover();
+  $('#modal-root').innerHTML = '';
+}
 function setModalError(message) { $('#modal-error').textContent = message; }
 function formInfo(id, label, text) {
-  return `<button type="button" class="info-tip-button form-info-button" aria-label="${esc(label)}" popovertarget="${id}">i</button><span id="${id}" class="form-info-tooltip" popover="auto" role="tooltip">${esc(text)}</span>`;
+  return `<span class="info-tip"><button type="button" class="info-tip-button form-info-button" aria-label="${esc(label)}" aria-describedby="${id}">i</button><span id="${id}" class="info-tip-text" role="tooltip">${esc(text)}</span></span>`;
 }
 function newProjectColor(seed) {
   const used = new Set(state.data.projects.map(project => colorPalette(project.color).base));
@@ -1592,39 +1699,35 @@ function newProjectColor(seed) {
     if (!used.has(color)) return color;
   }
 }
-function openInstantiate() {
-  if (!state.data.templates.length) { toast('먼저 일정 템플릿을 만들어주세요.'); switchView('templates'); return; }
-  const options = state.data.templates.map((template) => `<option value="${esc(template.id)}">${esc(template.name)} · ${template.tasks.length}개 작업</option>`).join('');
+function openInstantiate() { openProjectCreate(true); }
+function openProjectCreate(useTemplate) {
+  if (useTemplate && !state.data.templates.length) { toast(t("template.create_a_schedule_template_first")); switchView('templates'); return; }
+  const options = state.data.templates.map((template) => `<option value="${esc(template.id)}">${esc(template.name)} · ${template.tasks.length}${t("template.tasks")}</option>`).join('');
   const requestId = crypto.randomUUID();
   const initialColor = newProjectColor(`${todayInput()}:${requestId}`);
   const body = `<div class="form-grid">
     <div class="project-identity-row full">
-      <label class="form-field project-color-field"><span class="field-label">프로젝트 색상</span><input id="project-color" type="color" value="${initialColor}" aria-label="새 프로젝트 색상"></label>
-      <label class="form-field project-name-field"><span class="field-label">프로젝트 / 생산 배치 이름</span><input id="project-name" class="text-input" autocomplete="off" placeholder="예: MARKOS MAIN보드 50EA" autofocus></label>
+      <label class="form-field project-color-field"><span class="field-label">${t("common.color")}</span><input id="project-color" type="color" value="${initialColor}" aria-label="${t("project.new_project_color")}"></label>
+      <label class="form-field project-name-field"><span class="field-label">${t("project.project_production_batch_name")}</span><input id="project-name" class="text-input" autocomplete="off" placeholder="${t("project.e_g_markos_main_board_50ea")}" autofocus></label>
     </div>
-    <label class="form-field"><span class="field-label">적용할 템플릿</span><select id="project-template" class="select-input">${options}</select></label>
-    <label class="form-field"><span class="field-label">프로젝트 시작일</span><input id="project-start" type="date" class="text-input" value="${todayInput()}"></label>
-    <div class="form-field full"><div class="field-label"><label for="project-calendar">일정 계산 기준</label>${formInfo('project-calendar-help', '일정 계산 기준 설명', '작업 완료일 다음 작업일에 후속 공정을 시작합니다. 주 5일은 주말·공휴일을 건너뛰고, 주 7일은 날짜를 그대로 더합니다.')}</div><select id="project-calendar" class="select-input"><option value="working">주 5일 (월–금)</option><option value="calendar">주 7일</option></select></div>
-    <div class="form-field full"><div id="project-template-summary" class="project-template-summary"></div></div>
+    ${useTemplate ? `<label class="form-field full"><span class="field-label">${t("project.template_to_apply")}</span><select id="project-template" class="select-input">${options}</select></label>` : ''}
+    <label class="form-field"><span class="field-label">${t("inspector.start_date")}</span><input id="project-start" type="date" class="text-input" value="${todayInput()}"></label>
+    <div class="form-field"><div class="field-label"><label for="project-calendar">${t("project.scheduling_calendar")}</label>${formInfo('project-calendar-help', t("project.scheduling_calendar_help"), t("project.successors_start_on_the_workday_after"))}</div><select id="project-calendar" class="select-input"><option value="working">${t("inspector.5_day_week_mon_fri")}</option><option value="calendar">${t("inspector.7_day_week")}</option></select></div>
+    ${useTemplate ? '<div class="form-field full"><div id="project-template-summary" class="project-template-summary"></div></div>' : ''}
   </div>`;
-  const footer = `<button class="button" id="cancel-project">취소</button><div class="modal-footer-right"><button class="button button-primary" id="confirm-project">모든 작업으로 프로젝트 생성</button></div>`;
-  openModal('템플릿으로 프로젝트 만들기', '', body, footer, () => {
-    $('.modal-head h2').insertAdjacentHTML('beforeend', formInfo('project-create-help', '템플릿으로 프로젝트 만들기 설명', '선택한 템플릿의 작업과 의존 관계를 한 번에 복사합니다.'));
-    $$('.modal [popovertarget]').forEach(button => button.addEventListener('click', () => {
-      const overlay = document.getElementById(button.getAttribute('popovertarget'));
-      const rect = button.getBoundingClientRect();
-      overlay.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - 332))}px`;
-      overlay.style.top = `${rect.bottom + 8}px`;
-    }));
-    const summary = () => { const template = state.data.templates.find((item) => item.id === $('#project-template').value); $('#project-calendar').value = template.calendar_type || 'working'; $('#project-template-summary').textContent = `${template.name}: ${template.tasks.length}개 작업 · 작업 색상과 의존 관계를 복사하고 일정은 시작일로부터 자동 계산합니다.`; };
-    $('#project-template').addEventListener('change', summary); summary();
+  const footer = `<button class="button" id="cancel-project">${t("timeline.cancel")}</button><div class="modal-footer-right"><button class="button button-primary" id="confirm-project">${useTemplate ? t("project.create_project_with_all_tasks") : t("project.add_title")}</button></div>`;
+  openModal(useTemplate ? t("project.create_project_from_template") : t("project.add_title"), useTemplate ? '' : t("project.empty_description"), body, footer, () => {
+    $('.modal').classList.add('creation-modal');
+    if (useTemplate) $('.modal-head h2').insertAdjacentHTML('beforeend', formInfo('project-create-help', t("project.create_project_from_template_help"), t("project.copy_the_selected_template_s_tasks")));
+    const summary = () => { const template = state.data.templates.find((item) => item.id === $('#project-template').value); $('#project-calendar').value = template.calendar_type || 'working'; $('#project-template-summary').textContent = t("project.tasks_copies_task_colors_and_dependencies", {p0:template.name,p1:template.tasks.length}); };
+    if (useTemplate) { $('#project-template').addEventListener('change', summary); summary(); }
     $('#cancel-project').addEventListener('click', closeModal);
     $('#confirm-project').addEventListener('click', async () => {
       const button = $('#confirm-project'); if (button.disabled) return;
       button.disabled = true;
       try {
-      const project = await api('/api/instantiate', { method: 'POST', body: JSON.stringify({ request_id: requestId, name: $('#project-name').value.trim(), template_id: $('#project-template').value, start_date: $('#project-start').value, calendar_type: $('#project-calendar').value, color: $('#project-color').value }) });
-        closeModal(); state.filterProject = project.id; state.selection = { type: 'project', id: project.id }; state.inspectorOpen = 'project'; persistUi(); switchView('timeline'); await loadState(); toast(`${project.name} · ${project.tasks.length}개 작업을 생성했습니다.`);
+      const project = await api(useTemplate ? '/api/instantiate' : '/api/projects', { method: 'POST', body: JSON.stringify({ request_id: requestId, name: $('#project-name').value.trim(), template_id: $('#project-template')?.value, start_date: $('#project-start').value, calendar_type: $('#project-calendar').value, color: $('#project-color').value }) });
+        closeModal(); state.filterProject = project.id; state.selection = { type: 'project', id: project.id }; state.inspectorOpen = 'project'; persistUi(); switchView('timeline'); await loadState(); toast(useTemplate ? t("project.created_tasks", {p0:project.name,p1:project.tasks.length}) : t("project.empty_created"));
       } catch (error) { setModalError(error.message); button.disabled = false; }
     });
     $('#project-name').focus();
@@ -1635,22 +1738,23 @@ function openTaskEditor(projectId, taskId) {
   const task = project?.tasks.find((item) => item.id === taskId);
   if (!task || !project) return;
   const dependencies = project.tasks.filter((item) => item.id !== task.id);
-  const depMarkup = dependencies.length ? dependencies.map((item) => `<label><input type='checkbox' class='task-dep-checkbox' value='${esc(item.id)}' ${task.dependencies.includes(item.id) ? 'checked' : ''}><span>${esc(item.name)}</span></label>`).join('') : '<span class="form-help">다른 작업을 추가하면 연결할 수 있습니다.</span>';
+  const depMarkup = dependencies.length ? dependencies.map((item) => `<label><input type='checkbox' class='task-dep-checkbox' value='${esc(item.id)}' ${task.dependencies.includes(item.id) ? 'checked' : ''}><span>${esc(item.name)}</span></label>`).join('') : `<span class="form-help">${t("project.add_another_task_to_create_a")}</span>`;
   const body = `<div class='task-details'><div class='form-grid'>
-    <label class='form-field full'><span class='field-label'>작업명</span><input id='edit-task-name' class='text-input' value='${esc(task.name)}' required></label>
-    <label class='form-field'><span class='field-label'>예정 시작일</span><input id='edit-task-planned-start' type='date' class='text-input' value='${esc(task.planned_start)}' required></label>
-    <label class='form-field'><span class='field-label'>예정 종료일</span><input id='edit-task-planned-finish' type='date' class='text-input' value='${esc(task.planned_finish)}' required></label>
-    <label class='form-field'><span class='field-label'>담당 / 협력사</span><input id='edit-task-owner' class='text-input' value='${esc(task.owner)}' placeholder='담당 부서 또는 업체'></label>
-    <label class='form-field'><span class='field-label'>상태</span><select id='edit-task-status' class='select-input'>${Object.entries(statusNames).map(([key, name]) => `<option value='${key}' ${task.status === key ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
-    <label class='form-field full cascade-inline'><input data-cascade-dependents type='checkbox' ${state.cascadeDependents ? 'checked' : ''}><span>연결된 후행 작업 같이 변경</span></label>
-    <div class='form-field full schedule-note'><span>↳</span><span>더 늦은 예정·실제 종료일의 변경량만큼 모든 후행 작업의 예정 날짜를 이동합니다. 실제 기록은 유지됩니다.</span></div>
-    <label class='form-field full'><span class='field-label'>선행 작업 <span style='font-weight:400;color:#a2aab5'> · 복수 선택 시 모든 선행 작업이 끝나야 시작</span></span><div class='dependency-box'>${depMarkup}</div></label>
-    <label class='form-field full'><span class='field-label'>중지 / 대기 사유</span><input id='edit-task-blocker' class='text-input' value='${esc(task.blocker)}' placeholder='예: 부품 납기 확인 중'></label>
-    <div class='form-field full'><span class='field-label'>실제 작업일</span><div class='actual-grid'><label><input id='edit-task-actual-start' type='date' class='text-input' value='${esc(task.actual_start)}'><div class='form-help'>실제 시작일</div></label><label><input id='edit-task-actual-finish' type='date' class='text-input' value='${esc(task.actual_finish)}'><div class='form-help'>실제 완료일</div></label></div></div>
-    <label class='form-field full'><span class='field-label'>메모</span><textarea id='edit-task-notes' class='text-area' rows='2' placeholder='검사 결과, 연락 사항 등'>${esc(task.notes)}</textarea></label>
+    <label class='form-field full'><span class='field-label'>${t("timeline.task_name")}</span><input id='edit-task-name' class='text-input' value='${esc(task.name)}' required></label>
+    <label class='form-field'><span class='field-label'>${t("timeline.planned_start")}</span><input id='edit-task-planned-start' type='date' class='text-input' value='${esc(task.planned_start)}' required></label>
+    <label class='form-field'><span class='field-label'>${t("timeline.planned_finish")}</span><input id='edit-task-planned-finish' type='date' class='text-input' value='${esc(task.planned_finish)}' required></label>
+    <label class='form-field'><span class='field-label'>${t("timeline.owner_vendor")}</span><input id='edit-task-owner' class='text-input' value='${esc(task.owner)}' placeholder='${t("project.department_or_vendor")}'></label>
+    <label class='form-field'><span class='field-label'>${t("calendar.status")}</span><select id='edit-task-status' class='select-input'>${Object.entries(statusNames).map(([key, name]) => `<option value='${key}' ${task.status === key ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
+    <label class='form-field full cascade-inline'><input data-cascade-dependents type='checkbox' ${state.cascadeDependents ? 'checked' : ''}><span>${t("project.move_connected_successors")}</span></label>
+    <div class='form-field full schedule-note'><span>↳</span><span>${t("project.shift_all_successor_planned_dates_by")}</span></div>
+    <label class='form-field full'><span class='field-label'>${t("inspector.predecessors")} <span style='font-weight:400;color:#a2aab5'> ${t("project.all_selected_predecessors_must_finish_before")}</span></span><div class='dependency-box'>${depMarkup}</div></label>
+    <label class='form-field full'><span class='field-label'>${t("inspector.stopped_waiting_reason")}</span><input id='edit-task-blocker' class='text-input' value='${esc(task.blocker)}' placeholder='${t("inspector.e_g_checking_component_delivery")}'></label>
+    <div class='form-field full'><span class='field-label'>${t("inspector.actual_dates")}</span><div class='actual-grid'><label><input id='edit-task-actual-start' type='date' class='text-input' value='${esc(task.actual_start)}'><div class='form-help'>${t("inspector.actual_start")}</div></label><label><input id='edit-task-actual-finish' type='date' class='text-input' value='${esc(task.actual_finish)}'><div class='form-help'>${t("project.actual_completion_date")}</div></label></div></div>
+    <label class='form-field full'><span class='field-label'>${t("inspector.notes")}</span><textarea id='edit-task-notes' class='text-area' rows='2' placeholder='${t("inspector.inspection_results_contact_details_etc")}'>${esc(task.notes)}</textarea></label>
   </div></div>`;
-  const footer = `<button id='mark-complete' class='button complete-button'>✓ 오늘 완료 처리</button><div class='modal-footer-right'><button id='cancel-task' class='button'>취소</button><button id='save-task' class='button button-primary'>변경 저장</button></div>`;
-  openModal(task.name, `${project.name} · 예정 ${fmtDate(task.planned_start, true)} – ${fmtDate(task.planned_finish, true)}`, body, footer, () => {
+  const footer = `<button id='mark-complete' class='button complete-button'>${t("inspector.complete_today")}</button>
+        <button class="button danger-button" id="ins-task-delete" type="button">${t("task.delete")}</button><div class='modal-footer-right'><button id='cancel-task' class='button'>${t("timeline.cancel")}</button><button id='save-task' class='button button-primary'>${t("project.save_changes")}</button></div>`;
+  openModal(task.name, t("project.planned", {p0:project.name,p1:fmtDate(task.planned_start, true),p2:fmtDate(task.planned_finish, true)}), body, footer, () => {
     $('#cancel-task').addEventListener('click', closeModal);
     $$('[data-cascade-dependents]', $('#modal-root')).forEach((input) => input.addEventListener('change', () => setCascadeSetting(input.checked)));
     const formPayload = () => ({
@@ -1670,7 +1774,7 @@ function openTaskEditor(projectId, taskId) {
     const save = async (complete = false) => {
       if (saving) return;
       const payload = formPayload();
-      if (!payload.name) { setModalError('작업명을 입력하세요.'); return; }
+      if (!payload.name) { setModalError(t("template.enter_a_task_name")); return; }
       if (complete) { payload.status = 'done'; payload.actual_start ||= todayInput(); payload.actual_finish ||= todayInput(); }
       saving = true;
       $('#save-task').disabled = true;
@@ -1679,7 +1783,7 @@ function openTaskEditor(projectId, taskId) {
         await api(`/api/tasks/${encodeURIComponent(task.id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
         closeModal();
         await loadState();
-        toast(complete ? '실제 완료일을 기록했습니다.' : '작업 날짜와 속성을 저장했습니다.');
+        toast(complete ? t("project.actual_completion_date_recorded") : t("project.task_dates_and_properties_saved"));
       } catch (error) {
         setModalError(error.message);
         saving = false;
@@ -1694,12 +1798,12 @@ function openTaskEditor(projectId, taskId) {
 function openProjectEditor(projectId) {
   const project = state.data.projects.find((item) => item.id === projectId);
   if (!project) return;
-  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">프로젝트 이름</span><input id="edit-project-name" class="text-input" autocomplete="off" value="${esc(project.name)}"></label><label class="form-field"><span class="field-label">시작일</span><input id="edit-project-start" type="date" class="text-input" value="${esc(project.start_date)}"></label><label class="form-field"><span class="field-label">일정 계산 기준</span><select id="edit-project-calendar" class="select-input"><option value="working" ${project.calendar_type === 'working' ? 'selected' : ''}>주 5일 (월–금)</option><option value="calendar" ${project.calendar_type === 'calendar' ? 'selected' : ''}>주 7일</option></select></label><div class="form-field full"><div class="form-help">시작일과 달력 기준을 바꾸어도 저장된 작업 날짜는 그대로 유지됩니다.</div></div></div>`;
-  const footer = `<button id="cancel-project-edit" class="button">취소</button><div class="modal-footer-right"><button id="save-project-edit" class="button button-primary">프로젝트 정보 저장</button></div>`;
-  openModal('프로젝트 설정', `${project.tasks.length}개 작업 · ${project.template_name}`, body, footer, () => {
+  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">${t("inspector.project_name")}</span><input id="edit-project-name" class="text-input" autocomplete="off" value="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}"></label><label class="form-field"><span class="field-label">${t("inspector.start_date")}</span><input id="edit-project-start" type="date" class="text-input" value="${esc(project.start_date)}"></label><label class="form-field"><span class="field-label">${t("project.scheduling_calendar")}</span><select id="edit-project-calendar" class="select-input"><option value="working" ${project.calendar_type === 'working' ? 'selected' : ''}>${t("inspector.5_day_week_mon_fri")}</option><option value="calendar" ${project.calendar_type === 'calendar' ? 'selected' : ''}>${t("inspector.7_day_week")}</option></select></label><div class="form-field full"><div class="form-help">${t("project.changing_the_start_date_or_calendar")}</div></div></div>`;
+  const footer = `<button id="cancel-project-edit" class="button">${t("timeline.cancel")}</button><div class="modal-footer-right"><button id="save-project-edit" class="button button-primary">${t("project.save_project_info")}</button></div>`;
+  openModal(t("project.project_settings"), t("project.tasks", {p0:project.tasks.length,p1:project.template_name}), body, footer, () => {
     $('#cancel-project-edit').addEventListener('click', closeModal);
     $('#save-project-edit').addEventListener('click', async () => {
-      try { await api(`/api/projects/${encodeURIComponent(project.id)}`, { method: 'PATCH', body: JSON.stringify({ name: $('#edit-project-name').value.trim(), start_date: $('#edit-project-start').value, calendar_type: $('#edit-project-calendar').value }) }); closeModal(); await loadState(); toast('프로젝트 정보를 저장했습니다. 작업 날짜는 그대로 유지됩니다.'); }
+      try { await api(`/api/projects/${encodeURIComponent(project.id)}`, { method: 'PATCH', body: JSON.stringify({ name: $('#edit-project-name').value.trim(), start_date: $('#edit-project-start').value, calendar_type: $('#edit-project-calendar').value }) }); closeModal(); await loadState(); toast(t("project.project_info_saved_task_dates_are")); }
       catch (error) { setModalError(error.message); }
     });
   });
@@ -1711,17 +1815,26 @@ function taskInsertionOrder(tasks, taskId, anchorId, after) {
   ids.splice(ids.indexOf(anchorId)+(after?1:0),0,taskId);
   return ids;
 }
+function taskDropPlacement(dragged, target, manual) {
+  if (!target || target.taskId === dragged.id) return null;
+  if (target.taskId && target.projectId === dragged.projectId && !manual) return null;
+  return {project_id:target.projectId === '__unassigned__' ? null : target.projectId,
+    ...(target.taskId && manual ? {anchor_id:target.taskId, after:target.after} : {})};
+}
 function bindTaskReordering() {
   const chart = $('#gantt');
   let dragged = null, insertion = null;
   function clearPreview() {
-    $$('.task-insert-before, .task-insert-after',chart).forEach(row=>{row.classList.remove('task-insert-before','task-insert-after');row.querySelector('.task-left')?.removeAttribute('data-preview');});
+    $$('.task-insert-before, .task-insert-after, .directory-drop-target',chart).forEach(row=>{
+      row.classList.remove('task-insert-before','task-insert-after','directory-drop-target');
+      row.querySelector('.gantt-left')?.removeAttribute('data-preview');
+    });
     insertion = null;
   }
   function stop() { clearPreview(); $$('.task-order-dragging',chart).forEach(row=>row.classList.remove('task-order-dragging')); dragged = null; }
   chart.addEventListener('dragstart',event=>{
     const label = event.target.closest('.task-label[data-task-select]');
-    if (!label || $('#sort-select').value !== 'manual') {event.preventDefault();return;}
+    if (!label) {event.preventDefault();return;}
     dragged = {id:label.dataset.taskSelect,projectId:label.dataset.project};
     event.dataTransfer.effectAllowed='move';
     event.dataTransfer.setData('text/plain',dragged.id);
@@ -1729,17 +1842,21 @@ function bindTaskReordering() {
   });
   chart.addEventListener('dragover',event=>{
     if (!dragged) return;
-    const label = event.target.closest('.task-left')?.querySelector('.task-label[data-task-select]');
     clearPreview();
-    if (!label || label.dataset.project !== dragged.projectId || label.dataset.taskSelect === dragged.id) {event.dataTransfer.dropEffect='none';return;}
+    const cell = event.target.closest('.gantt-left');
+    const label = cell?.querySelector('.task-label[data-task-select]');
+    const folderId = cell?.dataset.dropProject;
+    const row = cell?.closest('.gantt-row');
+    const rect = row?.getBoundingClientRect();
+    const target = label ? {projectId:label.dataset.project,taskId:label.dataset.taskSelect,after:event.clientY > rect.top+rect.height/2} : folderId ? {projectId:folderId} : null;
+    const manual = $('#sort-select').value === 'manual';
+    insertion = taskDropPlacement(dragged,target,manual);
+    if (!insertion) {event.dataTransfer.dropEffect='none';return;}
     event.preventDefault();event.dataTransfer.dropEffect='move';
-    const row = label.closest('.task-row'), rect=row.getBoundingClientRect();
-    const after=event.clientY > rect.top+rect.height/2;
-    const project=state.data.projects.find(p=>p.id===dragged.projectId);
-    const order=taskInsertionOrder(project.tasks,dragged.id,label.dataset.taskSelect,after);
-    row.classList.add(after?'task-insert-after':'task-insert-before');
-    row.querySelector('.task-left').dataset.preview=`${order.indexOf(dragged.id)+1}번째에 삽입`;
-    insertion={anchor_id:label.dataset.taskSelect,after};
+    if (insertion.anchor_id) row.classList.add(insertion.after?'task-insert-after':'task-insert-before');
+    else row.classList.add('directory-drop-target');
+    const name = target.projectId === '__unassigned__' ? t("directory.root_name") : state.data.projects.find(p=>p.id===target.projectId)?.name;
+    cell.dataset.preview = t("directory.move_into", {p0:name});
     const wrap=$('#gantt-wrap'), bounds=wrap.getBoundingClientRect();
     if(event.clientY>bounds.bottom-45) wrap.scrollTop+=15;
     else if(event.clientY<bounds.top+90) wrap.scrollTop-=15;
@@ -1752,16 +1869,74 @@ function bindTaskReordering() {
     const taskId=dragged.id, fields=insertion;
     stop();
     const request=taskSaveQueue.catch(()=>{}).then(async()=>{
-      const project=await api(`/api/tasks/${encodeURIComponent(taskId)}/order`,{method:'PATCH',body:JSON.stringify(fields)});
-      const current=state.data.projects.find(p=>p.id===project.id);
-      if(current) {current.tasks=project.tasks;current.updated_at=project.updated_at;}
-      if(state.view==='timeline') renderTimeline({preserveInspector:true});
-      toast('기본 작업 순서를 저장했습니다.');
+      const {project_id, ...position}=fields;
+      const project=await api(`/api/tasks/${encodeURIComponent(taskId)}/placement`,{method:'PATCH',body:JSON.stringify({directory_id:project_id ? `project:${project_id}` : 'root',...position})});
+      if (state.filterProject) state.filterProject=project.id;
+      state.hiddenProjects.delete(project.id);
+      state.collapsedProjects.delete(project.id);
+      state.selection={type:'task',id:taskId}; state.inspectorOpen='task';
+      persistUi();
+      await loadState();
+      toast(t("inspector.task_moved_to", {p0:project.is_unassigned ? t("inspector.no_project") : project.name}));
     });
     taskSaveQueue=request;
     try {await request;} catch(error) {toast(error.message);}
   });
   $('#sort-select').addEventListener('change',stop);
+}
+
+// A top-layer popover avoids clipping by the sticky Gantt header and scroll containers.
+function bindFloatingHelp() {
+  const overlay = document.createElement('div');
+  overlay.id = 'floating-help';
+  overlay.className = 'floating-help';
+  overlay.setAttribute('popover', 'manual');
+  overlay.setAttribute('role', 'tooltip');
+  document.body.append(overlay);
+  let active = null, hoverTimer = null, pending = null;
+  const cancelHover = () => { clearTimeout(hoverTimer); hoverTimer = null; pending = null; };
+  const targetFor = node => node instanceof Element ? node.closest('.info-tip, [data-hover-help]') : null;
+  function hide() { cancelHover(); overlay.hidePopover(); active = null; }
+  function show(target) {
+    cancelHover();
+    if (!target || !target.isConnected || active === target) return;
+    active = target;
+    const content = target.querySelector('.info-tip-text');
+    overlay.replaceChildren();
+    if (content) for (const child of content.childNodes) overlay.append(child.cloneNode(true));
+    else overlay.textContent = target.dataset.hoverHelp;
+    overlay.showPopover();
+    const rect = target.getBoundingClientRect();
+    const width = overlay.offsetWidth, height = overlay.offsetHeight;
+    overlay.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - width - 8))}px`;
+    const top = rect.bottom + 8 + height <= innerHeight - 8 ? rect.bottom + 8 : rect.top - height - 8;
+    overlay.style.top = `${Math.max(8, Math.min(top, innerHeight - height - 8))}px`;
+  }
+  document.addEventListener('pointerover', event => {
+    const target = targetFor(event.target);
+    if (!target || target.contains(event.relatedTarget)) return;
+    if (event.pointerType === 'touch' || event.buttons || active === target || pending === target) return;
+    cancelHover();
+    pending = target;
+    hoverTimer = setTimeout(() => show(target), 3000);
+  });
+  document.addEventListener('pointerout', event => {
+    const target = targetFor(event.target);
+    if (target && !target.contains(event.relatedTarget) && !overlay.contains(event.relatedTarget)) hide();
+  });
+  overlay.addEventListener('pointerleave', hide);
+  document.addEventListener('pointerdown', event => {
+    if (targetFor(event.target)?.matches('.task-status-help') && !event.target.closest('.status-help-trigger')) hide();
+  });
+  document.addEventListener('focusout', event => { if (targetFor(event.target)) hide(); });
+  document.addEventListener('click', event => {
+    const target = targetFor(event.target);
+    if (target?.matches('.info-tip') || event.target.closest('.status-help-trigger')) show(target);
+    else if (!target && !overlay.contains(event.target)) hide();
+  });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') hide(); });
+  document.addEventListener('scroll', event => { if (!overlay.contains(event.target)) hide(); }, true);
+  window.addEventListener('resize', hide);
 }
 
 function bindCascadeHelp() {
@@ -1834,7 +2009,7 @@ function bindMobileSearch() {
 function syncLayoutToggle() {
   const button = $('#mobile-layout-toggle');
   button.dataset.currentLayout = state.layout;
-  const label = state.layout === 'gantt' ? '목록 보기로 전환' : '간트 보기로 전환';
+  const label = state.layout === 'gantt' ? t("common.switch_to_list_view") : t("common.switch_to_gantt_view");
   button.setAttribute('aria-label', label);
   button.title = label;
   $$('[data-layout]').forEach(item => item.classList.toggle('selected', item.dataset.layout === state.layout));
@@ -1934,6 +2109,16 @@ function bindChartAutoRefresh() {
   });
 }
 function attachEvents() {
+  $('#language-select').value = I18n.language;
+  $('#language-select').addEventListener('change', async event => {
+    await taskSaveQueue.catch(() => {});
+    I18n.setLanguage(event.target.value);
+    I18n.apply(document);
+    $('#breadcrumb-title').textContent = t({timeline:'navigation.all_schedules',templates:'navigation.schedule_templates',settings:'navigation.settings'}[state.view]);
+    $('#page-description').textContent = t({timeline:'navigation.view_each_project_s_daily_schedule',templates:'navigation.define_a_workflow_once_and_apply',settings:'navigation.view_the_app_version_and_public'}[state.view]);
+    syncLayoutToggle();
+    renderAll();
+  });
   bindMobileSearch();
   bindCascadeHelp();
   bindChartAutoRefresh();
@@ -2043,7 +2228,7 @@ function attachEvents() {
       drag.bar.style.clipPath = shape[1];
     }
     renderDependencyLinks();
-    drag.bar.title = `${drag.period === 'actual' ? '실제' : '예정'} · ${fmtDate(candidate.start, true)}–${fmtDate(candidate.finish, true)}`;
+    drag.bar.title = `${drag.period === 'actual' ? t("timeline.actual") : t("status.planned")} · ${fmtDate(candidate.start, true)}–${fmtDate(candidate.finish, true)}`;
   });
   $('#gantt').addEventListener('pointerup', async (event) => {
     const drag = state.drag;
@@ -2088,9 +2273,7 @@ function attachEvents() {
     const collapse = event.target.closest('[data-collapse]');
     if (collapse) {
       const projectId = collapse.dataset.collapse;
-      state.collapsedProjects.has(projectId) ? state.collapsedProjects.delete(projectId) : state.collapsedProjects.add(projectId);
-      persistUi();
-      renderTimeline();
+      projectMotion.toggle(projectId);
       return;
     }
     if (event.target.closest('.resize-handle')) { event.preventDefault(); return; }
@@ -2111,5 +2294,10 @@ function attachEvents() {
   });
 }
 
+const projectMotion = createProjectMotion({getState:()=>state, render:()=>{renderSidebar();renderTimeline({preserveInspector:true});}, persist:persistUi, redraw:()=>renderDependencyLinks()});
+I18n.apply(document);
+bindFloatingHelp();
 attachEvents();
-loadState().catch((error) => { toast(`로컬 백엔드에 연결할 수 없습니다: ${error.message}`); $('#gantt').innerHTML = `<div class="empty-state"><strong>서버가 실행 중인지 확인하세요</strong><span>python3 -m mygantt.server --port 8765</span></div>`; });
+loadState().catch((error) => { toast(t("common.cannot_connect_to_the_local_backend", {p0:error.message})); $('#gantt').innerHTML = `<div class="empty-state"><strong>${t("common.check_that_the_server_is_running")}</strong><span>python3 -m mygantt.server --port 8765</span></div>`; });
+
+});

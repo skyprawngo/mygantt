@@ -1,3 +1,4 @@
+const withI18n = require('./i18n_context.cjs');
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const source=fs.readFileSync('web/app.js','utf8');
 class Input extends EventTarget {
@@ -9,7 +10,7 @@ class Input extends EventTarget {
  const inputs=[name,group],status={textContent:'',style:{setProperty(){}},classList:{toggle(){}}},form=new EventTarget();form.isConnected=true;
  const project={id:'p',name:'A',group_name:'',tasks:[{id:'t'}]};
  const calls=[];const controls=[];
- const ctx=vm.createContext({Map,Promise,encodeURIComponent,state:{data:{projects:[project]},view:'timeline'},$:()=>status,$$:()=>inputs,renderSidebar(){},renderTimeline(options){assert.equal(options.preserveInspector,true)},toast(){},api(path,options){calls.push(JSON.parse(options.body));return new Promise((resolve,reject)=>controls.push({resolve,reject}))}});
+ const ctx=withI18n(vm.createContext({Map,Promise,encodeURIComponent,state:{data:{projects:[project]},view:'timeline'},$:()=>status,$$:()=>inputs,renderSidebar(){},renderTimeline(options){assert.equal(options.preserveInspector,true)},toast(){},api(path,options){calls.push(JSON.parse(options.body));return new Promise((resolve,reject)=>controls.push({resolve,reject}))}}));
  vm.runInContext(source.slice(source.indexOf('const projectSaveQueues'),source.indexOf('function bindInspector(')),ctx);
  vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc(')),ctx);
  ctx.bindProjectAutoSave(form,project);
