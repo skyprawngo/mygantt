@@ -1,57 +1,73 @@
-# MyGantt · 생산 일정 관리
+# MyGantt · Production Scheduling
 
-## 소개
+English | [한국어](readme_KR.md)
 
-MyGantt는 여러 프로젝트와 생산 배치의 일정을 간트 차트로 관리하는 웹 앱입니다. 반복되는 공정은 일정 템플릿으로 만들고, 프로젝트별 예정·실제 작업일과 진행 상황을 한 화면에서 확인할 수 있습니다.
+## Introduction
 
-Python 표준 라이브러리와 SQLite로 실행되며, 별도의 패키지 설치나 데이터베이스 서버가 필요하지 않습니다. 데이터는 앱 서버가 실행되는 컴퓨터에 저장되고, PC와 휴대폰 브라우저에서 사용할 수 있습니다.
+MyGantt is a web app for managing projects and production batches with an interactive Gantt chart. Turn recurring workflows into schedule templates, then track planned dates, actual dates, and progress in one place.
 
-## 주요 기능
+Built with the Python standard library and SQLite, it requires no package installation or separate database server. Data stays on the computer running the app server, and the interface works in desktop and mobile browsers.
 
-- **직접 편집하는 간트 차트** — 작업 바를 드래그해 일정을 이동하거나 양 끝을 조절해 기간을 변경합니다. 예정·실제 작업일과 진행률을 함께 표시하며, 속성 편집은 자동 저장되어 차트에 반영됩니다.
-- **선·후행 작업 연결과 일정 연동** — 여러 선행·후행 작업을 연결하고 흐름을 시각적으로 확인합니다. ‘후행 같이 조정’을 켜면 예정·실제 종료일 중 더 늦은 날짜의 변경량만큼 연결된 모든 후행 작업의 예정 일정을 이동하고, 실제 기록은 유지합니다.
-- **재사용 가능한 일정 템플릿** — 작업 구성과 연결 관계를 템플릿으로 저장해 새 프로젝트를 만듭니다. 생성된 프로젝트는 독립된 일정이므로 이후 템플릿 수정의 영향을 받지 않습니다. 단일 작업도 별도로 추가할 수 있습니다.
-- **프로젝트 중심의 일정 정리** — 검색·상태 필터·정렬·그룹별 보기와 간트·목록 보기를 제공합니다. 프로젝트를 접거나 숨길 수 있고, 완료된 프로젝트는 접힘·이동 애니메이션 후 숨겨집니다. 사이드바에서 다시 선택하면 표시됩니다.
-- **PC·모바일 및 다국어 지원** — 좁은 화면에서는 메뉴와 속성 패널을 열고 닫아 작업 공간을 확보합니다. 설정에서 한국어(KR), 영어(US), 일본어(JP)를 선택할 수 있습니다.
-- **캘린더 활용** — 주말·선택한 국가의 공휴일을 표시하고 일정을 `.ics` 파일로 내보냅니다. 내보낸 일정은 외부 캘린더로 가져올 수 있으며, 양방향 동기화는 지원하지 않습니다.
+### Desktop overview
 
-## 설치 및 실행
+![All schedules in the desktop Gantt view](docs/images/all-schedules-desktop.png)
 
-Git과 Python 3.12를 준비합니다. Python 3.12는 프로젝트 CI에서 사용하는 버전입니다.
+### Mobile overview
 
-### 1. 저장소 받기
+<img src="docs/images/all-schedules-mobile.png" alt="All schedules in the narrow mobile Gantt view" width="360">
+
+## Key Features
+
+- **Edit directly on the Gantt chart** — Drag task bars to move schedules or resize either end to change their duration. View planned and actual dates alongside progress, with property edits saved automatically and reflected in the chart.
+- **Dependencies and linked schedule adjustments** — Connect multiple predecessors and successors and see their relationships. With “Move successors” enabled, changes to the later of a task’s planned and actual finish shift every linked successor’s planned dates by the same amount. Actual records stay unchanged.
+- **Reusable schedule templates** — Save task structures and dependencies, then create independent project schedules from them. Later template edits do not affect existing projects. You can also add individual tasks.
+- **Project-focused organization** — Search, filter by status, sort, group, and switch between Gantt and list views. Collapse or hide projects; completed projects fold and move toward the sidebar before being hidden. Select them in the sidebar to show them again.
+- **Desktop, mobile, and multilingual UI** — On narrow screens, toggle the menu and property panels to make room for the chart. Choose Korean (KR), English (US), or Japanese (JP) in Settings.
+- **Calendar support** — Display weekends and public holidays for your selected country, and export schedules as `.ics` files for external calendar apps. Calendar export is a snapshot, not two-way synchronization.
+
+### Schedule templates
+
+Arrange tasks and predecessor–successor connections on a relative D+ timeline, then reuse the workflow when creating projects.
+
+![Schedule template Gantt chart and task properties](docs/images/schedule-templates.png)
+
+## Installation and Setup
+
+Install Git and Python 3.12. Python 3.12 is the version used in this project's CI.
+
+### 1. Clone the repository
 
 ```sh
 git clone https://github.com/skyprawngo/mygantt.git
 cd mygantt
 ```
 
-### 2. 서버 실행
+### 2. Start the server
 
 ```sh
 python3 -m mygantt.server --host 127.0.0.1 --port 8765
 ```
 
-### 3. 브라우저에서 열기
+### 3. Open the app
 
-[http://127.0.0.1:8765](http://127.0.0.1:8765)에 접속합니다. 서버를 종료하려면 실행한 터미널에서 `Ctrl+C`를 누릅니다.
+Visit [http://127.0.0.1:8765](http://127.0.0.1:8765) in your browser. Press `Ctrl+C` in the server terminal to stop it.
 
-기본 실행 시 초기 데이터베이스에 `New schedule template` 시드 템플릿과 생산 배치가 생성됩니다. 시드 구성은 `mygantt/seed_template.json`에 저장되며, 기존 데이터베이스의 템플릿이나 프로젝트를 덮어쓰지 않습니다. 예제 없이 새로 시작하려면 첫 실행에 `--no-seed`를 추가합니다. 이 옵션은 기존 데이터를 삭제하지 않습니다.
+By default, a new database includes a `New schedule template` seed template and example production batches. The seed configuration lives in `mygantt/seed_template.json` and does not overwrite templates or projects in an existing database. To start without examples, add `--no-seed` on the first run. This option does not delete existing data.
 
 ```sh
 python3 -m mygantt.server --host 127.0.0.1 --port 8765 --no-seed
 ```
 
-### 데이터 저장과 백업
+### Data storage and backup
 
-기본 데이터 파일은 저장소 안의 `data/mygantt.sqlite3`입니다. 다른 위치를 사용하려면 실행 명령에 `--db /원하는/경로/mygantt.sqlite3`를 추가합니다.
+The default database is `data/mygantt.sqlite3` inside the repository. To use another location, add `--db /your/path/mygantt.sqlite3` to the server command.
 
-백업은 서버를 종료한 후 데이터 파일을 복사합니다.
+Stop the server before copying the database for a backup:
 
 ```sh
 cp data/mygantt.sqlite3 data/mygantt-backup.sqlite3
 ```
 
-공휴일 조회에는 외부 API를 사용하며, 프로젝트·작업 데이터는 조회 요청에 포함하지 않습니다. 설정의 국가 캘린더에서 한국·일본·미국·캐나다·영국·독일·프랑스·호주를 선택할 수 있습니다. 국가 선택은 같은 서버를 사용하는 기기에 공통 적용됩니다. 전국 공휴일을 표시하며 주·지역 한정 공휴일은 제외합니다. 새 프로젝트의 주 5일 일정은 선택한 국가의 공휴일과 주말을 제외하고, 달력일 설정은 모든 날짜를 계산합니다. 국가 변경으로 기존 작업 날짜가 바뀌지는 않습니다.
+Public holiday lookups use an external API; project and task data are not included in those requests. In Settings, choose South Korea, Japan, the United States, Canada, the United Kingdom, Germany, France, or Australia. The selection applies to all devices using the same server. Only national public holidays are included; state and regional holidays are excluded. New projects using the five-day calendar skip weekends and holidays for the selected country, while the seven-day calendar counts every date. Changing the country does not alter existing task dates.
 
-기본 주소는 실행 중인 컴퓨터에서만 접속할 수 있습니다. 휴대폰 등 다른 기기에서 사용할 서버를 구성하려면 [Ubuntu 배포 안내](deploy/ubuntu/README.md)를 참고하세요.
+The default address is accessible only from the computer running the server. For a server accessible from phones and other devices, see the [Ubuntu deployment guide](deploy/ubuntu/README.md).
