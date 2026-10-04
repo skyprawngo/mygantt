@@ -5,6 +5,8 @@ import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
+from unittest.mock import patch
+from types import SimpleNamespace
 
 from mygantt.database import Database
 from mygantt.holiday_calendar import BUNDLED_HOLIDAYS_2026, API_SOURCE, FALLBACK_SOURCE
@@ -46,6 +48,54 @@ class HttpApiTests(unittest.TestCase):
       content_type = response.headers.get("Content-Type", "")
       return raw.decode("utf-8") if "text/calendar" in content_type else json.loads(raw)
 
+  def test_storage_location_reports_mac_account_and_actual_database(self):
+    with patch("mygantt.server.platform.system", return_value="Darwin"), \
+         patch("mygantt.server.platform.node", return_value="mac-host.local"), \
+         patch("pwd.getpwuid", return_value=SimpleNamespace(pw_gecos="이정윤", pw_name="test-user")):
+      storage = self.call("/api/state")["storage"]
+    self.assertEqual(storage["label"], "macOS⋅이정윤")
+    self.assertEqual(storage["database_path"], str(self.db_path.resolve()))
+
+  def test_storage_location_reports_ubuntu_server_not_browser_device(self):
+    with patch("mygantt.server.platform.system", return_value="Linux"), \
+         patch("mygantt.server.platform.node", return_value="Sub-FP750"), \
+         patch("mygantt.server.platform.freedesktop_os_release", return_value={"NAME": "Ubuntu"}):
+      storage = self.call("/api/state")["storage"]
+    self.assertEqual(storage["label"], "Ubuntu⋅Sub-FP750")
+    self.assertEqual(storage["database_path"], str(self.db_path.resolve()))
+
+  def test_storage_location_falls_back_when_linux_release_is_unavailable(self):
+    with patch("mygantt.server.platform.system", return_value="Linux"), \
+         patch("mygantt.server.platform.node", return_value="Sub-FP750"), \
+         patch("mygantt.server.platform.freedesktop_os_release", side_effect=OSError):
+      self.assertEqual(self.call("/api/state")["storage"]["label"], "Linux⋅Sub-FP750")
+
+  def test_add_individual_task_persists_without_changing_template_or_existing_tasks(self):
+    from urllib.error import HTTPError
+    state = self.call("/api/state")
+    project = state["projects"][0]
+    path = f"/api/projects/{project['id']}/tasks"
+    fields = {"name": "개별 검사", "planned_start": "2026-10-05", "planned_finish": "2026-10-07"}
+    created = self.call(path, "POST", fields)
+    self.assertEqual(created["tasks"][:-1], project["tasks"])
+    task = created["tasks"][-1]
+    self.assertEqual(task["name"], fields["name"])
+    self.assertEqual(task["planned_finish"], fields["planned_finish"])
+    self.assertEqual(task["dependencies"], [])
+    self.assertEqual(task["actual_finish"], "")
+    self.assertEqual(self.call("/api/state")["templates"], state["templates"])
+    for invalid in [{**fields, "name": " "}, {**fields, "planned_finish": "2026-10-01"}]:
+      with self.assertRaises(HTTPError) as error:
+        self.call(path, "POST", invalid)
+      self.assertEqual(error.exception.code, 400)
+    with self.assertRaises(HTTPError) as error:
+      self.call("/api/projects/missing/tasks", "POST", fields)
+    self.assertEqual(error.exception.code, 404)
+    self.stop_server()
+    self.database = Database(self.db_path, holiday_fetcher=self.fetch_holidays)
+    self.start_server()
+    self.assertEqual(self.call(f"/api/projects/{project['id']}")["tasks"], created["tasks"])
+
   def test_successor_checkboxes_and_actual_finish_offset_roundtrip(self):
     project = self.call("/api/state")["projects"][0]
     a, b, c = project["tasks"][:3]
@@ -74,7 +124,7 @@ class HttpApiTests(unittest.TestCase):
       {"key": "left", "name": "왼쪽", "duration_value": 1, "duration_unit": "days", "dependencies": []},
       {"key": "right", "name": "오른쪽", "duration_value": 1, "duration_unit": "days", "dependencies": ["left"]},
     ], "start_date": "2026-10-05", "calendar_type": "working"})
-    self.assertEqual(preview["tasks"][1]["planned_start"], "2026-10-06")
+    self.assertEqual(preview["tasks"][1]["planned_start"], "2026-10-07")
 
     payload = {"request_id": "submit-once", "template_id": template["id"], "name": "릴리스 01", "start_date": "2026-10-05", "calendar_type": "working"}
     project = self.call("/api/instantiate", "POST", payload)
@@ -95,9 +145,9 @@ class HttpApiTests(unittest.TestCase):
     release = next(task for task in project["tasks"] if task["template_task_key"] == "release")
     test = next(task for task in project["tasks"] if task["template_task_key"] == "test")
     expanded = self.call(f"/api/tasks/{docs['id']}", "PATCH", {"planned_start": "2026-10-05", "planned_finish": "2026-10-08", "cascade_dependents": True})
-    self.assertEqual(next(task for task in expanded["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-11")
+    self.assertEqual(next(task for task in expanded["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-14")
     rewired = self.call(f"/api/tasks/{release['id']}", "PATCH", {"dependencies": [test["id"]]})
-    self.assertEqual(next(task for task in rewired["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-11")
+    self.assertEqual(next(task for task in rewired["tasks"] if task["id"] == release["id"])["planned_start"], "2026-10-14")
     updated = self.call(f"/api/tasks/{project['tasks'][0]['id']}", "PATCH", {"status": "doing", "owner": "빌드팀", "blocker": "CI 대기"})
     self.assertEqual(updated["tasks"][0]["status"], "doing")
     self.assertEqual(updated["tasks"][0]["owner"], "빌드팀")
@@ -113,7 +163,7 @@ class HttpApiTests(unittest.TestCase):
     reopened = self.call(f"/api/projects/{project['id']}")
     self.assertEqual(reopened["tasks"][0]["owner"], "빌드팀")
     reopened_release = next(task for task in reopened["tasks"] if task["template_task_key"] == "release")
-    self.assertEqual(reopened_release["planned_start"], "2026-10-11")
+    self.assertEqual(reopened_release["planned_start"], "2026-10-14")
     self.assertEqual(reopened_release["dependencies"], [test["id"]])
     reopened_second = self.call(f"/api/projects/{second['id']}")
     self.assertEqual(reopened_second["color"], "#654321")

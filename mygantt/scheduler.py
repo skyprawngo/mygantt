@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any
+from typing import Any, Callable
 
 
 class ScheduleError(ValueError):
@@ -157,11 +157,25 @@ def schedule_tasks(
   calendar_type: str = "working",
   *,
   include_trailing_weekend: bool = False,
+  is_holiday: Callable[[date], bool] | None = None,
 ) -> list[dict[str, Any]]:
   """Return scheduled task copies. Completed rows keep their saved plan and actuals."""
   if calendar_type not in {"working", "calendar"}:
     raise ScheduleError("달력 유형은 working 또는 calendar여야 합니다.")
-  start = on_or_after_workday(_date(project_start), calendar_type)
+  def eligible(day: date) -> bool:
+    return calendar_type == "calendar" or (is_workday(day) and not (is_holiday and is_holiday(day)))
+
+  def roll(day: date) -> date:
+    while not eligible(day):
+      day += timedelta(days=1)
+    return day
+
+  def advance(day: date, count: int) -> date:
+    for _ in range(count):
+      day = roll(day + timedelta(days=1))
+    return day
+
+  start = roll(_date(project_start))
   ordered = topological_order(tasks)
   scheduled: dict[str, dict[str, Any]] = {}
   for original in ordered:
@@ -181,14 +195,14 @@ def schedule_tasks(
       anchor = predecessor.get("actual_finish") if predecessor.get("status") == "done" else None
       anchor = anchor or predecessor.get("planned_finish")
       if anchor:
-        candidate = next_workday(_date(anchor), calendar_type)
+        candidate = roll(_date(anchor) + timedelta(days=1))
         if candidate > earliest:
           earliest = candidate
-    task_start = on_or_after_workday(earliest, calendar_type)
+    task_start = roll(earliest)
     explicit_day = template_start_day(task)
     if explicit_day is not None:
-      task_start = _add_eligible_days(start, explicit_day - 1, calendar_type)
-    task_finish = finish_date(task_start, duration_days(task, calendar_type), calendar_type)
+      task_start = advance(start, explicit_day - 1)
+    task_finish = advance(task_start, duration_days(task, calendar_type) - 1)
     if include_trailing_weekend and calendar_type == "working" and task_finish.weekday() == 4:
       task_finish += timedelta(days=2)
     task["planned_start"] = task_start.isoformat()

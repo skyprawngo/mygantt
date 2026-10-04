@@ -5,9 +5,15 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
+import platform
+import socket
+import stat
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import ThreadingUnixStreamServer
 from typing import Any
 
 from .database import Database
@@ -16,6 +22,59 @@ from .scheduler import ScheduleError, schedule_tasks
 
 APP_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = APP_DIR / "data" / "mygantt.sqlite3"
+
+
+def storage_location(database: Database) -> dict[str, str]:
+  """Describe the database host, independently of the browser's device."""
+  system = platform.system()
+  device = platform.node().removesuffix(".local") or "이름 미확인"
+  if system == "Darwin":
+    os_name = "macOS"
+    try:
+      import pwd
+      account = pwd.getpwuid(os.getuid())
+      device = account.pw_gecos.split(",", 1)[0].strip() or account.pw_name or device
+    except (ImportError, KeyError, OSError):
+      pass
+  elif system == "Linux":
+    try:
+      os_name = platform.freedesktop_os_release().get("NAME", "Linux")
+    except OSError:
+      os_name = "Linux"
+  else:
+    os_name = system or "OS 미확인"
+  return {
+    "label": f"{os_name}⋅{device}",
+    "database_path": str(Path(database.path).expanduser().resolve()) if database.path != ":memory:" else ":memory:",
+  }
+
+
+class UnixHTTPServer(ThreadingUnixStreamServer):
+  daemon_threads = True
+
+
+def unix_server(path: Path, handler):
+  """Bind a private HTTP socket, refusing to replace live or unrelated files."""
+  path.parent.mkdir(parents=True, exist_ok=True)
+  if path.exists() or path.is_symlink():
+    existing = path.lstat()
+    if not stat.S_ISSOCK(existing.st_mode) or existing.st_uid != os.getuid():
+      raise FileExistsError(f"Refusing to replace socket path: {path}")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+      probe.settimeout(1)
+      try:
+        probe.connect(str(path))
+      except ConnectionRefusedError:
+        path.unlink()
+      else:
+        raise FileExistsError(f"Another server is listening on socket: {path}")
+  mask = os.umask(0o077)
+  try:
+    server = UnixHTTPServer(str(path), handler)
+  finally:
+    os.umask(mask)
+  os.chmod(path, 0o600)
+  return server
 
 
 def make_handler(database: Database):
@@ -53,7 +112,7 @@ def make_handler(database: Database):
       path = parsed.path
       try:
         if path == "/api/state":
-          self._json(database.state())
+          self._json({**database.state(), "storage": storage_location(database)})
           return
         if path == "/api/holidays":
           query = urllib.parse.parse_qs(parsed.query)
@@ -92,6 +151,10 @@ def make_handler(database: Database):
         if path == "/api/templates":
           self._json(database.save_template(payload), 201)
           return
+        if path.startswith("/api/projects/") and path.endswith("/tasks") and len(path.split("/")) == 5:
+          project = database.create_task(path.split("/")[3], payload)
+          self._json(project if project else {"error": "프로젝트를 찾을 수 없습니다."}, 201 if project else 404)
+          return
         if path == "/api/instantiate":
           self._json(database.instantiate(payload), 201)
           return
@@ -103,7 +166,7 @@ def make_handler(database: Database):
           preview_tasks = []
           for index, task in enumerate(tasks):
             preview_tasks.append({**task, "id": key_to_id[str(task.get("key"))], "dependencies": [key_to_id.get(str(dep), str(dep)) for dep in task.get("dependencies", [])], "status": "todo", "sort_order": index})
-          result = schedule_tasks(preview_tasks, payload.get("start_date", ""), payload.get("calendar_type", "working"), include_trailing_weekend=True)
+          result = database.schedule_template(preview_tasks, payload.get("start_date", ""), payload.get("calendar_type", "working"))
           self._json({"tasks": result})
           return
         self._error("경로를 찾을 수 없습니다.", 404)
@@ -127,6 +190,18 @@ def make_handler(database: Database):
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        if path.startswith("/api/tasks/") and path.endswith("/order"):
+          if set(payload) != {"anchor_id", "after"}:
+            raise ScheduleError("삽입할 작업과 방향을 지정하세요.")
+          project = database.reorder_task(path.split("/")[-2], payload["anchor_id"], payload["after"])
+          self._json(project if project else {"error": "작업을 찾을 수 없습니다."}, 200 if project else 404)
+          return
+        if path.startswith("/api/tasks/") and path.endswith("/project"):
+          if set(payload) != {"project_id"}:
+            raise ScheduleError("이동할 프로젝트를 지정하세요.")
+          project = database.move_task(path.split("/")[-2], payload["project_id"])
+          self._json(project if project else {"error": "작업을 찾을 수 없습니다."}, 200 if project else 404)
+          return
         if path.startswith("/api/tasks/"):
           project = database.update_task(path.rsplit("/", 1)[-1], payload)
           self._json(project if project else {"error": "작업을 찾을 수 없습니다."}, 200 if project else 404)
@@ -168,17 +243,31 @@ def main() -> None:
   parser.add_argument("--host", default="127.0.0.1")
   parser.add_argument("--port", type=int, default=8765)
   parser.add_argument("--db", default=str(DB_PATH))
+  parser.add_argument("--no-seed", action="store_true", help="Create an empty production database without example templates or projects")
+  parser.add_argument("--unix-socket", type=Path, help="Also serve HTTP on a private Unix socket for an internal reverse proxy")
   args = parser.parse_args()
-  database = Database(args.db)
+  database = Database(args.db, seed_samples=not args.no_seed)
   server = ThreadingHTTPServer((args.host, args.port), make_handler(database))
-  print(f"MyGantt is running at http://{args.host}:{args.port}")
-  print(f"SQLite database: {args.db}")
+  local_socket = None
+  socket_thread = None
   try:
+    if args.unix_socket:
+      local_socket = unix_server(args.unix_socket, make_handler(database))
+      socket_thread = threading.Thread(target=local_socket.serve_forever, daemon=True)
+      socket_thread.start()
+      print(f"Private HTTP socket: {args.unix_socket}")
+    print(f"MyGantt is running at http://{args.host}:{args.port}")
+    print(f"SQLite database: {args.db}")
     server.serve_forever()
   except KeyboardInterrupt:
     print("Stopping MyGantt")
   finally:
     server.server_close()
+    if local_socket:
+      local_socket.shutdown()
+      local_socket.server_close()
+      socket_thread.join(timeout=2)
+      args.unix_socket.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

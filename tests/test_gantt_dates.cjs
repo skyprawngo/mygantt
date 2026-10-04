@@ -11,13 +11,13 @@ function harness(task) {
   const context={state,Date,console,$:()=>({addEventListener:(name,fn)=>handlers[name]=fn}),
     api:async(path,options)=>calls.push(JSON.parse(options.body)),persistUi(){},loadState:async()=>{},toast(){},renderTimeline(){},renderDependencyLinks(){}};
   vm.createContext(context);
-  vm.runInContext(between('function dateFrom(', 'function dateRangeLabel(')+between('function dependencySourceKind(', 'function renderDependencyLinks(')+between('async function saveDraggedTaskDates(', 'function normalizedTemplate('),context);
+  vm.runInContext(between('function actualTaskRange(', 'function taskRowHeight(')+between('function dateFrom(', 'function dateRangeLabel(')+between('function dependencySourceKind(', 'function renderDependencyLinks(')+between('async function saveDraggedTaskDates(', 'function normalizedTemplate('),context);
   vm.runInContext(between("  $('#gantt').addEventListener('pointerdown'", "  $('#gantt').addEventListener('keydown'"),context);
   const classes={add(){},remove(){},toggle(){}};
   function begin(period,edge){
-    const bar={dataset:{datePeriod:period,taskSelect:task.id,project:'p'},style:{left:'100px',width:'322px'},classList:classes};
+    const bar={dataset:{datePeriod:period,taskSelect:task.id,project:'p'},style:{left:'100px',width:'322px'},classList:classes,setPointerCapture(){}};
     const handle={dataset:{resizeEdge:edge},closest:()=>bar,classList:classes,setPointerCapture(){}};
-    const event={target:{closest:()=>handle},isPrimary:true,button:0,clientX:100,pointerId:1,preventDefault(){}};
+    const event={target:{closest:selector=>edge==='move'?(selector==='.resize-handle'?null:bar):handle},isPrimary:true,button:0,clientX:100,pointerId:1,preventDefault(){}};
     handlers.pointerdown(event);return {bar,event};
   }
   return {context,state,calls,handlers,begin};
@@ -29,12 +29,12 @@ test('actual end drag switches outgoing source live, saves only actual finish',a
  assert.equal(bar.style.width,'552px');
  assert.equal(h.context.dependencySourceKind(record),'actual');
  await h.handlers.pointerup(event);
- assert.deepEqual(h.calls,[{actual_finish:'2026-10-14'}]);assert.equal(h.state.savingDates,false);
+ assert.deepEqual(h.calls,[{actual_finish:'2026-10-14',cascade_dependents:true}]);assert.equal(h.state.savingDates,false);
 });
 test('actual start drag leaves end and planned dates untouched',async()=>{
  const h=harness(record),{event}=h.begin('actual','start');
  h.handlers.pointermove({...event,clientX:146});await h.handlers.pointerup(event);
- assert.deepEqual(h.calls,[{actual_start:'2026-10-04'}]);
+ assert.deepEqual(h.calls,[{actual_start:'2026-10-04',cascade_dependents:true}]);
 });
 test('reversed actual range and cancelled drag do not save',async()=>{
  const h=harness(record),{event}=h.begin('actual','start');
@@ -43,13 +43,18 @@ test('reversed actual range and cancelled drag do not save',async()=>{
  h.begin('actual','end');h.handlers.pointermove({...event,clientX:192});h.handlers.pointercancel(event);
  assert.equal(h.state.drag,null);assert.equal(h.calls.length,0);
 });
-test('partial start marker moves without inventing finish; end handle can add finish',async()=>{
+test('open actual end follows planned end visually without saving an inferred finish',async()=>{
  const h=harness({...record,actual_finish:''}),{bar,event}=h.begin('actual','start');
- h.handlers.pointermove({...event,clientX:146});assert.equal(bar.style.width,'46px');
- await h.handlers.pointerup(event);assert.deepEqual(h.calls,[{actual_start:'2026-10-04'}]);
- const g=harness({...record,actual_finish:''}),e=g.begin('actual','end').event;
- g.handlers.pointermove({...e,clientX:192});await g.handlers.pointerup(e);
- assert.deepEqual(g.calls,[{actual_finish:'2026-10-05'}]);
+ h.handlers.pointermove({...event,clientX:146});assert.equal(bar.style.width,'414px');
+ assert.match(bar.style.clipPath,/path/);
+ await h.handlers.pointerup(event);assert.deepEqual(h.calls,[{actual_start:'2026-10-04',cascade_dependents:true}]);
+});
+test('open actual start follows planned start and preserves the missing date',async()=>{
+ const h=harness({...record,actual_start:''}),{bar,event}=h.begin('actual','end');
+ h.handlers.pointermove({...event,clientX:146});assert.equal(bar.style.width,'138px');
+ await h.handlers.pointerup(event);assert.deepEqual(h.calls,[{actual_finish:'2026-10-10',cascade_dependents:true}]);
+ const range=h.context.actualTaskRange({...record,actual_start:'',actual_finish:'2026-10-01'});
+ assert.equal(range.start,range.finish);assert.equal(range.openSide,'left');
 });
 test('later finish wins; equal ends use the tier facing the target; preview stays live',()=>{
  const h=harness(record),fn=h.context.dependencySourceKind;
@@ -77,4 +82,28 @@ test('planned drag uses intermediate slider scale for day conversion',async()=>{
  const {event}=h.begin('planned','end');
  h.handlers.pointermove({...event,clientX:206});await h.handlers.pointerup(event);
  assert.deepEqual(h.calls,[{planned_finish:'2026-10-14',cascade_dependents:true}]);
+});
+
+for (const period of ['planned', 'actual']) for (const delta of [-3, 2]) {
+ test(`${period} body drag shifts both dates equally by ${delta} days`,async()=>{
+  const h=harness(record),{event,bar}=h.begin(period,'move');
+  h.state.cascadeDependents=false;
+  h.handlers.pointermove({...event,clientX:100+46*delta});
+  assert.equal(bar.style.left,`${100+46*delta}px`);
+  const expected={cascade_dependents:false};
+  for(const edge of ['start','finish']) expected[`${period}_${edge}`]=h.context.shiftIsoDate(record[`${period}_${edge}`],delta);
+  await h.handlers.pointerup(event);
+  assert.deepEqual(h.calls,[expected]);
+ });
+}
+test('body drag preserves missing actual dates and honors cascade',async()=>{
+ const h=harness({...record,actual_finish:''}),{event}=h.begin('actual','move');
+ h.handlers.pointermove({...event,clientX:146});await h.handlers.pointerup(event);
+ assert.deepEqual(h.calls,[{actual_start:'2026-10-04',cascade_dependents:true}]);
+});
+test('body click and cancelled body drag never save',async()=>{
+ const h=harness(record),{event}=h.begin('planned','move');
+ await h.handlers.pointerup(event);assert.equal(h.calls.length,0);
+ h.begin('planned','move');h.handlers.pointermove({...event,clientX:192});
+ h.handlers.pointercancel(event);assert.equal(h.calls.length,0);assert.equal(h.state.drag,null);
 });

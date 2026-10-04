@@ -11,7 +11,7 @@ class DatabaseTests(unittest.TestCase):
   def setUp(self):
     self.temp = tempfile.TemporaryDirectory()
     self.path = Path(self.temp.name) / "test.sqlite3"
-    self.db = Database(self.path)
+    self.db = Database(self.path, holiday_fetcher=lambda year: [])
 
   def tearDown(self):
     self.temp.cleanup()
@@ -29,6 +29,49 @@ class DatabaseTests(unittest.TestCase):
       ],
     }
 
+  def test_progress_and_stopped_state_persist(self):
+    template = self.db.save_template({"name": "진행률", "tasks": [{"key": "a", "name": "A", "duration_value": 1, "duration_unit": "days", "dependencies": []}]})
+    project = self.db.instantiate({"template_id": template["id"], "name": "진행률", "start_date": "2026-10-06"})
+    task_id = project["tasks"][0]["id"]
+    for progress, status in [(0, "todo"), (10, "doing"), (90, "doing"), (100, "done")]:
+      result = self.db.update_task(task_id, {"progress": progress})
+      self.assertEqual(result["tasks"][0]["status"], status)
+      self.assertEqual(result["progress"], progress)
+    self.db.update_task(task_id, {"progress": 40, "status": "blocked"})
+    reopened = Database(self.path, holiday_fetcher=lambda year: [])
+    self.assertEqual(reopened.get_project(project["id"])["tasks"][0]["progress"], 40)
+    self.assertEqual(reopened.get_project(project["id"])["tasks"][0]["status"], "blocked")
+    self.assertEqual(self.db.update_task(task_id, {"progress": 50})["tasks"][0]["status"], "doing")
+    with self.assertRaises(ScheduleError): self.db.update_task(task_id, {"progress": 45})
+    self.assertEqual(self.db.update_task(task_id, {"status": "done"})["tasks"][0]["progress"], 100)
+
+  def test_empty_production_database_stays_empty_after_restart(self):
+    path = Path(self.temp.name) / "production.sqlite3"
+    production = Database(path, holiday_fetcher=lambda year: [], seed_samples=False)
+    self.assertEqual(production.state()["templates"], [])
+    self.assertEqual(production.state()["projects"], [])
+    with production.connection() as db:
+      self.assertEqual(db.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+      self.assertEqual(db.execute("SELECT COUNT(*) FROM holiday_cache").fetchone()[0], 1)
+    reopened = Database(path, holiday_fetcher=lambda year: [], seed_samples=False)
+    self.assertEqual(reopened.state()["templates"], [])
+    self.assertEqual(reopened.state()["projects"], [])
+
+  def test_no_seed_preserves_user_created_production_records(self):
+    path = Path(self.temp.name) / "production.sqlite3"
+    production = Database(path, holiday_fetcher=lambda year: [], seed_samples=False)
+    template = production.save_template(self.custom_template())
+    project = production.instantiate({"request_id": "production-submit", "template_id": template["id"], "name": "Release verification", "start_date": "2026-10-05", "calendar_type": "working"})
+    production.update_task(project["tasks"][0]["id"], {"status": "done", "actual_finish": "2026-10-09"})
+    reopened = Database(path, holiday_fetcher=lambda year: [], seed_samples=False)
+    self.assertEqual(len(reopened.state()["templates"]), 1)
+    self.assertEqual(len(reopened.state()["projects"]), 1)
+    self.assertEqual(reopened.get_project(project["id"])["tasks"][0]["actual_finish"], "2026-10-09")
+
+  def test_no_seed_does_not_delete_existing_records(self):
+    before = self.db.state()
+    self.assertEqual(Database(self.path, seed_samples=False).state(), before)
+
   def test_board_workflow_is_only_a_generic_seed_template(self):
     state = self.db.state()
     template = next(item for item in state["templates"] if item["name"] == SAMPLE_TEMPLATE["name"])
@@ -44,7 +87,7 @@ class DatabaseTests(unittest.TestCase):
     ]})
     project = self.db.instantiate({"template_id": template["id"], "name": "날짜 배치", "start_date": "2026-10-05"})
     task = project["tasks"][0]
-    self.assertEqual((task["planned_start"], task["planned_finish"]), ("2026-10-05", "2026-10-06"))
+    self.assertEqual((task["planned_start"], task["planned_finish"]), ("2026-10-06", "2026-10-07"))
     self.assertNotIn("duration_value", task)
     self.assertNotIn("duration_unit", task)
     with self.db.connection() as db:
@@ -84,6 +127,23 @@ class DatabaseTests(unittest.TestCase):
     self.assertTrue(any(project["id"] == first["id"] for project in reopened["projects"]))
     self.assertTrue(any(item["name"] == "서비스 릴리스 검증 v2" for item in reopened["templates"]))
 
+  def test_template_replacement_keeps_existing_project_snapshot_unchanged(self):
+    template = self.db.save_template(self.custom_template())
+    project = self.db.instantiate({"template_id": template["id"], "name": "독립 일정", "start_date": "2026-10-05"})
+    self.db.update_task(project["tasks"][0]["id"], {"status": "doing", "notes": "보존 기록", "actual_start": "2026-10-06"})
+    before = self.db.get_project(project["id"])
+    replacement = {"name": "교체 템플릿", "description": "완전히 변경", "project_color": "#123456", "calendar_type": "calendar", "tasks": [
+      {"key": "new_a", "name": "새 공정 A", "duration_value": 3, "duration_unit": "days", "dependencies": [], "owner": "다른 담당", "color": "#abcdef"},
+      {"key": "new_b", "name": "새 공정 B", "duration_value": 2, "duration_unit": "weeks", "dependencies": ["new_a"]},
+    ]}
+    self.db.save_template(replacement, template["id"])
+    self.assertEqual(self.db.get_project(project["id"]), before)
+    reopened = Database(self.path, holiday_fetcher=lambda year: [])
+    self.assertEqual(reopened.get_project(project["id"]), before)
+    new_project = reopened.instantiate({"template_id": template["id"], "name": "새 일정", "start_date": "2026-10-05"})
+    self.assertEqual([t["name"] for t in new_project["tasks"]], ["새 공정 A", "새 공정 B"])
+    self.assertEqual(len(new_project["tasks"][1]["dependencies"]), 1)
+
   def test_rejects_cyclic_template_graph_without_saving_it(self):
     payload = self.custom_template()
     payload["tasks"][0]["dependencies"] = ["release"]
@@ -116,16 +176,16 @@ class DatabaseTests(unittest.TestCase):
     second = self.db.instantiate({"template_id": template["id"], "name": "분기 조정 B", "start_date": "2026-10-05"})
     first_tasks = {task["template_task_key"]: task for task in first["tasks"]}
     second_tasks = {task["template_task_key"]: task for task in second["tasks"]}
-    self.assertEqual(first_tasks["join"]["planned_start"], "2026-10-06")
-    self.assertEqual(second_tasks["join"]["planned_start"], "2026-10-06")
+    self.assertEqual(first_tasks["join"]["planned_start"], "2026-10-07")
+    self.assertEqual(second_tasks["join"]["planned_start"], "2026-10-07")
 
     updated = self.db.update_task(first_tasks["join"]["id"], {"dependencies": [first_tasks["build"]["id"], first_tasks["vendor"]["id"]]})
     updated_tasks = {task["template_task_key"]: task for task in updated["tasks"]}
     untouched_second = self.db.get_project(second["id"])
     untouched_tasks = {task["template_task_key"]: task for task in untouched_second["tasks"]}
-    self.assertEqual(updated_tasks["join"]["planned_start"], "2026-10-06")
+    self.assertEqual(updated_tasks["join"]["planned_start"], "2026-10-07")
     self.assertEqual(len(updated_tasks["join"]["dependencies"]), 2)
-    self.assertEqual(untouched_tasks["join"]["planned_start"], "2026-10-06")
+    self.assertEqual(untouched_tasks["join"]["planned_start"], "2026-10-07")
 
   def test_successor_edits_preserve_other_predecessors_and_are_atomic(self):
     template = self.db.save_template(self.custom_template())
@@ -154,7 +214,7 @@ class DatabaseTests(unittest.TestCase):
     template = self.db.save_template(self.custom_template())
     project = self.db.instantiate({"template_id": template["id"], "name": "연결 이동", "start_date": "2026-10-05"})
     tasks = {t["template_task_key"]: t for t in project["tasks"]}
-    after = self.db.update_task(tasks["design"]["id"], {"successors": [tasks["bench"]["id"], tasks["compliance"]["id"]], "planned_finish": "2026-10-14", "cascade_dependents": True})
+    after = self.db.update_task(tasks["design"]["id"], {"successors": [tasks["bench"]["id"], tasks["compliance"]["id"]], "planned_finish": "2026-10-16", "cascade_dependents": True})
     from datetime import date
     for task in after["tasks"]:
       key = task["template_task_key"]

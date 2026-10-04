@@ -6,11 +6,12 @@ class Input extends EventTarget {
 }
 (async()=>{
  const name=new Input('ins-project-name','A'),group=new Input('ins-project-group','');
- const inputs=[name,group],status={textContent:'',style:{},classList:{toggle(){}}},form=new EventTarget();form.isConnected=true;
+ const inputs=[name,group],status={textContent:'',style:{setProperty(){}},classList:{toggle(){}}},form=new EventTarget();form.isConnected=true;
  const project={id:'p',name:'A',group_name:'',tasks:[{id:'t'}]};
  const calls=[];const controls=[];
  const ctx=vm.createContext({Map,Promise,encodeURIComponent,state:{data:{projects:[project]},view:'timeline'},$:()=>status,$$:()=>inputs,renderSidebar(){},renderTimeline(options){assert.equal(options.preserveInspector,true)},toast(){},api(path,options){calls.push(JSON.parse(options.body));return new Promise((resolve,reject)=>controls.push({resolve,reject}))}});
  vm.runInContext(source.slice(source.indexOf('const projectSaveQueues'),source.indexOf('function bindInspector(')),ctx);
+ vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc(')),ctx);
  ctx.bindProjectAutoSave(form,project);
  const tick=()=>new Promise(r=>setImmediate(r));
  name.blur();await tick();assert.equal(calls.length,0);

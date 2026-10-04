@@ -1,0 +1,38 @@
+[Unit]
+Description=MyGantt credential-free CI-gated delivery (unprivileged)
+Wants=network-online.target
+After=network-online.target mygantt.service
+
+[Service]
+Type=oneshot
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+WorkingDirectory=/srv/mygantt
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /usr/local/libexec/mygantt/poll-deploy.py --verify-isolation
+TimeoutStartSec=600
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+InaccessiblePaths=/proc -/run/docker.sock -/run/containerd -/run/libvirt -/run/dbus/system_bus_socket -/run/lxd -/var/lib/lxd -/var/snap/lxd
+InaccessiblePaths=/var/lib/mygantt /var/lib/mygantt-socket
+ReadWritePaths=/srv/mygantt
+ReadOnlyPaths=/var/lib/mygantt-delivery

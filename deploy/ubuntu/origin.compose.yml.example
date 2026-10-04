@@ -1,0 +1,34 @@
+name: mygantt
+services:
+  origin:
+    image: nginx@sha256:ef8676b33d681f272ba429b27658bdd7e640963279714c96bddf1dc76307f7b6
+    container_name: mygantt-origin
+    user: "${MYGANTT_UID:?Use the dedicated service UID}:${MYGANTT_GID:?Use the dedicated service GID}"
+    entrypoint: ["nginx"]
+    command: ["-c", "/etc/nginx/nginx.conf", "-g", "daemon off;"]
+    restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 64m
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      - type: bind
+        source: /var/lib/mygantt-socket
+        target: /run/mygantt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /etc/mygantt/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [mygantt_tunnel]
+networks:
+  mygantt_tunnel:
+    external: true
+    name: mygantt_tunnel

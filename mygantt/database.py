@@ -38,6 +38,8 @@ SAMPLE_BATCHES = [
   "ICE640N 메인보드",
 ]
 
+UNASSIGNED_PROJECT_ID = "__unassigned__"
+
 PROJECT_COLORS = ["#5872d9", "#b96749", "#27897f", "#a45ca8", "#b48527", "#3978a8", "#c45670", "#5a8d45", "#765bb2", "#368a9b", "#c06f2d", "#657386"]
 TASK_COLORS = ["#5872d9", "#b96749", "#27897f", "#a45ca8", "#b48527", "#3978a8", "#c45670", "#5a8d45", "#765bb2", "#368a9b", "#c06f2d", "#657386"]
 
@@ -57,8 +59,9 @@ def json_load(value: str | None, fallback: Any) -> Any:
 
 
 class Database:
-  def __init__(self, path: str | Path, holiday_fetcher=None):
+  def __init__(self, path: str | Path, holiday_fetcher=None, *, seed_samples: bool = True):
     self.path = str(path)
+    self.seed_samples = seed_samples
     from .holiday_calendar import fetch_public_holidays
     self.holiday_fetcher = holiday_fetcher or fetch_public_holidays
     self.holiday_lock = threading.Lock()
@@ -159,8 +162,10 @@ class Database:
       self._migrate(db)
       self._seed_holiday_fallback(db)
       count = db.execute("SELECT COUNT(*) FROM templates").fetchone()[0]
-      if count == 0:
+      if count == 0 and self.seed_samples:
         self._seed(db)
+      for row in db.execute("SELECT id FROM projects").fetchall():
+        self._normalize_task_order(db, row[0])
 
   def _seed(self, db: sqlite3.Connection) -> None:
     template_id = new_id()
@@ -216,6 +221,34 @@ class Database:
         values[4:4] = [int(task.get("duration_value", 1)), str(task.get("duration_unit", "days"))]
       placeholders = ", ".join("?" for _ in names)
       db.execute(f"INSERT INTO project_tasks ({', '.join(names)}) VALUES ({placeholders})", values)
+    self._normalize_task_order(db, project_id)
+
+  @staticmethod
+  def _normalize_task_order(db, project_id):
+    rows = db.execute("SELECT id,sort_order FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (project_id,)).fetchall()
+    for order, row in enumerate(rows, 1):
+      if row["sort_order"] != order:
+        db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (order, row["id"]))
+
+  def reorder_task(self, task_id, anchor_id, after=False):
+    if not isinstance(anchor_id, str) or type(after) is not bool:
+      raise ScheduleError("삽입 위치가 올바르지 않습니다.")
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      task = db.execute("SELECT project_id FROM project_tasks WHERE id=?", (task_id,)).fetchone()
+      if not task:
+        return None
+      project_id = task["project_id"]
+      ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (project_id,))]
+      if anchor_id not in ids:
+        raise ScheduleError("같은 프로젝트 안의 작업에만 순서를 지정할 수 있습니다.")
+      if anchor_id != task_id:
+        ids.remove(task_id)
+        ids.insert(ids.index(anchor_id) + int(after), task_id)
+        for index, ident in enumerate(ids, 1):
+          db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
+        db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
+      return self._project(db, project_id)
 
   def _migrate(self, db: sqlite3.Connection) -> None:
     """Add fields while keeping existing instance records intact."""
@@ -231,6 +264,7 @@ class Database:
     columns = {
       "templates": {
         "project_color": "TEXT NOT NULL DEFAULT ''",
+        "calendar_type": "TEXT NOT NULL DEFAULT 'working'",
       },
       "template_tasks": {
         "color": "TEXT NOT NULL DEFAULT ''",
@@ -242,6 +276,7 @@ class Database:
         "tags": "TEXT NOT NULL DEFAULT '[]'",
       },
       "project_tasks": {
+        "progress": "INTEGER",
         "color": "TEXT NOT NULL DEFAULT ''",
         "group_name": "TEXT NOT NULL DEFAULT ''",
         "tags": "TEXT NOT NULL DEFAULT '[]'",
@@ -339,6 +374,7 @@ class Database:
       item = dict(task)
       # Legacy database files may retain these columns; dates are now the only
       # instance schedule properties exposed through the API.
+      item["progress"] = item.get("progress") if item.get("progress") is not None else {"todo": 0, "doing": 10, "blocked": 10, "done": 100}.get(item["status"], 0)
       item.pop("duration_value", None)
       item.pop("duration_unit", None)
       item["dependencies"] = json_load(item["dependencies"], [])
@@ -348,17 +384,28 @@ class Database:
     total = len(tasks)
     project = dict(row)
     project["tags"] = json_load(project.get("tags"), [])
-    return {**project, "tasks": tasks, "progress": round(100 * completed / total) if total else 0}
+    return {**project, "is_unassigned": project_id == UNASSIGNED_PROJECT_ID, "tasks": tasks, "progress": round(sum(task["progress"] for task in tasks) / total) if total else 0}
 
   def state(self) -> dict[str, Any]:
     with self.connection() as db:
       templates = [self._template(db, row[0]) for row in db.execute("SELECT id FROM templates ORDER BY name")]
       projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY start_date, name")]
-      return {"templates": templates, "projects": projects}
+      return {"templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]]}
 
   def holidays(self, start: str | None = None, end: str | None = None, *, now: datetime | None = None, fetcher=None) -> dict[str, Any]:
     from .holiday_calendar import calendar_payload
     return calendar_payload(self, start, end, now=now, fetcher=fetcher)
+
+  def schedule_template(self, tasks, start_date, calendar_type):
+    years = {}
+    def is_holiday(day):
+      if day.year not in years:
+        data = self.holidays(f"{day.year}-01-01", f"{day.year}-12-31")
+        if day.year not in data["coverage_years"]:
+          raise ScheduleError(f"{day.year}년 공휴일 자료가 없어 주 5일 일정을 계산할 수 없습니다.")
+        years[day.year] = {entry["date"] for entry in data["holidays"]}
+      return day.isoformat() in years[day.year]
+    return schedule_tasks(tasks, start_date, calendar_type, include_trailing_weekend=True, is_holiday=is_holiday)
 
   def get_template(self, template_id: str) -> dict[str, Any] | None:
     with self.connection() as db:
@@ -402,6 +449,11 @@ class Database:
         template_id = new_id()
         project_color = self._validate_color(payload.get("project_color")) or self._next_template_color(db)
         db.execute("INSERT INTO templates (id, name, description, project_color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (template_id, name, payload.get("description", ""), project_color, stamp, stamp))
+      basis = payload.get("calendar_type")
+      if basis is not None:
+        if basis not in {"working", "calendar"}:
+          raise ScheduleError("일정 기준이 올바르지 않습니다.")
+        db.execute("UPDATE templates SET calendar_type=? WHERE id=?", (basis, template_id))
       self._insert_template_tasks(db, template_id, prepared)
       return self._template(db, template_id)
 
@@ -426,6 +478,9 @@ class Database:
       template = self._template(db, template_id)
       if not template:
         raise ScheduleError("템플릿을 찾을 수 없습니다.")
+      calendar_type = str(payload.get("calendar_type") or template.get("calendar_type") or "working")
+      # Resolve holiday years before opening the project write transaction.
+      planned = {t["key"]: t for t in self.schedule_template(template["tasks"], start_date, calendar_type)}
       project_id = new_id()
       stamp = now_iso()
       color = self._validate_color(payload.get("color")) or template.get("project_color") or self._next_project_color(db)
@@ -447,7 +502,7 @@ class Database:
           "color": task.get("color") or TASK_COLORS[task["sort_order"] % len(TASK_COLORS)],
           "group_name": "", "tags": [],
         })
-      scheduled = schedule_tasks(snapshot, start_date, calendar_type, include_trailing_weekend=True)
+      scheduled = [{**task, "planned_start": planned[task["template_task_key"]]["planned_start"], "planned_finish": planned[task["template_task_key"]]["planned_finish"]} for task in snapshot]
       self._insert_project_tasks(db, project_id, scheduled)
       if request_id:
         db.execute("INSERT INTO project_creation_requests VALUES (?, ?)", (request_id, project_id))
@@ -458,6 +513,8 @@ class Database:
       return self._project(db, project_id)
 
   def update_project(self, project_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    if project_id == UNASSIGNED_PROJECT_ID:
+      raise ScheduleError("프로젝트 없음 그룹의 속성은 변경할 수 없습니다.")
     allowed = {"name", "start_date", "calendar_type", "color", "group_name", "tags"}
     if set(fields) - allowed:
       raise ScheduleError("수정할 수 없는 프로젝트 필드입니다.")
@@ -479,12 +536,72 @@ class Database:
       # not silently recalculate or overwrite any existing task range.
       return self._project(db, project_id)
 
+  def create_task(self, project_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+    if set(fields) - {"name", "planned_start", "planned_finish"}:
+      raise ScheduleError("추가할 수 없는 작업 필드입니다.")
+    name = str(fields.get("name", "")).strip()
+    if not name:
+      raise ScheduleError("작업명을 입력하세요.")
+    validate_date_range(fields.get("planned_start"), fields.get("planned_finish"))
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      project = self._project(db, project_id)
+      if not project:
+        return None
+      order = max((task["sort_order"] for task in project["tasks"]), default=-1) + 1
+      self._insert_project_tasks(db, project_id, [{
+        "name": name, "planned_start": fields["planned_start"],
+        "planned_finish": fields["planned_finish"], "sort_order": order,
+        "color": TASK_COLORS[order % len(TASK_COLORS)],
+      }])
+      db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
+      return self._project(db, project_id)
+
+  def move_task(self, task_id: str, project_id: str | None) -> dict[str, Any] | None:
+    """Keep task records intact; remove links that would cross project boundaries.
+
+    A reserved storage container keeps unassigned tasks editable without changing
+    existing NOT NULL foreign keys. It is exposed as an unassigned group in UI.
+    """
+    if project_id is not None and (not isinstance(project_id, str) or not project_id):
+      raise ScheduleError("프로젝트가 올바르지 않습니다.")
+    destination = project_id or UNASSIGNED_PROJECT_ID
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      task = db.execute("SELECT * FROM project_tasks WHERE id=?", (task_id,)).fetchone()
+      if not task:
+        return None
+      if destination == task["project_id"]:
+        return self._project(db, destination)
+      stamp = now_iso()
+      if destination == UNASSIGNED_PROJECT_ID:
+        db.execute("INSERT OR IGNORE INTO projects (id,name,template_name,start_date,calendar_type,color,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+                   (destination, "프로젝트 없음", "", task["planned_start"], "calendar", "#94a3b8", stamp, stamp))
+      elif not db.execute("SELECT 1 FROM projects WHERE id=?", (destination,)).fetchone():
+        raise ScheduleError("프로젝트를 찾을 수 없습니다.")
+      order = db.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM project_tasks WHERE project_id=?", (destination,)).fetchone()[0]
+      for row in db.execute("SELECT id,dependencies FROM project_tasks WHERE project_id=?", (task["project_id"],)).fetchall():
+        deps = json_load(row["dependencies"], [])
+        if task_id in deps:
+          db.execute("UPDATE project_tasks SET dependencies=? WHERE id=?", (json.dumps([dep for dep in deps if dep != task_id]), row["id"]))
+      db.execute("UPDATE project_tasks SET project_id=?,dependencies='[]',sort_order=? WHERE id=?", (destination, order, task_id))
+      db.execute("UPDATE projects SET updated_at=? WHERE id IN (?,?)", (stamp, task["project_id"], destination))
+      self._normalize_task_order(db, task["project_id"])
+      self._normalize_task_order(db, destination)
+      return self._project(db, destination)
+
   def update_task(self, task_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
-    allowed = {"name", "dependencies", "successors", "owner", "handoff", "blocker", "status", "planned_start", "planned_finish", "actual_start", "actual_finish", "notes", "color", "group_name", "tags", "cascade_dependents"}
+    allowed = {"name", "dependencies", "successors", "owner", "handoff", "blocker", "status", "planned_start", "planned_finish", "actual_start", "actual_finish", "notes", "color", "group_name", "tags", "cascade_dependents", "progress"}
     if set(fields) - allowed:
       raise ScheduleError("수정할 수 없는 작업 필드입니다.")
     if "status" in fields and fields["status"] not in {"todo", "doing", "blocked", "done"}:
       raise ScheduleError("작업 상태가 올바르지 않습니다.")
+    if "progress" in fields:
+      value = fields["progress"]
+      if type(value) is not int or value < 0 or value > 100 or value % 10:
+        raise ScheduleError("진행률은 0부터 100까지 10 단위여야 합니다.")
+      if fields.get("status") != "blocked":
+        fields = {**fields, "status": "todo" if value == 0 else "done" if value == 100 else "doing"}
     cascade_dependents = fields.get("cascade_dependents", False)
     if not isinstance(cascade_dependents, bool):
       raise ScheduleError("후행 작업 일정 조정 옵션이 올바르지 않습니다.")
@@ -496,6 +613,9 @@ class Database:
       project_id = row[0]
       project = self._project(db, project_id)
       target = next(task for task in project["tasks"] if task["id"] == task_id)
+      if "status" in fields and "progress" not in fields:
+        status = fields["status"]
+        fields = {**fields, "progress": 0 if status == "todo" else 100 if status == "done" else max(10, min(90, target["progress"])) if status == "doing" else target["progress"]}
       deps = fields.get("dependencies", target["dependencies"])
       if not isinstance(deps, list):
         raise ScheduleError("선행 작업 형식이 올바르지 않습니다.")
@@ -544,10 +664,10 @@ class Database:
       )
       for task in scheduled:
         if task["id"] == task_id:
-          db.execute("""UPDATE project_tasks SET name=?, dependencies=?, owner=?, handoff=?, blocker=?, status=?, planned_start=?, planned_finish=?, actual_start=?, actual_finish=?, notes=?, color=?, group_name=?, tags=? WHERE id=?""", (
+          db.execute("""UPDATE project_tasks SET name=?, dependencies=?, owner=?, handoff=?, blocker=?, status=?, planned_start=?, planned_finish=?, actual_start=?, actual_finish=?, notes=?, color=?, group_name=?, tags=?, progress=? WHERE id=?""", (
             task["name"], json.dumps(task["dependencies"], ensure_ascii=False), task.get("owner", ""), task.get("handoff", ""), task.get("blocker", ""), task.get("status", "todo"),
             task["planned_start"], task["planned_finish"], task.get("actual_start", ""), task.get("actual_finish", ""), task.get("notes", ""),
-            task.get("color", ""), str(task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False), task["id"],
+            task.get("color", ""), str(task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False), task.get("progress", 0), task["id"],
           ))
           continue
         original_task = next(item for item in project["tasks"] if item["id"] == task["id"])

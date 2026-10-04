@@ -1,0 +1,43 @@
+[Unit]
+Description=MyGantt production supervisor (unprivileged)
+After=network.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+WorkingDirectory=/srv/mygantt
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /usr/local/libexec/mygantt/supervisor.py --verify-isolation
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+StateDirectory=mygantt mygantt-delivery mygantt-socket
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=pid
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+InaccessiblePaths=/proc -/run/docker.sock -/run/containerd -/run/libvirt -/run/dbus/system_bus_socket -/run/lxd -/var/lib/lxd -/var/snap/lxd
+ReadOnlyPaths=/srv/mygantt
+ReadWritePaths=/var/lib/mygantt /var/lib/mygantt-delivery /var/lib/mygantt-socket
+
+[Install]
+WantedBy=multi-user.target
