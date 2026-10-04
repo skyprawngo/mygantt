@@ -252,7 +252,7 @@ class DatabaseTests(unittest.TestCase):
     self.assertEqual(reopened["tags"], ["MAIN", "시제품"])
     self.assertEqual(next(task for task in reopened["tasks"] if task["id"] == vendor["id"])["color"], "#12abef")
 
-  def test_template_project_and_task_colors_are_snapshotted_per_batch(self):
+  def test_project_color_is_independent_and_task_colors_are_snapshotted_per_batch(self):
     payload = self.custom_template()
     payload["project_color"] = "#123456"
     payload["tasks"][0]["color"] = "#aabbcc"
@@ -260,7 +260,7 @@ class DatabaseTests(unittest.TestCase):
     template = self.db.save_template(payload)
     first = self.db.instantiate({"template_id": template["id"], "name": "색상 스냅샷 A", "start_date": "2026-10-05"})
     manual = self.db.instantiate({"template_id": template["id"], "name": "색상 수동 지정", "start_date": "2026-10-06", "color": "#654321"})
-    self.assertEqual(first["color"], "#123456")
+    self.assertRegex(first["color"], r"^#[0-9a-f]{6}$")
     self.assertEqual(manual["color"], "#654321")
     self.assertEqual(first["tasks"][0]["color"], "#aabbcc")
     self.assertEqual(first["tasks"][1]["color"], "#bbccdd")
@@ -270,11 +270,27 @@ class DatabaseTests(unittest.TestCase):
     edited["tasks"][0]["color"] = "#112233"
     updated_template = self.db.save_template(edited, template["id"])
     later = self.db.instantiate({"template_id": updated_template["id"], "name": "색상 스냅샷 B", "start_date": "2026-10-07"})
-    self.assertEqual(self.db.get_project(first["id"])["color"], "#123456")
+    self.assertEqual(self.db.get_project(first["id"])["color"], first["color"])
     self.assertEqual(self.db.get_project(first["id"])["tasks"][0]["color"], "#aabbcc")
     self.assertEqual(self.db.get_project(manual["id"])["color"], "#654321")
-    self.assertEqual(later["color"], "#fedcba")
+    self.assertNotIn(later["color"], [first["color"], manual["color"]])
     self.assertEqual(later["tasks"][0]["color"], "#112233")
+
+  def test_new_project_colors_do_not_repeat_and_conflicting_requests_are_serialized(self):
+    from concurrent.futures import ThreadPoolExecutor
+    template = self.db.save_template(self.custom_template())
+    base = {"template_id": template["id"], "name": "색상", "start_date": "2026-10-05", "calendar_type": "calendar"}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+      projects = list(pool.map(lambda i: self.db.instantiate({**base, "request_id": f"color-{i}", "color": "#ABCDEF"}), range(2)))
+    self.assertEqual(len({p["color"] for p in projects}), 2)
+    self.assertIn("#abcdef", [p["color"] for p in projects])
+    for i in range(14):
+      self.db.instantiate({**base, "request_id": f"auto-{i}"})
+    colors = [p["color"] for p in self.db.state()["projects"]]
+    self.assertEqual(len(colors), len(set(colors)))
+    again = self.db.instantiate({**base, "request_id": "color-0", "color": "#ABCDEF"})
+    self.assertEqual(again["id"], projects[0]["id"])
+    self.assertEqual(again["color"], projects[0]["color"])
 
   def test_migrates_legacy_database_without_replacing_rows_or_actual_dates(self):
     legacy_path = Path(self.temp.name) / "legacy.sqlite3"

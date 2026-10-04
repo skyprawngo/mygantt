@@ -63,7 +63,7 @@ function updateCurrentTimeMarker() {
   const cell = $('.date-header.today', chart);
   if (cell) {
     cell.style.setProperty('--time-progress', `${fraction * 100}%`);
-    cell.title = `${dateKey(now)} · 새로고침 시각 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} (왼쪽 00시 · 오른쪽 24시)`;
+    cell.title = `${dateKey(now)} · 갱신 시각 ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} (왼쪽 00시 · 오른쪽 24시)`;
   }
 }
 function dateFrom(value) { return new Date(`${value}T00:00:00`); }
@@ -91,10 +91,14 @@ async function api(path, options = {}) {
   const type = response.headers.get('content-type') || '';
   const data = type.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) throw new Error(data?.error || `요청 실패 (${response.status})`);
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes((options.method || 'GET').toUpperCase())) {
+    document.dispatchEvent(new Event('chart-data-changed'));
+  }
   return data;
 }
 async function loadState() {
   state.data = await api('/api/state');
+  timelineReferenceTime = new Date();
   const dates = state.data.projects.flatMap((project) => project.tasks.flatMap((task) => [task.planned_start, task.planned_finish])).filter(Boolean).sort();
   const start = dates[0] && dates[0] < todayInput() ? dates[0] : todayInput();
   const end = dates.at(-1) && dates.at(-1) > todayInput() ? dates.at(-1) : todayInput();
@@ -136,7 +140,7 @@ function switchView(view) {
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
   $('#export-calendar').classList.toggle('hidden', view !== 'timeline');
   $('#new-project').classList.toggle('hidden', view !== 'timeline');
-  $('#breadcrumb-title').textContent = { timeline: '전체 일정', templates: '공정 템플릿', settings: '설정' }[view];
+  $('#breadcrumb-title').textContent = { timeline: '전체 일정', templates: '일정 템플릿', settings: '설정' }[view];
   $('#page-description').textContent = { timeline: '프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.', templates: '업무 흐름을 한 번 구성하고, 각 배치에 전체 작업과 일정을 함께 적용합니다. 템플릿을 수정해도 이미 만든 프로젝트 일정은 그대로 유지됩니다.', settings: '앱 버전과 공휴일 자료 정보를 확인합니다.' }[view];
   renderAll();
 }
@@ -421,7 +425,7 @@ function unifiedTaskShape(planned, actual, openSide = '', plannedRadii = [4,4,4,
   const vertex = (x,y,r=0,controls=null) => ({x,y,r,controls});
   const [ptl,ptr,pbr,pbl] = plannedRadii, [atl,atr,abr,abl] = actualRadii;
   const upper = [vertex(planned.left,top,ptl),vertex(planned.right,top,ptr),vertex(planned.right,planned.bottom,pbr),vertex(planned.left,planned.bottom,pbl)];
-  const lower = [vertex(actual.left,join,openSide==='left'?0:atl),vertex(actual.right,join,openSide==='right'?0:atr),
+  const lower = [vertex(actual.left,join,openSide==='left'?(actual.left===planned.left?pbl:0):atl),vertex(actual.right,join,openSide==='right'?0:atr),
     openSide==='right' ? vertex(actual.right-curve,bottom,0,[[actual.right-curve*.45,join],[actual.right-curve*.55,bottom]]) : vertex(actual.right,bottom,abr),
     vertex(openSide==='left'?actual.left+curve:actual.left,bottom,openSide==='left'?0:abl)];
   if (openSide==='left') lower[0].controls=[[actual.left+curve*.55,bottom],[actual.left+curve*.45,join]];
@@ -430,15 +434,16 @@ function unifiedTaskShape(planned, actual, openSide = '', plannedRadii = [4,4,4,
     const points=[];
     for (const v of vertices) {
       const previous=points.at(-1);
-      if (previous && previous.x===v.x && previous.y===v.y && !v.controls) previous.r=Math.min(previous.r,v.r);
+      if (previous && previous.x===v.x && previous.y===v.y && !v.controls) previous.r=previous.controls ? Math.max(previous.r,v.r) : Math.min(previous.r,v.r);
       else points.push({...v});
     }
     const corners=points.map((v,i)=>{
       const prev=points[(i+points.length-1)%points.length], next=points[(i+1)%points.length];
-      const incoming=Math.hypot(v.x-prev.x,v.y-prev.y), outgoing=Math.hypot(next.x-v.x,next.y-v.y);
-      const cross=(v.x-prev.x)*(next.y-v.y)-(v.y-prev.y)*(next.x-v.x);
-      const r=v.controls || next.controls || !cross ? 0 : Math.min(v.r,incoming/2,outgoing/2);
-      return {v,r,entry:[v.x+(prev.x-v.x)*(r/(incoming||1)),v.y+(prev.y-v.y)*(r/(incoming||1))],exit:[v.x+(next.x-v.x)*(r/(outgoing||1)),v.y+(next.y-v.y)*(r/(outgoing||1))]};
+      const tangent=v.controls ? {x:v.controls[1][0],y:v.controls[1][1]} : prev;
+      const incoming=Math.hypot(v.x-tangent.x,v.y-tangent.y), outgoing=Math.hypot(next.x-v.x,next.y-v.y);
+      const cross=(v.x-tangent.x)*(next.y-v.y)-(v.y-tangent.y)*(next.x-v.x);
+      const r=next.controls || !cross ? 0 : Math.min(v.r,incoming/2,outgoing/2);
+      return {v,r,entry:[v.x+(tangent.x-v.x)*(r/(incoming||1)),v.y+(tangent.y-v.y)*(r/(incoming||1))],exit:[v.x+(next.x-v.x)*(r/(outgoing||1)),v.y+(next.y-v.y)*(r/(outgoing||1))]};
     });
     let path=`M ${corners[0].exit.join(' ')}`;
     for(let step=1;step<=corners.length;step++) {
@@ -476,9 +481,19 @@ function unifiedTaskPaint(task, plannedBar, actualBar, origin, index, attachment
       height:rect.height,barWidth:rect.width}));
   });
   const width=shape.right-shape.left,height=shape.bottom-shape.top;
-  const maskImage=esc('data:image/svg+xml,'+encodeURIComponent(attachmentProgressMask(width,height,progress,ports)));
+  const maskMarkup=attachmentProgressMask(width,height,progress,ports)
+    .replace('<svg ', `<svg x="${shape.left}" y="${shape.top}" `)
+    .replace(/id="([^"]+)"/g, (_, name) => `id="${id}-${name}"`)
+    .replace(/url\(#([^)]*)\)/g, (_, name) => `url(#${id}-${name})`);
   plannedBar.classList.add('unified-task-backed'); actualBar.classList.add('unified-task-backed');
-  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}" style="mask-type:alpha"><image href="${maskImage}" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}"/></mask></defs><path class="unified-task-paint" data-unified-task="${esc(task.id)}" d="${shape.path}" fill="${palette.base}" pointer-events="none"/><path class="unified-task-progress" d="${shape.path}" fill="${palette.dark}" mask="url(#${id})" pointer-events="none"/>`;
+  // Paint grips in the same SVG as the fill. HTML spans remain transparent hit targets.
+  const grips = [[plannedBar, true, true], [actualBar, Boolean(task.actual_start), Boolean(task.actual_finish)]]
+    .flatMap(([bar, start, end]) => {
+      const r = relative(bar);
+      return [[start, r.left + 2], [end, r.right - 4]].filter(([visible]) => visible)
+        .map(([, x]) => `<line class="unified-task-grip" x1="${x+1}" x2="${x+1}" y1="${r.top+6}" y2="${r.bottom-6}" stroke="${palette.ink}" stroke-width="2" stroke-linecap="round" opacity=".45" pointer-events="none"/>`);
+    }).join('');
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}" style="mask-type:alpha">${maskMarkup}</mask></defs><path class="unified-task-paint" data-unified-task="${esc(task.id)}" d="${shape.path}" fill="${progress === 100 ? palette.dark : palette.base}" pointer-events="none"/><path class="unified-task-progress" d="${shape.path}" fill="${palette.dark}" mask="url(#${id})" pointer-events="none"/>${grips}${task.status === 'blocked' ? `<path class="blocked-task-outline" d="${shape.path}"/>` : ''}`;
 }
 
 function renderDependencyLinks(options = null) {
@@ -558,7 +573,7 @@ function renderDependencyLinks(options = null) {
         const gradientAxis = kind === 'gap'
           ? `x1="${from.x}" y1="0" x2="${to.x}" y2="0"`
           : `x1="0" y1="${sourceSurfaceY}" x2="0" y2="${targetSurfaceY}"`;
-        gradients.push(`<linearGradient id="${gradientId}" gradientUnits="userSpaceOnUse" ${gradientAxis}><stop offset="0" stop-color="${colorPalette(predecessor.color).base}"/><stop offset="1" stop-color="${colorPalette(task.color).base}"/></linearGradient>`);
+        gradients.push(`<linearGradient id="${gradientId}" gradientUnits="userSpaceOnUse" ${gradientAxis}><stop offset="0" stop-color="${taskProgress(predecessor) === 100 ? colorPalette(predecessor.color).dark : colorPalette(predecessor.color).base}"/><stop offset="1" stop-color="${taskProgress(task) === 100 ? colorPalette(task.color).dark : colorPalette(task.color).base}"/></linearGradient>`);
         gradients.push(`<linearGradient id="${gradientId}-progress" gradientUnits="userSpaceOnUse" ${gradientAxis}><stop offset="0" stop-color="${outgoingConnectionColor(predecessor)}"/><stop offset="1" stop-color="${connectionColor(task)}"/></linearGradient>`);
         if (!attachmentPorts.has(sourceBar)) attachmentPorts.set(sourceBar, {task:predecessor, ports:[]});
         attachmentPorts.get(sourceBar).ports.push(kind === 'gap'
@@ -593,14 +608,25 @@ function renderDependencyLinks(options = null) {
   const markup = edges.map(({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label }) => {
     const ribbon = dependencyRibbon(from, to);
     const paint = dependencyConnectedPath(from, to, geometry.get(sourceBar), geometry.get(targetBar), origin);
-    return `<path class="dependency-paint" d="${paint}" fill="url(#${gradientId})" fill-rule="nonzero" aria-hidden="true"/>
-      <path d="${ribbon}" fill="url(#${gradientId}-progress)" pointer-events="none" aria-hidden="true"/>
+    // Overlap the progress paint at shared faces, clipped to the existing
+    // exterior: separate antialiased edges otherwise expose a hairline of base color.
+    return `<defs><clipPath id="${gradientId}-outline" clipPathUnits="userSpaceOnUse"><path d="${paint}"/></clipPath></defs><path class="dependency-paint" d="${paint}" fill="url(#${gradientId})" fill-rule="nonzero" aria-hidden="true"/>
+      <path class="dependency-progress" d="${ribbon}" fill="url(#${gradientId}-progress)" stroke="url(#${gradientId}-progress)" stroke-width="1" stroke-linejoin="round" clip-path="url(#${gradientId}-outline)" pointer-events="none" aria-hidden="true"/>
       <path class="dependency-link${related ? ' is-related' : ''}" d="${ribbon}" fill="transparent" data-connection-kind="${kind}" data-task-select="${esc(task.id)}" data-predecessor="${esc(predecessorId)}" data-source-period="${sourceKind}" role="button" tabindex="0" aria-label="${esc(label)}"><title>${esc(label)}</title></path>`;
   }).join('');
   const unifiedMarkup = projects.flatMap(project => project.tasks).filter(task => bars.has(task.id) && actualBars.has(task.id))
     .map((task,index) => unifiedTaskPaint(task,bars.get(task.id),actualBars.get(task.id),origin,index,attachmentPorts)).join('');
-  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="선행 작업과 후행 작업 연결"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}</svg>`);
+  const blockedMarkup = projects.flatMap(project => project.tasks)
+    .filter(task => task.status === 'blocked' && bars.has(task.id) && !actualBars.has(task.id) && connectedBars.has(bars.get(task.id)))
+    .map(task => {
+      const bar = bars.get(task.id), {rect, style} = geometry.get(bar);
+      const start = [rect.left-origin.left+Math.min(parseFloat(style.borderTopLeftRadius)||0,rect.width/2,rect.height/2), rect.top-origin.top];
+      const path = `M ${start.join(' ')}${dependencyBarOutline(rect,style,origin,0,start,start)} Z`;
+      return `<path class="blocked-task-outline" d="${path}"/>`;
+    }).join('');
+  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="선행 작업과 후행 작업 연결"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}</svg>`);
   connectedBars.forEach((bar) => bar.classList.add('svg-backed'));
+
 }
 
 function ganttAddRow(id, width) {
@@ -650,7 +676,9 @@ function renderTimeline({ preserveInspector = false } = {}) {
   const days = Math.max(1, dayDiff(start, end) + 1);
   $('#range-label').textContent = dateRangeLabel(bounds.start, bounds.end);
   const pxPerDay = state.zoom;
-  const labelWidth = mobileLayout() ? 132 : 254;
+  const labelWidth = mobileLayout() && !state.mobileLabelsExpanded ? 36 : 254;
+  $('#gantt').style.setProperty('--label-width', `${labelWidth}px`);
+  $('#gantt').classList.toggle('labels-collapsed', mobileLayout() && !state.mobileLabelsExpanded);
   const timelineWidth = Math.max(720, days * pxPerDay);
   const dates = dateColumns(start, days, pxPerDay);
   renderHolidayStatus();
@@ -667,7 +695,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   const projectBands = [];
   const rowShading = dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? ' · 주말' : ''}"></div>`).join('');
   const timelineCellStyle = `--day-width:${pxPerDay}px;`;
-  const groupMode = $('#group-select')?.value === 'group';
+  const groupMode = $('#sort-select')?.value === 'group';
   const groupedProjects = groupMode ? [...projects.reduce((groups, project) => {
     if (project.is_unassigned) return groups;
     const groupName = project.group_name?.trim() || '그룹 미지정';
@@ -724,7 +752,35 @@ function renderTimeline({ preserveInspector = false } = {}) {
   bodyHeight += 38;
   const headerDates = dates.map((item) => `<div class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
   const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
-  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px"><span>프로젝트 / 작업</span></div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
+  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${mobileLayout() ? `<button type="button" class="gantt-label-toggle" aria-expanded="${Boolean(state.mobileLabelsExpanded)}" aria-label="프로젝트 / 작업 열 ${state.mobileLabelsExpanded ? '축소' : '확장'}"><span class="gantt-label-title">프로젝트 / 작업</span><span aria-hidden="true">${state.mobileLabelsExpanded ? '‹' : '›'}</span></button>` : '<span>프로젝트 / 작업</span>'}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
+  if (mobileLayout() && state.mobileLabelsExpanded) {
+    const textWidth = node => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect().width;
+    };
+    const widths = $$('.project-name, .task-name', $('#gantt')).map(name => {
+      const button = name.closest('button'), style = getComputedStyle(button);
+      const icon = button.querySelector('.group-dot, .task-state');
+      return textWidth(name) + (icon?.getBoundingClientRect().width || 0) +
+        (parseFloat(style.columnGap) || 0) + (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    });
+    const width = Math.ceil(Math.max(120, ...widths,
+      ...$$('.group-header-label', $('#gantt')).map(label => textWidth(label) + 30))) + 2;
+    $('#gantt').style.setProperty('--label-width', `${width}px`);
+    $('.gantt-head-left', $('#gantt')).style.width = `${width}px`;
+    $('.gantt-body', $('#gantt')).style.width = `${width + timelineWidth}px`;
+    $$('.project-duration-band', $('#gantt')).forEach(band => {
+      band.style.left = `${parseFloat(band.style.left) + width - labelWidth}px`;
+    });
+  }
+  if (mobileLayout()) $('.gantt-head-left', $('#gantt')).addEventListener('click', event => {
+    if (event.target.closest('.info-tip')) return;
+    const keyboard = event.detail === 0;
+    state.mobileLabelsExpanded = !state.mobileLabelsExpanded;
+    renderTimeline({ preserveInspector: true });
+    if (keyboard) $('.gantt-label-toggle', $('#gantt'))?.focus();
+  });
   $('#add-project-task').addEventListener('click', openAddProjectTask);
   updateCurrentTimeMarker();
   renderDependencyLinks();
@@ -990,10 +1046,24 @@ function bindTaskProgress(form, task) {
   paint();
 }
 
+// A second primary click on an editing cell ends editing and uses blur autosave.
+function bindInspectorFocusToggle(form) {
+  if (!form) return;
+  $$('input:not([type="checkbox"]):not([type="color"]):not([type="range"]), textarea', form).forEach(input => {
+    input.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || document.activeElement !== input) return;
+      event.preventDefault();
+      input.blur();
+    });
+  });
+}
+
 function bindInspector(project, task) {
   const projectForm = $('#project-inspector-form');
   if (projectForm && project) bindProjectAutoSave(projectForm, project);
   const taskForm = $('#task-inspector-form');
+  bindInspectorFocusToggle(projectForm);
+  bindInspectorFocusToggle(taskForm);
   disableFieldSuggestions(taskForm);
   if (taskForm && project && task) {
     bindTaskProgress(taskForm, task);
@@ -1355,7 +1425,7 @@ function renderTemplateEditorContent() {
   $('#template-editor').innerHTML = `
     <div class="timeline-layout">
       <div class="timeline-main"><div class="schedule-card">
-        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="템플릿 제목" value="${esc(draft.name)}" placeholder="템플릿 제목"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}> 후행 같이 조정</label><label class="template-calendar-label">기간 기준 <select id="template-calendar" class="select-control"><option value="working">주 5일</option><option value="calendar">주 7일</option></select></label><label class="zoom-slider-control">축척 <input id="template-zoom" type="range" min="34" max="62" value="${state.templateZoom || 46}" aria-label="템플릿 축척"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><button id="save-template" class="button button-primary">템플릿 저장</button></div></div>
+        <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="템플릿 제목" value="${esc(draft.name)}" placeholder="템플릿 제목"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">후행 같이 조정</span><span class="cascade-label-short">후행</span></label><label class="template-calendar-label">기간 기준 <select id="template-calendar" class="select-control"><option value="working">주 5일</option><option value="calendar">주 7일</option></select></label><label class="zoom-slider-control">축척 <input id="template-zoom" type="range" min="24" max="62" value="${state.templateZoom || 46}" aria-label="템플릿 축척"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><button id="save-template" class="button button-primary">템플릿 저장</button><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="템플릿 간트 표시 설명" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><i class="legend-swatch project-swatch" aria-hidden="true"></i>프로젝트 요약</b><br>템플릿 작업들의 전체 기간을 표시합니다.<br><br><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>작업 연결</b><br>선행 작업에서 후행 작업으로 이어지는 관계입니다.<br><br>D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다.</span></span></div></div>
         <div class="schedule-legend"><span><i class="legend-swatch project-swatch"></i>프로젝트 요약</span><span>작업 연결</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="템플릿 일정 기준" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">D는 프로젝트 첫 작업일이며 D+1은 다음 작업일입니다. 주 5일은 토·일을 제외합니다. 막대와 양끝을 끌어 시작과 기간을 조정할 수 있습니다. 저장한 템플릿은 새 배치에 적용됩니다.</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
@@ -1497,7 +1567,7 @@ async function saveTemplate() {
 function createTemplate() {
   const key = `task_${crypto.randomUUID().slice(0, 8)}`;
   state.selectedTemplateId = null;
-  state.draft = { name: '새 공정 템플릿', description: '', project_color: projectColors[state.data.templates.length % projectColors.length], tasks: [{ key, name: '작업 1', duration_value: 1, duration_unit: 'days', dependencies: [], owner: '', handoff: '', color: taskColors[0] }] };
+  state.draft = { name: '새 일정 템플릿', description: '', project_color: projectColors[state.data.templates.length % projectColors.length], tasks: [{ key, name: '작업 1', duration_value: 1, duration_unit: 'days', dependencies: [], owner: '', handoff: '', color: taskColors[0] }] };
   state.preview = null;
   switchView('templates');
 }
@@ -1510,17 +1580,44 @@ function openModal(title, subtitle, body, footer, onOpen = null) {
 }
 function closeModal() { $('#modal-root').innerHTML = ''; }
 function setModalError(message) { $('#modal-error').textContent = message; }
+function formInfo(id, label, text) {
+  return `<button type="button" class="info-tip-button form-info-button" aria-label="${esc(label)}" popovertarget="${id}">i</button><span id="${id}" class="form-info-tooltip" popover="auto" role="tooltip">${esc(text)}</span>`;
+}
+function newProjectColor(seed) {
+  const used = new Set(state.data.projects.map(project => colorPalette(project.color).base));
+  for (let attempt = 0; ; attempt++) {
+    let hash = 2166136261;
+    for (const char of `${seed}:${attempt}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+    const color = '#' + [0,8,16].map(shift => (64 + ((hash >>> shift) & 127)).toString(16).padStart(2,'0')).join('');
+    if (!used.has(color)) return color;
+  }
+}
 function openInstantiate() {
-  if (!state.data.templates.length) { toast('먼저 공정 템플릿을 만들어주세요.'); switchView('templates'); return; }
+  if (!state.data.templates.length) { toast('먼저 일정 템플릿을 만들어주세요.'); switchView('templates'); return; }
   const options = state.data.templates.map((template) => `<option value="${esc(template.id)}">${esc(template.name)} · ${template.tasks.length}개 작업</option>`).join('');
   const requestId = crypto.randomUUID();
-  const firstTemplate = state.data.templates[0];
-  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">프로젝트 / 생산 배치 이름</span><input id="project-name" class="text-input" autocomplete="off" placeholder="예: MARKOS MAIN보드 50EA" autofocus></label><label class="form-field"><span class="field-label">적용할 템플릿</span><select id="project-template" class="select-input">${options}</select></label><label class="form-field"><span class="field-label">프로젝트 시작일</span><input id="project-start" type="date" class="text-input" value="${todayInput()}"></label><label class="form-field"><span class="field-label">일정 계산 기준</span><select id="project-calendar" class="select-input"><option value="working">주 5일 (월–금)</option><option value="calendar">주 7일</option></select><div class="form-help">작업 완료일 다음 작업일에 후속 공정을 시작합니다. 주 5일은 주말·공휴일을 건너뛰고, 주 7일은 날짜를 그대로 더합니다.</div></label><label class="form-field"><span class="field-label">프로젝트 색상</span><div class="color-field modal-project-color"><input id="project-color" type="color" value="${esc(firstTemplate.project_color || projectColors[0])}" aria-label="새 프로젝트 색상"><code>${esc(firstTemplate.project_color || projectColors[0])}</code></div><div class="form-help">템플릿 기본색으로 시작하며 여기서 변경할 수 있습니다.</div></label><div class="form-field full"><div id="project-template-summary" class="project-template-summary"></div></div></div>`;
+  const initialColor = newProjectColor(`${todayInput()}:${requestId}`);
+  const body = `<div class="form-grid">
+    <div class="project-identity-row full">
+      <label class="form-field project-color-field"><span class="field-label">프로젝트 색상</span><input id="project-color" type="color" value="${initialColor}" aria-label="새 프로젝트 색상"></label>
+      <label class="form-field project-name-field"><span class="field-label">프로젝트 / 생산 배치 이름</span><input id="project-name" class="text-input" autocomplete="off" placeholder="예: MARKOS MAIN보드 50EA" autofocus></label>
+    </div>
+    <label class="form-field"><span class="field-label">적용할 템플릿</span><select id="project-template" class="select-input">${options}</select></label>
+    <label class="form-field"><span class="field-label">프로젝트 시작일</span><input id="project-start" type="date" class="text-input" value="${todayInput()}"></label>
+    <div class="form-field full"><div class="field-label"><label for="project-calendar">일정 계산 기준</label>${formInfo('project-calendar-help', '일정 계산 기준 설명', '작업 완료일 다음 작업일에 후속 공정을 시작합니다. 주 5일은 주말·공휴일을 건너뛰고, 주 7일은 날짜를 그대로 더합니다.')}</div><select id="project-calendar" class="select-input"><option value="working">주 5일 (월–금)</option><option value="calendar">주 7일</option></select></div>
+    <div class="form-field full"><div id="project-template-summary" class="project-template-summary"></div></div>
+  </div>`;
   const footer = `<button class="button" id="cancel-project">취소</button><div class="modal-footer-right"><button class="button button-primary" id="confirm-project">모든 작업으로 프로젝트 생성</button></div>`;
-  openModal('템플릿으로 프로젝트 만들기', '선택한 템플릿의 작업과 의존 관계를 한 번에 복사합니다.', body, footer, () => {
-    const summary = () => { const template = state.data.templates.find((item) => item.id === $('#project-template').value); $('#project-calendar').value = template.calendar_type || 'working'; $('#project-template-summary').textContent = `${template.name}: ${template.tasks.length}개 작업 · 작업 색상과 의존 관계를 복사하고 일정은 시작일로부터 자동 계산합니다.`; $('#project-color').value = template.project_color || projectColors[0]; $('#project-color').nextElementSibling.textContent = $('#project-color').value; };
+  openModal('템플릿으로 프로젝트 만들기', '', body, footer, () => {
+    $('.modal-head h2').insertAdjacentHTML('beforeend', formInfo('project-create-help', '템플릿으로 프로젝트 만들기 설명', '선택한 템플릿의 작업과 의존 관계를 한 번에 복사합니다.'));
+    $$('.modal [popovertarget]').forEach(button => button.addEventListener('click', () => {
+      const overlay = document.getElementById(button.getAttribute('popovertarget'));
+      const rect = button.getBoundingClientRect();
+      overlay.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - 332))}px`;
+      overlay.style.top = `${rect.bottom + 8}px`;
+    }));
+    const summary = () => { const template = state.data.templates.find((item) => item.id === $('#project-template').value); $('#project-calendar').value = template.calendar_type || 'working'; $('#project-template-summary').textContent = `${template.name}: ${template.tasks.length}개 작업 · 작업 색상과 의존 관계를 복사하고 일정은 시작일로부터 자동 계산합니다.`; };
     $('#project-template').addEventListener('change', summary); summary();
-    $('#project-color').addEventListener('input', (event) => { event.target.nextElementSibling.textContent = event.target.value; });
     $('#cancel-project').addEventListener('click', closeModal);
     $('#confirm-project').addEventListener('click', async () => {
       const button = $('#confirm-project'); if (button.disabled) return;
@@ -1667,6 +1764,81 @@ function bindTaskReordering() {
   $('#sort-select').addEventListener('change',stop);
 }
 
+function bindCascadeHelp() {
+  const control = $('#cascade-setting').closest('.cascade-toggle');
+  const overlay = $('#cascade-help');
+  let timer = null, origin = null, suppressClick = false;
+  function cancel() { clearTimeout(timer); timer = null; origin = null; }
+  function show() {
+    cancel();
+    suppressClick = true;
+    const rect = control.getBoundingClientRect();
+    overlay.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - 332))}px`;
+    overlay.style.top = `${rect.bottom + 8}px`;
+    overlay.showPopover();
+  }
+  control.addEventListener('pointerdown', event => {
+    cancel();
+    suppressClick = false;
+    if (!event.isPrimary || event.button !== 0) return;
+    origin = {x:event.clientX, y:event.clientY};
+    timer = setTimeout(show, 500);
+  });
+  document.addEventListener('pointermove', event => {
+    if (origin && Math.hypot(event.clientX-origin.x, event.clientY-origin.y) > 8) cancel();
+  });
+  document.addEventListener('pointerup', cancel);
+  document.addEventListener('pointercancel', cancel);
+  window.addEventListener('blur', cancel);
+  control.addEventListener('click', event => {
+    if (!suppressClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressClick = false;
+  }, true);
+  control.addEventListener('contextmenu', event => { event.preventDefault(); show(); });
+  control.addEventListener('keydown', event => {
+    if (event.key === 'F1') { event.preventDefault(); show(); }
+  });
+}
+
+function bindMobileSearch() {
+  const dialog = $('#mobile-search-dialog'), input = $('#mobile-search-input');
+  const button = $('#mobile-search-button'), search = $('#search-filter');
+  function sync() {
+    search.value = input.value;
+    button.classList.toggle('search-active', Boolean(input.value.trim()));
+    renderTimeline();
+  }
+  button.addEventListener('click', () => { input.value = search.value; dialog.showModal(); input.focus(); });
+  input.addEventListener('input', sync);
+  $('#mobile-search-clear').addEventListener('click', () => { input.value = ''; sync(); input.focus(); });
+  // Capture Escape before a search input can consume it to clear its value.
+  dialog.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    dialog.close();
+  }, true);
+  dialog.addEventListener('cancel', event => { event.preventDefault(); dialog.close(); });
+  dialog.addEventListener('pointerdown', event => {
+    const rect = dialog.getBoundingClientRect();
+    if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) {
+      event.preventDefault();
+      dialog.close();
+    }
+  });
+  dialog.addEventListener('close', () => button.focus());
+  window.matchMedia('(max-width: 760px)').addEventListener('change', event => { if (!event.matches && dialog.open) dialog.close(); });
+}
+function syncLayoutToggle() {
+  const button = $('#mobile-layout-toggle');
+  button.dataset.currentLayout = state.layout;
+  const label = state.layout === 'gantt' ? '목록 보기로 전환' : '간트 보기로 전환';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  $$('[data-layout]').forEach(item => item.classList.toggle('selected', item.dataset.layout === state.layout));
+}
 function mobileLayout() { return window.matchMedia('(max-width: 760px)').matches; }
 let mobileDrawerReturnFocus = null;
 function setMobileDrawer(panel) {
@@ -1744,7 +1916,27 @@ function bindMobileDrawers() {
   setMobileDrawer(null);
 }
 
+function bindChartAutoRefresh() {
+  let scheduled = false;
+  function refresh() {
+    // Wait until date dragging and its save finish; never replace a captured bar.
+    if (state.drag || state.savingDates) { requestAnimationFrame(refresh); return; }
+    scheduled = false;
+    if (state.view === 'timeline') {
+      renderSidebar();
+      renderTimeline({ preserveInspector: true });
+    }
+  }
+  document.addEventListener('chart-data-changed', () => {
+    timelineReferenceTime = new Date();
+    // API callers merge their successful response into state before this frame.
+    if (!scheduled) { scheduled = true; requestAnimationFrame(refresh); }
+  });
+}
 function attachEvents() {
+  bindMobileSearch();
+  bindCascadeHelp();
+  bindChartAutoRefresh();
   bindMobileDrawers();
   bindTaskReordering();
   const cascadeSetting = $('#cascade-setting');
@@ -1758,16 +1950,21 @@ function attachEvents() {
   $('#search-filter').addEventListener('input', renderTimeline);
   $('#status-filter').addEventListener('change', renderTimeline);
   $('#sort-select').addEventListener('change', renderTimeline);
-  $('#group-select').addEventListener('change', renderTimeline);
   $$('[data-layout]').forEach((button) => button.addEventListener('click', () => {
     state.layout = button.dataset.layout;
-    $$('[data-layout]').forEach((item) => item.classList.toggle('selected', item === button));
+    syncLayoutToggle();
     renderTimeline();
   }));
+  $('#mobile-layout-toggle').addEventListener('click', () => {
+    state.layout = state.layout === 'gantt' ? 'list' : 'gantt';
+    syncLayoutToggle();
+    renderTimeline();
+  });
+  syncLayoutToggle();
   const zoomSlider = $('#zoom-slider');
   let zoomFrame = null;
   zoomSlider.addEventListener('input', () => {
-    const value = Math.max(34, Math.min(62, Number(zoomSlider.value)));
+    const value = Math.max(24, Math.min(62, Number(zoomSlider.value)));
     const label = `${Math.round(value / 46 * 100)}%`;
     $('#zoom-value').textContent = label;
     zoomSlider.setAttribute('aria-valuetext', label);
@@ -1776,7 +1973,7 @@ function attachEvents() {
       zoomFrame = null;
       const wrap = $('#gantt-wrap');
       const oldLeft = wrap.scrollLeft, oldTop = wrap.scrollTop;
-      const halfVisible = Math.max(0, wrap.clientWidth - (mobileLayout() ? 132 : 254)) / 2;
+      const halfVisible = Math.max(0, wrap.clientWidth - ($('.gantt-head-left', $('#gantt'))?.getBoundingClientRect().width || 254)) / 2;
       const centerDay = (oldLeft + halfVisible) / state.zoom;
       state.zoom = value;
       renderTimeline({ preserveInspector: true });
@@ -1791,7 +1988,6 @@ function attachEvents() {
       if (line) wrap.scrollLeft = Math.max(0, (mobileLayout() ? 132 : 254) + Number(line.style.left.replace('px', '')) - wrap.clientWidth / 2);
     }
   });
-  $('#refresh-button').addEventListener('click', async () => { try { timelineReferenceTime = new Date(); await loadState(); toast('일정을 새로 불러왔습니다.'); } catch (error) { toast(error.message); } });
   $('#gantt').addEventListener('pointerdown', (event) => {
     const handle = event.target.closest('.resize-handle');
     const bar = handle?.closest('.task-bar, .actual-task-bar') || event.target.closest('.task-bar, .actual-task-bar');

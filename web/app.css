@@ -504,7 +504,9 @@
  .drawer-close{position:absolute;right:8px;top:8px;width:40px;height:40px;border:0;border-radius:8px;background:#f1f3f8;color:#475467;font-size:24px;z-index:2}
  #mobile-inspector{position:fixed;inset:0 0 0 auto;width:min(360px,94vw);height:100dvh;max-height:none;z-index:80;overflow-y:auto;border-radius:0;transform:translateX(105%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:-8px 0 28px #18223022}
  .inspector-open #mobile-inspector{transform:translateX(0);visibility:visible}
- #mobile-inspector .inspector-title{padding-right:56px;position:sticky;top:0;background:white;z-index:1}
+ #mobile-inspector .inspector-title{padding-right:8px;position:sticky;top:0;background:white;z-index:10;gap:8px}
+ #mobile-inspector .inspector-title .inspector-state{margin-left:auto}
+ #mobile-inspector .inspector-title .drawer-close{position:static;flex:0 0 40px}
  #mobile-inspector input:not([type=checkbox]):not([type=color]):not([type=range]),#mobile-inspector textarea,#mobile-inspector select{font-size:16px;min-height:40px}
  #mobile-inspector .inspector-relations input{width:18px;height:18px}
  #mobile-inspector .inspector-relations th,#mobile-inspector .inspector-relations td{padding:9px 4px;font-size:11px}
@@ -541,3 +543,115 @@
 @media(max-width:760px){
  html,body{overscroll-behavior-x:none}
 }
+#mobile-layout-toggle{width:40px;height:36px;flex:0 0 40px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--blue)}
+#mobile-layout-toggle[data-current-layout=gantt] .layout-list-icon,#mobile-layout-toggle[data-current-layout=list] .layout-gantt-icon{display:none}
+@media(max-width:760px){#timeline-view .segmented{display:none}}
+.cascade-label-short{display:none}
+@media(max-width:760px){
+ .cascade-label-full{display:none}.cascade-label-short{display:inline}
+ #timeline-view .schedule-legend,#templates-view .schedule-legend{display:none}
+ .mobile-chart-info{position:relative;align-self:center;flex-shrink:0}
+ .mobile-chart-info>.info-tip-button{width:28px;height:28px;font-size:14px}
+ .mobile-chart-info .info-tip-text{position:fixed;top:110px;left:12px;right:12px;bottom:auto;width:auto;max-width:none;max-height:calc(100dvh - 140px);overflow:auto;font-size:12px;line-height:1.6;white-space:normal;z-index:90}
+}
+#mobile-search-dialog{width:min(420px,calc(100vw - 24px));padding:20px;border:1px solid var(--line);border-radius:14px;color:var(--ink);box-shadow:0 12px 40px #18223033}
+#mobile-search-dialog::backdrop{background:#18223066}
+#mobile-search-dialog header,#mobile-search-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#mobile-search-dialog header{margin-bottom:18px;font-size:16px}
+#mobile-search-dialog label{display:block;color:var(--muted);margin-bottom:8px}
+#mobile-search-input{width:100%;min-width:0;height:44px;padding:10px;border:1px solid var(--line);border-radius:7px;font-size:16px}
+#mobile-search-dialog footer{margin-top:18px}
+@media(max-width:760px){
+ #timeline-view .search-box{display:none}
+ #mobile-search-button{width:40px;height:36px;flex:0 0 40px;border:1px solid var(--line);background:white;color:var(--blue)}
+ #mobile-search-button.search-active{background:#edf0ff;border-color:var(--blue)}
+ #timeline-view .toolbar-left .select-control{flex:1;min-width:0;max-width:none}
+}
+.info-tip-text .tooltip-legend-heading{display:inline-flex;align-items:center;gap:7px}
+.info-tip-text .tooltip-legend-heading .legend-swatch{display:inline-block;width:11px;height:11px;flex:none;border-radius:2px;box-shadow:0 0 0 1px #ffffff40}
+.info-tip-text .tooltip-legend-heading .dependency-legend{width:22px;height:12px;flex:none}
+
+/* Keep all compact chart controls on one row, including both control groups. */
+@media(max-width:760px){
+ #timeline-view .toolbar{flex-direction:row;flex-wrap:nowrap;align-items:center;gap:4px;overflow-x:auto;padding:8px;overscroll-behavior-x:contain}
+ #timeline-view .toolbar-left,#timeline-view .toolbar-right{display:contents}
+ #timeline-view .toolbar>*{flex-shrink:0}
+ #timeline-view #mobile-layout-toggle,#timeline-view #mobile-search-button{width:32px;height:32px;flex:0 0 32px}
+ #timeline-view #status-filter{width:64px;max-width:64px;flex:0 0 64px;padding-left:5px;padding-right:2px}
+ #timeline-view #sort-select{width:76px;max-width:76px;flex:0 0 76px;padding-left:5px;padding-right:2px}
+ #timeline-view .cascade-toggle{flex:none;gap:3px;padding:5px;font-size:10px;white-space:nowrap}
+ #timeline-view .zoom-slider-control{flex:none;margin-left:auto;gap:2px}
+ #timeline-view .zoom-slider-control input{width:48px}
+ #timeline-view .zoom-slider-control output{min-width:28px;font-size:10px}
+ #timeline-view #today-button{flex:none;padding:6px;font-size:11px}
+ #timeline-view .mobile-chart-info{flex:none}
+}
+
+/* Compact help belongs to the frozen chart heading, beside its label. */
+.gantt-head-left{gap:5px}
+.chart-header-info{align-self:flex-end;margin-bottom:-2px}
+.chart-header-info>.info-tip-button{width:16px;height:16px;font-size:11px}
+.chart-header-info .info-tip-text{position:fixed;top:160px;left:12px;right:auto;bottom:auto;width:320px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 180px);overflow:auto;white-space:normal;pointer-events:auto;z-index:90}
+#cascade-help{position:fixed;inset:auto;margin:0;width:320px;max-width:calc(100vw - 24px);padding:12px 14px;border:0;border-radius:8px;background:#273347;color:#fff;box-shadow:0 4px 18px #18223033;font-size:12px;line-height:1.6}
+.cascade-toggle{-webkit-touch-callout:none;user-select:none}
+@media(max-width:760px){
+ #timeline-view #status-filter,#timeline-view #sort-select{height:32px;min-height:32px;border-radius:7px}
+ #timeline-view .gantt-head-left{padding-left:8px;padding-right:5px;font-size:9px;white-space:nowrap}
+}
+
+.modal-head p:empty{display:none}
+.form-info-button{margin-left:6px;vertical-align:middle;flex:none}
+.form-info-tooltip{position:fixed;inset:auto;margin:0;width:320px;max-width:calc(100vw - 24px);padding:11px 13px;border:0;border-radius:8px;background:#273347;color:white;box-shadow:0 4px 18px #18223033;font-size:12px;font-weight:400;line-height:1.6;letter-spacing:normal}
+.project-identity-row{grid-column:1/-1;display:flex;align-items:flex-end;gap:12px;min-width:0}
+.project-color-field{flex:none}
+.project-name-field{flex:1;min-width:0}
+.project-identity-row #project-color{display:block;width:38px;height:32px;padding:2px;border:1px solid #e5e9f0;border-radius:6px;background:white;cursor:pointer}
+.project-identity-row #project-name{height:32px}
+@media(max-width:760px){
+ .project-color-field>.field-label{display:none}
+ .project-identity-row{gap:8px}
+ .project-identity-row #project-color,.project-identity-row #project-name{height:40px}
+ .project-identity-row #project-name{font-size:16px}
+}
+
+/* Match the neighboring chart buttons, including the compact toolbar. */
+.cascade-toggle{height:32px;min-height:32px}
+
+/* Keep hit targets transparent; the shared SVG paints both body and grips. */
+.project-timeline .unified-task-backed{appearance:none;-webkit-appearance:none}
+.project-timeline .unified-task-backed>.resize-handle{background:transparent;opacity:1}
+.project-timeline .unified-task-backed>.resize-handle::after{display:none}
+.project-timeline .unified-task-backed>.resize-handle.resize-invalid::after{display:block;background:#ff7777;opacity:1}
+.blocked-task-outline{fill:none;stroke:#d34e58;stroke-width:2;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}
+.project-timeline .task-bar.blocked:is(.svg-backed,.unified-task-backed){outline:none}
+
+@media(max-width:760px){
+ #timeline-view .gantt-left{width:var(--label-width,132px);flex-basis:var(--label-width,132px)}
+ #timeline-view .gantt-head-left{cursor:pointer;gap:4px}
+ .gantt-label-toggle{border:0;background:transparent;color:inherit;padding:0;font:inherit;font-weight:inherit;white-space:nowrap;text-align:left;align-self:stretch;display:flex;align-items:flex-end;gap:3px;flex:none}
+ .gantt-label-toggle>span{font-size:13px;line-height:1}
+ .gantt-label-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:2px}
+}
+
+@media(max-width:760px){
+ .gantt-label-toggle>.gantt-label-title{font-size:inherit;line-height:inherit}
+ #timeline-view .labels-collapsed .gantt-head-left{padding:0;justify-content:center}
+ .labels-collapsed .gantt-label-toggle{width:100%;justify-content:center;padding-bottom:5px}
+ .labels-collapsed .gantt-label-toggle>.gantt-label-title,
+ .labels-collapsed .chart-header-info{display:none}
+ #timeline-view .labels-collapsed .task-name,
+ #timeline-view .labels-collapsed .project-name,
+ #timeline-view .labels-collapsed .group-header-label{display:none}
+ #timeline-view .labels-collapsed .task-label,
+ #timeline-view .labels-collapsed .project-select{justify-content:center;padding-left:0;padding-right:0;gap:0}
+ #timeline-view .labels-collapsed .gantt-add-button{padding:0;text-align:center;font-size:0}
+ #timeline-view .labels-collapsed .gantt-add-button::before{content:'＋';font-size:14px}
+}
+
+/* Allow tighter day columns without adding horizontal calendar padding. */
+.date-header{padding-left:0;padding-right:0;min-width:0}
+
+/* Native sticky positioning stays synchronized with compositor scrolling.
+   clip trims bar paint without creating an intermediate scroll container. */
+#gantt .task-bar,#gantt .actual-task-bar{overflow:clip}
+#gantt .bar-text{position:sticky;left:calc(var(--label-width,254px) + 6px);flex-shrink:1;min-width:0}

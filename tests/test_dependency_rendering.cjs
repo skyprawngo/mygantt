@@ -50,7 +50,7 @@ for (const actual of [false, true]) for (const below of [false, true]) {
     assert.equal((paint.match(/M /g) || []).length, 1, 'one exterior contour, no separate touching subpaths');
     assert.equal((paint.match(/Z/g) || []).length, 1, 'only the exterior contour is closed');
     assert(h.body.markup.includes('fill-rule="nonzero"'));
-    assert(!h.body.markup.includes('<rect'), 'no seam patch rectangles');
+    assert(!h.body.markup.split('<defs><mask id="unified-task-progress-')[0].includes('<rect'), 'connection contours have no seam patch rectangles (unified masks may use rectangles)');
     assert(h.sourceBar.classes.has('svg-backed'));
     h.context.renderDependencyLinks();
     assert(!h.body.markup.includes('stop-color="transparent"'), 'redraw restores colors before measuring');

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sqlite3
 import threading
 import uuid
@@ -483,7 +484,16 @@ class Database:
       planned = {t["key"]: t for t in self.schedule_template(template["tasks"], start_date, calendar_type)}
       project_id = new_id()
       stamp = now_iso()
-      color = self._validate_color(payload.get("color")) or template.get("project_color") or self._next_project_color(db)
+      db.execute("BEGIN IMMEDIATE")
+      # Recheck idempotency after acquiring the write lock, before choosing a color.
+      if request_id:
+        prior = db.execute("SELECT project_id FROM project_creation_requests WHERE request_id=?", (request_id,)).fetchone()
+        if prior:
+          return self._project(db, prior[0])
+      color = self._validate_color(payload.get("color"))
+      used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
+      if not color or color in used:
+        color = self._next_project_color(db)
       group_name = str(payload.get("group_name", "")).strip()
       tags = json.dumps(self._normalize_tags(payload.get("tags", [])), ensure_ascii=False)
       db.execute("INSERT INTO projects (id, name, template_id, template_name, start_date, calendar_type, color, group_name, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (project_id, name, template_id, template["name"], start_date, calendar_type, color, group_name, tags, stamp, stamp))
@@ -679,9 +689,15 @@ class Database:
       return self._project(db, project_id)
 
   def _next_project_color(self, db: sqlite3.Connection) -> str:
-    used = [row[0] for row in db.execute("SELECT color FROM projects WHERE color != ''")]
-    counts = {color: used.count(color) for color in PROJECT_COLORS}
-    return min(PROJECT_COLORS, key=lambda color: (counts[color], PROJECT_COLORS.index(color)))
+    used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
+    seed = f"{now_iso()}:{new_id()}"
+    attempt = 0
+    while True:
+      digest = hashlib.sha256(f"{seed}:{attempt}".encode()).digest()
+      color = "#" + "".join(f"{64 + (channel & 127):02x}" for channel in digest[:3])
+      if color not in used:
+        return color
+      attempt += 1
 
   def _next_template_color(self, db: sqlite3.Connection) -> str:
     used = [row[0] for row in db.execute("SELECT project_color FROM templates WHERE project_color != ''")]

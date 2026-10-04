@@ -22,9 +22,9 @@ test('one user-space progress gradient for both tiers, including zero and comple
   const paint=c.unifiedTaskPaint({id:'a',progress},bar(p),bar({left:30,right:150,top:29,bottom:49,width:120}),{left:0,top:0},0);
   assert.equal((paint.match(/<path /g)||[]).length,2);
   assert.match(paint,/maskUnits="userSpaceOnUse"/);
-  const mask=decodeURIComponent(paint.match(/href="data:image\/svg\+xml,([^"]+)/)[1]);
+  const mask=paint;
   assert.match(mask,/width="150" height="42"/);
-  assert.match(mask,/<linearGradient id="front">/);
+  assert.match(mask,/<linearGradient id="unified-task-progress-0-front">/);
  }
 });
 
@@ -56,7 +56,7 @@ test('both tier attachments are translated into one shared progress mask on ever
  const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
  const planned=bar({...p,height:22}),actual=bar({left:30,right:150,top:29,bottom:49,width:120,height:20});
  const ports=new Map([[planned,{ports:[{side:'top',x:40,width:30,direction:'incoming'}]}],[actual,{ports:[{side:'right',direction:'outgoing'}]}]]);
- const render=progress=>decodeURIComponent(c.unifiedTaskPaint({id:'a',progress},planned,actual,{left:0,top:0},0,ports).match(/href="data:image\/svg\+xml,([^"]+)/)[1]);
+ const render=progress=>c.unifiedTaskPaint({id:'a',progress},planned,actual,{left:0,top:0},0,ports);
  const mask=render(90);
  assert.match(mask,/cx="40" cy="0"/);
  assert.match(mask,/cx="150" cy="32"/);
@@ -65,4 +65,38 @@ test('both tier attachments are translated into one shared progress mask on ever
  assert.match(render(95),/<g opacity="0.5">/);
  ports.get(actual).ports=[{side:'top',x:60,width:20,direction:'outgoing'}];
  assert.match(render(90),/cx="90" cy="22"/);
+});
+
+test('aligned open-left curve rounds into the planned lower-left edge',()=>{
+ const a={left:0,right:80,top:29,bottom:49,width:80};
+ const path=c.unifiedTaskShape(p,a,'left').path;
+ assert.match(path,/ Q 0 29 0 25/);
+ assert.doesNotMatch(path,/NaN|Infinity/);
+});
+test('unified grips and masks are inline SVG without nested image decoding',()=>{
+ const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
+ const paint=c.unifiedTaskPaint({id:'a',progress:100,actual_finish:'2026-10-04'},bar(p),bar({left:0,right:80,top:29,bottom:49,width:80}),{left:0,top:0},0);
+ assert.doesNotMatch(paint,/<image|data:image/);
+ assert.equal((paint.match(/class="unified-task-grip"/g)||[]).length,3);
+ assert.match(paint,/id="unified-task-progress-0-fill"/);
+ assert.match(paint,/url\(#unified-task-progress-0-fill\)/);
+});
+
+test('blocked unified bar outlines its exterior once without a tier seam',()=>{
+ const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
+ const args=[bar(p),bar({left:30,right:150,top:29,bottom:49,width:120}),{left:0,top:0},0];
+ const paint=c.unifiedTaskPaint({id:'a',progress:40,status:'blocked'},...args);
+ const outline=paint.match(/class="blocked-task-outline" d="([^"]+)"/)[1];
+ assert.equal(outline,paint.match(/class="unified-task-paint"[^>]* d="([^"]+)"/)[1]);
+ assert.equal((outline.match(/M /g)||[]).length,1);
+ assert.doesNotMatch(c.unifiedTaskPaint({id:'a',progress:40,status:'doing'},...args),/blocked-task-outline/);
+});
+
+test('completed unified bars do not leave a light base-color halo beneath antialiased progress edges',()=>{
+ const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
+ for(const progress of [90,100]) {
+  const markup=c.unifiedTaskPaint({id:'a',color:'#27897f',progress},bar(p),bar({left:0,right:80,top:29,bottom:49,width:80}),{left:0,top:0},0);
+  const fill=markup.match(/class="unified-task-paint"[^>]*fill="([^"]+)"/)[1];
+  assert.equal(fill,progress===100?c.colorPalette('#27897f').dark:c.colorPalette('#27897f').base);
+ }
 });

@@ -130,7 +130,9 @@ class HttpApiTests(unittest.TestCase):
     project = self.call("/api/instantiate", "POST", payload)
     retry = self.call("/api/instantiate", "POST", payload)
     self.assertEqual(project["id"], retry["id"])
-    self.assertEqual(project["color"], "#123456")
+    self.assertRegex(project["color"], r"^#[0-9a-f]{6}$")
+    self.assertNotIn(project["color"], [item["color"] for item in before["projects"]])
+    self.assertEqual(project["color"], retry["color"])
     self.assertEqual(project["tasks"][0]["color"], "#aabbcc")
     self.assertEqual(len(project["tasks"]), 4)
     self.assertNotIn("duration_value", project["tasks"][0])
@@ -173,10 +175,10 @@ class HttpApiTests(unittest.TestCase):
     with urlopen(f"{self.base}/", timeout=3) as response:
       html = response.read().decode("utf-8")
     self.assertIn("MyGantt", html)
-    self.assertIn("공정 템플릿", html)
+    self.assertIn("일정 템플릿", html)
     self.assertIn("프로젝트 속성", html)
     self.assertIn("작업 속성", html)
-    self.assertIn("group-select", html)
+    self.assertIn('value="group">그룹별 보기', html)
 
   def test_korean_holiday_data_has_explicit_coverage_and_range_filter(self):
     payload = self.call("/api/holidays?start=2026-10-01&end=2026-10-31")
