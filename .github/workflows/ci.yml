@@ -35,3 +35,14 @@ jobs:
         run: node --check web/app.js
       - name: Run browser logic tests
         run: node --test tests/*.cjs
+      - name: Validate production source archive
+        run: |
+          python - <<'PYCODE'
+          import subprocess, sys, tempfile
+          from pathlib import Path
+          sys.path.insert(0, 'deploy/ubuntu')
+          from delivery import extract_source
+          archive = subprocess.check_output(['git', 'archive', '--format=tar', 'HEAD'])
+          with tempfile.TemporaryDirectory() as folder:
+              extract_source(archive, Path(folder))
+          PYCODE

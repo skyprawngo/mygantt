@@ -86,7 +86,7 @@ class DeliverySafetyTests(unittest.TestCase):
   def test_source_extraction_rejects_escape_links_and_databases(self):
     with tempfile.TemporaryDirectory() as name:
       root = Path(name)
-      for filename, kind in [("../escape.py", tarfile.REGTYPE), ("link", tarfile.SYMTYPE), ("data/mygantt.sqlite3", tarfile.REGTYPE), ("nested/database.db", tarfile.REGTYPE), (".env", tarfile.REGTYPE)]:
+      for filename, kind in [("../escape.py", tarfile.REGTYPE), ("link", tarfile.SYMTYPE), ("data/mygantt.sqlite3", tarfile.REGTYPE), ("nested/database.db", tarfile.REGTYPE), (".env", tarfile.REGTYPE), ("nested/.env.production", tarfile.REGTYPE), ("devtools/db-sync/.env.example", tarfile.REGTYPE)]:
         with self.subTest(filename=filename):
           data = io.BytesIO()
           with tarfile.open(fileobj=data, mode="w") as archive:
@@ -98,6 +98,19 @@ class DeliverySafetyTests(unittest.TestCase):
           with self.assertRaises(ValueError):
             extract_source(data.getvalue(), root)
           self.assertEqual(list(root.iterdir()), [])
+
+  def test_configuration_instructions_can_ship_without_runtime_env(self):
+    with tempfile.TemporaryDirectory() as folder:
+      data = io.BytesIO()
+      content = b"MYGANTT_SYNC_ENABLED=false\n"
+      with tarfile.open(fileobj=data, mode="w") as archive:
+        member = tarfile.TarInfo("devtools/db-sync/config.env.example")
+        member.size = len(content)
+        archive.addfile(member, io.BytesIO(content))
+      root = Path(folder)
+      extract_source(data.getvalue(), root)
+      self.assertEqual((root / "devtools/db-sync/config.env.example").read_bytes(), content)
+      self.assertFalse((root / "devtools/db-sync/.env").exists())
 
   def test_backup_is_consistent_private_and_does_not_change_source(self):
     with tempfile.TemporaryDirectory() as name:

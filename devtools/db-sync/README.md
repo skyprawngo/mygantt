@@ -7,12 +7,14 @@ There is no public synchronization HTTP endpoint or discovery mechanism.
 
 ## Configuration
 
-Install `sync.py` into a private directory on each machine. Copy `.env.example`
+Install `sync.py` into a private directory on each machine. Copy `config.env.example`
 to `.env` **beside each installed script** and fill in that machine's values.
 The tool reads that exact file, not a `.env` found in the working directory.
 Process environment variables with the same names override file values.
 Use literal `KEY=value` lines (no shell expansion or quotes). Restrict `.env`
 and the installation directory to the service account. Never commit them.
+Actual `.env` files must be created or transferred privately on each host;
+deployment never provisions or overwrites them.
 
 - `MYGANTT_SYNC_ENABLED`: defaults to disabled; both peers must explicitly set `true`.
 - `MYGANTT_SYNC_PAIR_ID`: generate a UUID and provision the same value on both peers.
