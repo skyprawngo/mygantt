@@ -498,20 +498,20 @@
  .topbar{height:56px;min-height:56px;padding:0 8px;gap:8px}
  #mobile-menu-toggle{width:40px;height:40px;flex-shrink:0;font-size:22px}
  .breadcrumbs{min-width:0;gap:6px}.breadcrumbs>span:first-child,.breadcrumbs>b{display:none}
- .topbar-actions{margin-left:auto;gap:4px}.topbar-actions .saved-indicator,#export-calendar{display:none}
+ .topbar-actions{margin-left:auto;gap:4px}.topbar-actions .saved-indicator{display:none}
  .topbar-actions .button{padding:9px 8px;font-size:11px;white-space:nowrap}
  .sidebar{position:fixed;inset:0 auto 0 0;width:min(290px,86vw);min-height:0;height:100dvh;z-index:80;overflow:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s,visibility .2s;padding-top:56px;box-shadow:8px 0 28px #18223022}
  .menu-open .sidebar{transform:translateX(0);visibility:visible}
  .drawer-close{position:absolute;right:8px;top:8px;width:40px;height:40px;border:0;border-radius:8px;background:#f1f3f8;color:#475467;font-size:24px;z-index:2}
- #mobile-inspector{position:fixed;inset:0 0 0 auto;width:min(360px,94vw);height:100dvh;max-height:none;z-index:80;overflow-y:auto;border-radius:0;transform:translateX(105%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:-8px 0 28px #18223022}
- .inspector-open #mobile-inspector{transform:translateX(0);visibility:visible}
- #mobile-inspector .inspector-title{padding-right:8px;position:sticky;top:0;background:white;z-index:10;gap:8px}
- #mobile-inspector .inspector-title .inspector-state{margin-left:auto}
- #mobile-inspector .inspector-title .drawer-close{position:static;flex:0 0 40px}
- #mobile-inspector input:not([type=checkbox]):not([type=color]):not([type=range]),#mobile-inspector textarea,#mobile-inspector select{font-size:16px;min-height:40px}
- #mobile-inspector .inspector-relations input{width:18px;height:18px}
- #mobile-inspector .inspector-relations th,#mobile-inspector .inspector-relations td{padding:9px 4px;font-size:11px}
- #mobile-inspector .inspector-field>span{font-size:11px}
+ :is(#mobile-inspector,#template-inspector){position:fixed;inset:0 0 0 auto;width:min(360px,calc(100vw - 32px));height:100dvh;max-height:none;z-index:80;overflow-y:auto;border-radius:0;transform:translateX(105%);visibility:hidden;transition:transform .2s,visibility .2s;box-shadow:-8px 0 28px #18223022}
+ .inspector-open :is(#mobile-inspector,#template-inspector){transform:translateX(0);visibility:visible}
+ :is(#mobile-inspector,#template-inspector) .inspector-title{padding-right:8px;position:sticky;top:0;background:white;z-index:10;gap:8px}
+ :is(#mobile-inspector,#template-inspector) .inspector-title .inspector-state{margin-left:auto}
+ :is(#mobile-inspector,#template-inspector) .inspector-title .drawer-close{position:static;flex:0 0 40px}
+ :is(#mobile-inspector,#template-inspector) input:not([type=checkbox]):not([type=color]):not([type=range]),:is(#mobile-inspector,#template-inspector) textarea,:is(#mobile-inspector,#template-inspector) select{font-size:16px;min-height:40px}
+ :is(#mobile-inspector,#template-inspector) .inspector-relations input{width:18px;height:18px}
+ :is(#mobile-inspector,#template-inspector) .inspector-relations th,:is(#mobile-inspector,#template-inspector) .inspector-relations td{padding:9px 4px;font-size:11px}
+ :is(#mobile-inspector,#template-inspector) .inspector-field>span{font-size:11px}
  .view-panel,#timeline-view.view-panel,#templates-view.view-panel{padding:8px;height:calc(100dvh - 56px);min-width:0}
  #timeline-view .timeline-layout{display:block;min-width:0}
  .timeline-main,.schedule-card{min-width:0;width:100%}
@@ -535,11 +535,11 @@
  #templates-view .inspector{max-height:none}
  .modal-overlay{padding:8px}.modal{width:100%;max-height:94dvh}.form-grid{grid-template-columns:1fr}
 }
-@media(prefers-reduced-motion:reduce){.sidebar,#mobile-inspector{transition:none}}
+@media(prefers-reduced-motion:reduce){.sidebar,:is(#mobile-inspector,#template-inspector){transition:none}}
 @media(max-width:760px){
  #timeline-view .schedule-legend{height:auto;min-height:32px}
  #timeline-view .schedule-legend .legend-date-range{margin-left:0}
- #mobile-inspector .inspector-date-table input{min-width:0;width:100%}
+ :is(#mobile-inspector,#template-inspector) .inspector-date-table input{min-width:0;width:100%}
 }
 @media(max-width:760px){
  html,body{overscroll-behavior-x:none}
@@ -633,19 +633,19 @@
  .gantt-label-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:2px}
 
  .gantt-label-toggle>.gantt-label-title{font-size:inherit;line-height:inherit}
- #timeline-view .labels-collapsed .gantt-head-left{padding:0;justify-content:center}
+ :is(#timeline-view,#templates-view) .labels-collapsed .gantt-head-left{padding:0;justify-content:center}
  .labels-collapsed .gantt-label-toggle{width:100%;justify-content:center;padding-bottom:5px}
  .labels-collapsed .gantt-label-toggle>.gantt-label-title,
  .labels-collapsed .chart-header-info{display:none}
- #timeline-view .labels-collapsed .task-name,
- #timeline-view .labels-collapsed .project-name,
- #timeline-view .labels-collapsed .group-header-label{display:none}
- #timeline-view .labels-collapsed .task-label,
- #timeline-view .labels-collapsed .project-select{justify-content:center;padding-left:0;padding-right:0;gap:0}
- #timeline-view .labels-collapsed .gantt-add-button{padding:0;text-align:center;font-size:0}
- #timeline-view .labels-collapsed .gantt-add-button::before{content:'＋';font-size:14px}
+ :is(#timeline-view,#templates-view) .labels-collapsed .task-name,
+ :is(#timeline-view,#templates-view) .labels-collapsed .project-name,
+ :is(#timeline-view,#templates-view) .labels-collapsed .group-header-label{display:none}
+ :is(#timeline-view,#templates-view) .labels-collapsed .task-label,
+ :is(#timeline-view,#templates-view) .labels-collapsed .project-select{justify-content:center;padding-left:0;padding-right:0;gap:0}
+ :is(#timeline-view,#templates-view) .labels-collapsed .gantt-add-button{padding:0;text-align:center;font-size:0}
+ :is(#timeline-view,#templates-view) .labels-collapsed .gantt-add-button::before{content:'＋';font-size:14px}
 
-#timeline-view .labels-collapsed .task-owner,#timeline-view .labels-collapsed .project-meta{display:none}
+:is(#timeline-view,#templates-view) .labels-collapsed .task-owner,:is(#timeline-view,#templates-view) .labels-collapsed .project-meta{display:none}
 
 /* Allow tighter day columns without adding horizontal calendar padding. */
 .date-header{padding-left:0;padding-right:0;min-width:0}
@@ -730,11 +730,11 @@
 .directory-drop-target>.gantt-left::after{content:attr(data-preview);position:absolute;left:8px;top:100%;padding:3px 6px;background:#5267e8;color:white;font-size:10px;border-radius:4px;white-space:nowrap;z-index:21;pointer-events:none}
 
 /* Animate the shared column geometry without making its sticky surface translucent. */
-#gantt.labels-width-animating .gantt-left{overflow:clip}
-#gantt.labels-width-animating :is(.task-name,.project-name,.task-owner,.project-meta,.gantt-label-title,.chart-header-info,.group-header-label){opacity:var(--label-content-opacity,1)}
-#gantt.labels-width-animating .task-label{padding-left:calc(14px + 15px * var(--label-content-opacity));padding-right:calc(7px * var(--label-content-opacity));gap:calc(7px * var(--label-content-opacity))}
-#gantt.labels-width-animating .unassigned-task-row .task-label{padding-left:calc(14px - 2px * var(--label-content-opacity))}
-@media(max-width:760px){#gantt.labels-width-animating .task-label{padding-left:calc(14px - 8px * var(--label-content-opacity))}}
+:is(#gantt,#template-gantt).labels-width-animating .gantt-left{overflow:clip}
+:is(#gantt,#template-gantt).labels-width-animating :is(.task-name,.project-name,.task-owner,.project-meta,.gantt-label-title,.chart-header-info,.group-header-label){opacity:var(--label-content-opacity,1)}
+:is(#gantt,#template-gantt).labels-width-animating .task-label{padding-left:calc(14px + 15px * var(--label-content-opacity));padding-right:calc(7px * var(--label-content-opacity));gap:calc(7px * var(--label-content-opacity))}
+:is(#gantt,#template-gantt).labels-width-animating .unassigned-task-row .task-label{padding-left:calc(14px - 2px * var(--label-content-opacity))}
+@media(max-width:760px){:is(#gantt,#template-gantt).labels-width-animating .task-label{padding-left:calc(14px - 8px * var(--label-content-opacity))}}
 
 /* Template inspectors use the schedule property grid, with execution-only fields disabled. */
 #templates-view .property-grid :disabled{background:#f4f6f9;color:#99a3b2;cursor:not-allowed;opacity:1}
@@ -766,3 +766,68 @@
 .side-project-swipe:is(.swipe-open,.swipe-dragging)>.side-project-delete{visibility:visible}
 .side-project-delete:hover{background:#b63744}
 @media(prefers-reduced-motion:reduce){.side-project-swipe>.side-project-row{transition:none}}
+
+/* Templates use the same compact chart and inspector drawer as schedules. */
+#template-gantt .gantt-left{width:var(--label-width,254px);flex-basis:var(--label-width,254px)}
+@media(max-width:760px){
+  #templates-view .timeline-layout{display:block;overflow:visible}
+  #templates-view .toolbar{flex-wrap:nowrap;gap:6px;padding:8px}
+  #templates-view .toolbar-left{flex:1;min-width:0}
+  #templates-view .template-chart-title{width:100%;min-width:0;font-size:13px}
+  #templates-view .toolbar-right{flex:none;gap:6px;flex-wrap:nowrap}
+  #templates-view .zoom-slider-control{font-size:0;gap:3px}
+  #templates-view .zoom-slider-control input{width:48px}
+  #templates-view .zoom-slider-control output{font-size:11px;min-width:28px}
+  #templates-view .cascade-toggle{height:32px;padding:0 5px;white-space:nowrap}
+  #templates-view .task-label{padding-left:6px;gap:5px}
+  #templates-view .project-select{padding-left:6px;padding-right:4px}
+  #templates-view .task-name,#templates-view .project-name{font-size:11px}
+  #templates-view .project-meta{display:none}
+}
+
+/* Off-range bars cannot enlarge the calendar scroll range. */
+#gantt .gantt-body{overflow:clip}
+#gantt .gantt-head{overflow:clip}
+
+.color-field .random-color-button{margin-left:auto;flex:0 0 28px;width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;padding:0;border:0;border-radius:5px;background:transparent;color:var(--muted)}
+.color-field .random-color-button:hover{background:#eef1ff;color:var(--blue)}
+.color-field .random-color-button:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+
+.group-suggestions{position:fixed;inset:auto;margin:0;padding:4px;max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:7px;background:white;box-shadow:0 6px 20px #18223026}
+.group-suggestions button{display:block;width:100%;padding:7px 9px;text-align:left;border:0;border-radius:4px;background:transparent;color:var(--ink)}
+.group-suggestions button:hover,.group-suggestions button:focus,.group-suggestions button.selected{background:#eef1ff;color:var(--blue)}
+
+.gantt-left>.inline-row-name{display:block;width:calc(100% - 8px);min-width:0;height:28px;margin:4px;padding:3px 5px;border:2px solid var(--blue);border-radius:4px;background:white;color:var(--ink);font:inherit;outline:none}
+.gantt-left>.inline-row-name[aria-invalid="true"]{border-color:var(--red)}
+.gantt-left>.project-select[hidden],.gantt-left>.task-label[hidden]{display:none}
+
+/* Project insertion uses the same row marker as task insertion. */
+.project-order{display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-style:normal;font-variant-numeric:tabular-nums}
+.task-order-dragging .project-left{opacity:.45}
+.task-insert-before .project-left::after,.task-insert-after .project-left::after{content:"";position:absolute;left:8px;right:0;height:2px;background:#5267e8;z-index:20;pointer-events:none}
+.task-insert-before .project-left::after{top:0}
+.task-insert-after .project-left::after{bottom:0}
+
+#gantt .project-left .project-order{width:auto;min-width:16px;height:16px;flex-basis:auto;padding:0 2px}
+
+.property-grid .inspector-field.project-name-order,.property-grid .inspector-field.task-name-order{grid-template-columns:92px minmax(0,1fr) 48px}
+.property-grid .project-name-order #ins-project-order,.property-grid .task-name-order #ins-task-order{border-left:1px solid var(--line);padding:6px 3px;text-align:center}
+.tag-color-editor{grid-column:2 / -1;display:flex;flex-wrap:wrap;gap:6px;padding:0 8px 8px;min-width:0}
+.tag-color-editor>small{flex-basis:100%;color:var(--muted);font-size:11px}
+.colored-tag{display:inline-flex;align-items:center;gap:5px;max-width:100%;padding:3px 6px;border:1px solid currentColor;border-radius:5px;font-weight:600;font-size:12px}
+.colored-tag>span{overflow-wrap:anywhere}
+.colored-tag input[type=color]{width:22px;height:22px;min-width:22px;padding:0;border:0;background:transparent;cursor:pointer}
+.tag-token-editor{grid-column:2 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;margin:6px 8px;padding:6px;border:1px solid var(--line,#dce2ed);border-radius:7px;background:white;cursor:text}
+.tag-token-editor:focus-within{border-color:var(--blue);box-shadow:0 0 0 2px #5872d91a}
+.tag-token-list{display:contents}
+.tag-token-editor .colored-tag{border-radius:999px;padding:3px 9px;max-width:100%}
+button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap:anywhere;white-space:normal}
+.tag-token-editor .tag-entry{flex:1 1 120px;width:120px;min-width:50px;max-width:100%;height:28px;min-height:28px;padding:2px 3px;border:0;border-radius:0;background:transparent;box-shadow:none;outline:none}
+.tag-token-editor .tag-entry:focus{border:0;box-shadow:none;outline:none}
+.tag-palette-popover{position:fixed;inset:auto;margin:0;width:248px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:white;color:var(--ink);box-shadow:0 8px 32px #0003}
+.tag-palette-popover:popover-open{display:grid;gap:10px}
+.tag-palette-popover strong{overflow-wrap:anywhere}
+.tag-swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.tag-swatches button{height:28px;border:1px solid #0002;border-radius:5px;cursor:pointer}
+.tag-custom-color{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tag-palette-popover small{font-size:11px}

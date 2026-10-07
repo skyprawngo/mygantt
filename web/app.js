@@ -4,7 +4,10 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let savedUi = {};
 try { savedUi = JSON.parse(localStorage.getItem('mygantt-ui') || '{}'); } catch { savedUi = {}; }
-const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', zoom: 46, filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
+function restoreZoom(value, minimum) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(minimum, Math.min(62, value)) : 46;
+}
+const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', zoom: restoreZoom(savedUi.zoom, 24), templateZoom: restoreZoom(savedUi.templateZoom, 12), filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
 const statusNames = { get todo() { return t("status.planned"); }, get doing() { return t("status.in_progress"); }, get blocked() { return t("status.stopped"); }, get done() { return t("status.complete"); } };
 const durationNames = { get days() { return t("common.days"); }, get weeks() { return t("common.weeks"); } };
 const projectColors = ['#5872d9', '#b96749', '#27897f', '#a45ca8', '#b48527', '#3978a8', '#c45670', '#5a8d45', '#765bb2', '#368a9b', '#c06f2d', '#657386'];
@@ -103,9 +106,7 @@ async function loadState() {
   state.data = await api('/api/state');
   if (!state.holidayCalendars) state.holidayCalendars = (await api('/api/holiday-calendars')).calendars;
   timelineReferenceTime = new Date();
-  const dates = state.data.projects.flatMap((project) => project.tasks.flatMap((task) => [task.planned_start, task.planned_finish])).filter(Boolean).sort();
-  const start = dates[0] && dates[0] < todayInput() ? dates[0] : todayInput();
-  const end = dates.at(-1) && dates.at(-1) > todayInput() ? dates.at(-1) : todayInput();
+  const {start,end} = timelineCalendarRange();
   try {
     state.holidayData = await api(`/api/holidays?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&country=${encodeURIComponent(state.data.holiday_country || 'KR')}`);
   } catch (error) {
@@ -118,7 +119,7 @@ async function loadState() {
   renderAll();
 }
 function persistUi() {
-  localStorage.setItem('mygantt-ui', JSON.stringify({ selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
+  localStorage.setItem('mygantt-ui', JSON.stringify({ zoom: state.zoom, templateZoom: state.templateZoom, selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
 }
 function setCascadeSetting(value) {
   state.cascadeDependents = Boolean(value);
@@ -142,8 +143,8 @@ function switchView(view) {
   $('#templates-view').classList.toggle('hidden', view !== 'templates');
   $('#settings-view').classList.toggle('hidden', view !== 'settings');
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
-  $('#export-calendar').classList.toggle('hidden', view !== 'timeline');
   $('#new-project').classList.toggle('hidden', view !== 'timeline');
+  $('#import-project-template').classList.toggle('hidden', view !== 'templates');
   $('#breadcrumb-title').textContent = { timeline: t("navigation.all_schedules"), templates: t("navigation.schedule_templates"), settings: t("navigation.settings") }[view];
   $('#page-description').textContent = { timeline: t("navigation.view_each_project_s_daily_schedule"), templates: t("navigation.define_a_workflow_once_and_apply"), settings: t("navigation.view_the_app_version_and_public") }[view];
   renderAll();
@@ -264,6 +265,7 @@ function filteredProjects() {
   })).filter((project) => project.tasks.length || (!project.is_unassigned && status === 'all' && !state.data.projects.find(item => item.id === project.id)?.tasks.length && (!query || [project.name, project.group_name, ...(project.tags || [])].some(value => String(value || '').toLocaleLowerCase().includes(query)))));
   const sort = $('#sort-select')?.value || 'manual';
   projects.forEach(project => project.tasks.sort((a,b) => sort === 'name' ? a.name.localeCompare(b.name,I18n.locale) : sort === 'progress' ? taskProgress(b)-taskProgress(a) : sort === 'start' ? a.planned_start.localeCompare(b.planned_start) : (a.sort_order || 0)-(b.sort_order || 0)));
+  if (sort === 'manual') projects.sort((a,b) => (a.sort_order || 0)-(b.sort_order || 0));
   if (sort !== 'manual') projects.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, I18n.locale) : sort === 'progress' ? b.progress - a.progress : (a.tasks[0]?.planned_start || a.start_date).localeCompare(b.tasks[0]?.planned_start || b.start_date));
   return projects;
 }
@@ -312,6 +314,77 @@ function renderSettings() {
   select.innerHTML = [...groups].map(([group, calendars]) => `<optgroup label="${esc(t('calendar.group.'+group))}">${calendars.map(calendar => `<option value="${esc(calendar.country)}">${esc(t(calendar.textID))}</option>`).join('')}</optgroup>`).join('');
   select.value = state.data.holiday_country || 'KR';
   renderHolidayStatus();
+}
+// Calendar range is independent of project dates, including an empty workspace.
+function calendarMonthOffset(value, months) {
+  const date = dateFrom(value), day = date.getDate();
+  date.setDate(1); date.setMonth(date.getMonth() + months);
+  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  date.setDate(Math.min(day, last));
+  return dateKey(date);
+}
+function timelineCalendarRange() {
+  const today = dateKey(timelineReferenceTime);
+  if (!state.calendarRange) state.calendarRange = {start:calendarMonthOffset(today,-2),end:calendarMonthOffset(today,3)};
+  return state.calendarRange;
+}
+function calendarHeaderMarkup(dates, pxPerDay) {
+  return dates.map((item) => `<div class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+}
+function calendarShadingMarkup(dates, pxPerDay) {
+  return dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
+}
+function extendTimelineCalendar(oldStart, oldEnd) {
+  const chart = $('#gantt'), range = timelineCalendarRange(), px = state.zoom;
+  const prepend = dayDiff(range.start,oldStart), append = dayDiff(oldEnd,range.end);
+  const width = (dayDiff(range.start,range.end)+1)*px, shift = prepend*px;
+  const addedStart = prepend ? range.start : (() => { const d=dateFrom(oldEnd); d.setDate(d.getDate()+1); return dateKey(d); })();
+  const added = dateColumns(addedStart,prepend || append,px).map(day => ({...day,x:dayDiff(range.start,day.key)*px}));
+  if (shift) {
+    $$('.task-bar,.actual-task-bar,.project-summary-bar,.project-duration-band,.date-shade,.today-line',chart).forEach(node => {
+      node.style.left = `${parseFloat(node.style.left)+shift}px`;
+    });
+  }
+  $$('.gantt-right',chart).forEach(node => { node.style.width=`${width}px`; });
+  const label = parseFloat(chart.style.getPropertyValue('--label-width'));
+  $('.gantt-body',chart).style.width=`${width+label}px`;
+  $('.date-axis',chart).insertAdjacentHTML(prepend?'afterbegin':'beforeend',calendarHeaderMarkup(added,px));
+  $$('.row-date-shading',chart).forEach(node => node.insertAdjacentHTML('beforeend',calendarShadingMarkup(added,px)));
+  chart.dataset.todayOffset=dayDiff(range.start,dateKey(timelineReferenceTime));
+  $('#range-label').textContent=dateRangeLabel(range.start,range.end);
+  updateCurrentTimeMarker();
+  renderDependencyLinks();
+}
+function bindTimelineCalendarScroll() {
+  const wrap = $('#gantt-wrap');
+  let previous = wrap.scrollLeft;
+  wrap.onscroll = () => {
+    const left = wrap.scrollLeft, direction = Math.sign(left-previous);
+    previous = left;
+    if (!direction || state.drag || state.savingDates || state.layout !== 'gantt') return;
+    if (!(direction < 0 && left < 360) && !(direction > 0 && left + wrap.clientWidth > wrap.scrollWidth - 180)) return;
+    const range = timelineCalendarRange(), top = wrap.scrollTop, oldStart = range.start, oldEnd = range.end;
+    if (direction < 0) range.start = calendarMonthOffset(range.start,-1);
+    else range.end = calendarMonthOffset(range.end,1);
+    extendTimelineCalendar(oldStart,oldEnd);
+    wrap.scrollLeft = left + dayDiff(range.start,oldStart)*state.zoom;
+    wrap.scrollTop = top;
+    bindTimelineCalendarScroll();
+    refreshCalendarHolidays();
+  };
+}
+let calendarHolidayRequest = 0;
+async function refreshCalendarHolidays() {
+  const request = ++calendarHolidayRequest, range = {...timelineCalendarRange()};
+  const country = state.data.holiday_country || 'KR';
+  try {
+    const data = await api(`/api/holidays?start=${range.start}&end=${range.end}&country=${encodeURIComponent(country)}`);
+    if (request !== calendarHolidayRequest || country !== (state.data.holiday_country || 'KR')) return;
+    state.holidayData = data;
+    state.holidays = Object.fromEntries((data.holidays || []).map(h => [h.date,h.name]));
+    if (state.drag || state.savingDates) return;
+    renderTimeline({preserveInspector:true});
+  } catch (error) { toast(error.message); }
 }
 function projectBounds(projects) {
   const tasks = flatten(projects);
@@ -724,43 +797,48 @@ function addTemplateTask() {
   state.preview=null;
   renderTemplateEditor();
   queueTemplateSave();
+  setMobileDrawer('inspector');
   $('.template-task-name')?.focus();
 }
-function openAddProjectTask() {
-  const selected = '__unassigned__';
-  const projects = [{id:selected, name:t("inspector.no_project"), color:'#94a3b8'}, ...state.data.projects.filter(project => !project.is_unassigned && project.id !== selected)];
-  const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">${t("timeline.project")}</span><span class="project-select-field"><span id="new-task-project-color" class="project-select-swatch" aria-hidden="true"></span><select id="new-task-project" class="select-input">${projects.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name)}</option>`).join('')}</select></span></label><label class="form-field full"><span class="field-label">${t("timeline.task_name")}</span><input id="new-task-name" class="text-input" required placeholder="${t("timeline.new_task_name")}"></label><label class="form-field"><span class="field-label">${t("timeline.planned_start")}</span><input id="new-task-start" class="text-input" type="date" value="${todayInput()}" required></label><label class="form-field"><span class="field-label">${t("timeline.planned_finish")}</span><input id="new-task-finish" class="text-input" type="date" value="${todayInput()}" required></label></div>`;
-  openModal(t("timeline.add_task_2"), t("timeline.add_an_individual_task_to_the"), body, `<button id="cancel-new-task" class="button">${t("timeline.cancel")}</button><button id="save-new-task" class="button button-primary">${t("timeline.add")}</button>`, () => {
-    $('.modal').classList.add('creation-modal');
-    const syncProjectColor = () => { $('#new-task-project-color').style.backgroundColor = colorPalette(projects.find(project => project.id === $('#new-task-project').value)?.color).base; };
-    $('#new-task-project').addEventListener('change', syncProjectColor);
-    syncProjectColor();
-    $('#new-task-name').focus();
-    $('#cancel-new-task').addEventListener('click', closeModal);
-    $('#save-new-task').addEventListener('click', async () => {
-      const button=$('#save-new-task');
-      if (button.disabled) return;
-      const name=$('#new-task-name').value.trim(), start=$('#new-task-start').value, finish=$('#new-task-finish').value;
-      if (!name || !start || !finish || finish<start) { setModalError(t("timeline.enter_a_task_name_and_valid")); return; }
-      button.disabled=true;
-      try {
-        const project=await api(`/api/projects/${encodeURIComponent($('#new-task-project').value)}/tasks`, {method:'POST',body:JSON.stringify({name,planned_start:start,planned_finish:finish})});
-        state.filterProject=project.id; state.collapsedProjects.delete(project.id);
-        $('#search-filter').value=''; $('#status-filter').value='all';
-        state.selection={type:'task',id:project.tasks.at(-1).id}; state.inspectorOpen='task'; persistUi();
-        closeModal(); await loadState(); toast(t("timeline.task_added"));
-      } catch(error) { setModalError(error.message); button.disabled=false; }
-    });
-  });
+let quickCreatePending = false;
+async function createScheduleItem(type) {
+  if (quickCreatePending) return;
+  quickCreatePending = true;
+  try {
+    const today = todayInput();
+    let project, id;
+    if (type === 'project') {
+      project = await api('/api/projects', {method:'POST',body:JSON.stringify({
+        request_id:crypto.randomUUID(),name:t('template.new_project'),start_date:today,calendar_type:'working'
+      })});
+      id = project.id;
+    } else {
+      project = await api('/api/projects/__unassigned__/tasks', {method:'POST',body:JSON.stringify({
+        name:t('timeline.new_task_name'),planned_start:today,planned_finish:today
+      })});
+      id = project.tasks.at(-1).id;
+    }
+    state.filterProject = null;
+    state.collapsedProjects.delete(project.id);
+    state.selection = {type,id}; state.inspectorOpen = type;
+    $('#search-filter').value=''; $('#status-filter').value='all';
+    persistUi(); await loadState();
+    if (mobileLayout()) setMobileDrawer('inspector');
+    const input = type === 'project' ? $('#ins-project-name') : $('#ins-task-name');
+    input?.focus(); input?.select();
+  } catch (error) { toast(error.message); }
+  finally { quickCreatePending = false; }
 }
+function openAddProjectTask() { return createScheduleItem('task'); }
 
 let labelWidthFrame = null;
-function animateGanttLabelWidth(chart, from) {
+function animateGanttLabelWidth(chart, from, redraw = renderDependencyLinks) {
   const to = parseFloat(chart.style.getPropertyValue('--label-width'));
   if (matchMedia('(prefers-reduced-motion: reduce)').matches || Math.abs(to-from) < 1) return;
   const collapsed = chart.classList.contains('labels-collapsed');
   const head = $('.gantt-head-left', chart), body = $('.gantt-body', chart);
   const bodyWidth = parseFloat(body.style.width);
+  const content = $('.template-chart-content', chart);
   const bands = $$('.project-duration-band', chart).map(el => ({el,left:parseFloat(el.style.left)}));
   chart.classList.add('labels-width-animating');
   chart.classList.remove('labels-collapsed');
@@ -770,8 +848,9 @@ function animateGanttLabelWidth(chart, from) {
     chart.style.setProperty('--label-content-opacity', String(collapsed ? 1-progress : progress));
     head.style.width = `${width}px`;
     body.style.width = `${bodyWidth+width-to}px`;
+    if (content) content.style.width = body.style.width;
     for (const {el,left} of bands) el.style.left = `${left+width-to}px`;
-    renderDependencyLinks();
+    redraw();
   };
   apply(0);
   const start = performance.now();
@@ -784,28 +863,29 @@ function animateGanttLabelWidth(chart, from) {
       chart.classList.remove('labels-width-animating');
       chart.classList.toggle('labels-collapsed', collapsed);
       chart.style.removeProperty('--label-content-opacity');
-      renderDependencyLinks();
+      redraw();
     }
   }
   labelWidthFrame = requestAnimationFrame(frame);
 }
 
 function renderTimeline({ preserveInspector = false } = {}) {
+  if (inlineNameEditor?.isConnected) return;
   if (labelWidthFrame !== null) { cancelAnimationFrame(labelWidthFrame); labelWidthFrame = null; }
   $('#gantt').classList.remove('labels-width-animating');
   $('#gantt').style.removeProperty('--label-content-opacity');
   if (typeof projectMotion !== 'undefined') projectMotion.observe();
+  const calendarWrap = $('#gantt-wrap');
+  const calendarScroll = {left:calendarWrap.scrollLeft,top:calendarWrap.scrollTop};
   const visibleProjects = filteredProjects();
   const rootProject = visibleProjects.find(project => project.is_unassigned) || {id:'__unassigned__',is_unassigned:true,name:t("inspector.no_project"),color:'#94a3b8',tasks:[],progress:0};
   const projects = [...visibleProjects.filter(project => !project.is_unassigned), rootProject];
   const tasks = flatten(projects);
-  const bounds = projectBounds(projects);
-  let start = bounds.start; let end = bounds.end;
+  const bounds = timelineCalendarRange();
+  const {start,end} = bounds;
   const today = dateKey(timelineReferenceTime);
-  if (today < start) start = today;
-  if (today > end) end = today;
-  const days = Math.max(1, dayDiff(start, end) + 1);
-  $('#range-label').textContent = dateRangeLabel(bounds.start, bounds.end);
+  const days = dayDiff(start,end) + 1;
+  $('#range-label').textContent = dateRangeLabel(start,end);
   const pxPerDay = state.zoom;
   const labelsExpanded = mobileLayout() ? Boolean(state.mobileLabelsExpanded) : state.desktopLabelsExpanded !== false;
   const labelWidth = labelsExpanded ? 254 : 36;
@@ -825,12 +905,12 @@ function renderTimeline({ preserveInspector = false } = {}) {
   let rows = '';
   let bodyHeight = 0;
   const projectBands = [];
-  const rowShading = dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
+  const rowShading = calendarShadingMarkup(dates,pxPerDay);
   const timelineCellStyle = `--day-width:${pxPerDay}px;`;
   const groupMode = $('#sort-select')?.value === 'group';
   const groupedProjects = groupMode ? [...projects.reduce((groups, project) => {
     if (project.is_unassigned) return groups;
-    const groupName = project.group_name?.trim() || t("timeline.ungrouped");
+    const groupName = canonicalGroupName(project.group_name) || t("timeline.ungrouped");
     if (!groups.has(groupName)) groups.set(groupName, []);
     groups.get(groupName).push(project);
     return groups;
@@ -846,7 +926,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
     const projectFinish = project.tasks.map((task) => task.planned_finish).filter(Boolean).sort().at(-1);
-    const projectX = Math.max(0, dayDiff(start, projectStart || start)) * pxPerDay;
+    const projectX = dayDiff(start, projectStart || start) * pxPerDay;
     const projectBarWidth = Math.max(pxPerDay, (dayDiff(projectStart || start, projectFinish || projectStart || start) + 1) * pxPerDay);
     const isProjectSelected = state.selection?.type === 'project' && state.selection.id === project.id;
     const projectTop = bodyHeight;
@@ -855,7 +935,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
     const summaryClass = collapsed ? '' : ' expanded-project-label';
       rows += `<div class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
       <div class="gantt-left project-left" data-drop-project="${esc(project.id)}" data-directory-id="project:${esc(project.id)}">
-        <button class="project-select" type="button" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot" style="background:${colorPalette(project.color).base}"></i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
+        <button class="project-select" type="button" draggable="${!project.is_unassigned && $('#sort-select').value === 'manual'}" title="${t("directory.drag_project")}" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot project-order" style="background:${colorPalette(project.color).base}" aria-label="${t("timeline.default_order")} ${project.sort_order ?? ''}">${project.sort_order ?? ''}</i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
       </div>
       <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="${t("timeline.project_duration")} ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><i style="width:${project.progress}%"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} · ${project.progress}%</span></button></div>
     </div>`;
@@ -863,7 +943,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
     }
     if (collapsed) continue;
     for (const task of project.tasks) {
-      const startX = Math.max(0, dayDiff(start, task.planned_start)) * pxPerDay;
+      const startX = dayDiff(start, task.planned_start) * pxPerDay;
       const width = Math.max(pxPerDay, (dayDiff(task.planned_start, task.planned_finish) + 1) * pxPerDay);
       const actual = actualTaskRange(task);
       const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
@@ -883,7 +963,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   rows += ganttAddRow('add-empty-project', timelineWidth, t("project.add_row"), true);
   rows += ganttAddRow('add-project-task', timelineWidth, t("timeline.add_single_task"), true);
   bodyHeight += 76;
-  const headerDates = dates.map((item) => `<div class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+  const headerDates = calendarHeaderMarkup(dates,pxPerDay);
   const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" data-project-band="${esc(band.project.id)}" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
   $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${`<button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")} ${labelsExpanded ? t("timeline.collapse_2") : t("timeline.expand_2")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button>`}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
   if (mobileLayout() && state.mobileLabelsExpanded) {
@@ -924,6 +1004,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
   if (!preserveInspector) renderInspector();
   $('#list-wrap').innerHTML = `<table class="list-table"><thead><tr><th>${t("timeline.project")}</th><th>${t("timeline.task")}</th><th>${t("timeline.owner_vendor")}</th><th>${t("status.planned")}</th><th>${t("calendar.status")}</th><th>${t("timeline.stop_reason")}</th><th>${t("timeline.next_handoff")}</th></tr></thead><tbody>${projects.flatMap((project) => project.tasks.map((task) => `<tr class="list-task-row" data-project="${esc(project.id)}" data-task="${esc(task.id)}"><td>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</td><td class="list-task">${esc(task.name)}</td><td>${esc(task.owner || t("timeline.unassigned_2"))}</td><td>${fmtDate(task.planned_start, true)} – ${fmtDate(task.planned_finish, true)}</td><td><span class="status-pill ${task.status}">${statusNames[task.status] || task.status}</span></td><td>${esc(task.blocker || '—')}</td><td>${esc(task.handoff || '—')}</td></tr>`)).join('')}</tbody></table>`;
   $$('.list-task-row', $('#list-wrap')).forEach((row) => row.addEventListener('click', () => selectItem('task', row.dataset.task)));
+  calendarWrap.scrollLeft = state.calendarPositioned ? calendarScroll.left : Math.max(0, todayOffset * pxPerDay - 2 * pxPerDay);
+  calendarWrap.scrollTop = calendarScroll.top;
+  state.calendarPositioned = true;
+  bindTimelineCalendarScroll();
 }
 
 function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish) {
@@ -951,13 +1035,13 @@ function renderInspector() {
   if (project && !project.is_unassigned) {
     $('#project-inspector').innerHTML = `<form id="project-inspector-form" class="inspector-form">
       <div class="property-grid">
-      <label class="inspector-field"><span>${t("inspector.project_name")}</span><input id="ins-project-name" class="text-input" autocomplete="off" value="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}" required></label>
-      <div class="inspector-field"><span><label for="ins-project-color">${t("inspector.project_color")}</label></span><div class="color-field"><input id="ins-project-color" type="color" value="${esc(project.color || '#5872d9')}"><code>${esc(project.color || '#5872d9')}</code></div></div>
+      <div class="inspector-field project-name-order"><span><label for="ins-project-name">${t("inspector.project_name")}</label></span><input id="ins-project-name" class="text-input" autocomplete="off" value="${esc(project.name)}" required><input id="ins-project-order" class="text-input" type="number" min="1" max="${state.data.projects.filter(p=>!p.is_unassigned).length}" step="1" aria-label="${t("timeline.default_order")}" title="${t("timeline.default_order")}" value="${project.sort_order ?? ''}" required></div>
+      <div class="inspector-field"><span><label for="ins-project-color">${t("inspector.project_color")}</label></span><div class="color-field"><input id="ins-project-color" type="color" value="${esc(project.color || '#5872d9')}"><code>${esc(project.color || '#5872d9')}</code>${randomColorButton()}</div></div>
       <label class="inspector-field"><span>${t("inspector.start_date")}</span><input id="ins-project-start" type="date" class="text-input" value="${esc(project.start_date)}"></label>
       <label class="inspector-field"><span>${t("inspector.calendar")}</span><select id="ins-project-calendar" class="select-input"><option value="working" ${project.calendar_type === 'working' ? 'selected' : ''}>${t("inspector.5_day_week_mon_fri")}</option><option value="calendar" ${project.calendar_type === 'calendar' ? 'selected' : ''}>${t("inspector.7_day_week")}</option></select></label>
       <div class="inspector-field property-readonly"><span>${t("inspector.planned_range")} <span class="info-tip"><button type="button" class="info-tip-button" aria-label="${t("inspector.planned_range_help")}" aria-describedby="project-dates-tooltip">i</button><span id="project-dates-tooltip" class="info-tip-text" role="tooltip">${t("inspector.changing_the_batch_start_or_calendar")}</span></span></span><div class="derived-date"><small>${project.calendar_type === 'working' ? t("inspector.5_day_week_excludes_weekends_and") : t("inspector.7_day_week")}</small><b>${fmtDate(project.tasks.map((item) => item.planned_start).filter(Boolean).sort()[0], true)} — ${fmtDate(project.tasks.map((item) => item.planned_finish).filter(Boolean).sort().at(-1), true)}</b></div></div>
-      <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-project-group" class="text-input" value="${esc(project.group_name || '')}" placeholder="${t("inspector.e_g_markos_q4_2026")}"></label>
-      <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-project-tags" class="text-input" value="${esc((project.tags || []).join(', '))}" placeholder="${t("inspector.e_g_main_board_urgent")}"></label>
+      <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-project-group" class="text-input" value="${esc(project.group_name || '')}" placeholder="${t("inspector.group_placeholder")}"></label>
+      <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-project-tags" class="text-input" value="${esc((project.tags || []).join(', '))}" placeholder="${t("inspector.tags_placeholder")}"></label>
       </div>
       <small class="project-autosave-state" role="status" aria-live="polite"></small>
       <div class="inspector-actions"><button class="button delete-button" id="ins-project-delete" type="button">${t("project.delete")}</button><button class="button complete-button" id="ins-project-complete" type="button" ${project.tasks.length ? '' : 'disabled'}>${t("project.complete")}</button></div>
@@ -972,16 +1056,16 @@ function renderInspector() {
     $('#task-inspector').innerHTML = `
       <form id="task-inspector-form" class="inspector-form">
         <div class="property-grid">
-        <label class="inspector-field"><span>${t("timeline.task_name")}</span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required></label>
-        <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code></div></div>
+        <div class="inspector-field task-name-order"><span><label for="ins-task-name">${t("timeline.task_name")}</label></span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required><input id="ins-task-order" class="text-input" type="number" min="1" max="${project.tasks.length}" step="1" aria-label="${t("timeline.default_order")}" title="${t("timeline.default_order")}" value="${task.sort_order ?? ''}" required></div>
+        <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code>${randomColorButton()}</div></div>
         ${taskDateGrid(`<input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required>`, `<input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required>`, `<input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}">`, `<input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}">`)}
-        <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.e_g_outsourced_work")}"></label>
-        <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="${t("inspector.e_g_inspection_waiting")}"></label>
-        <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.department_or_vendor")}"></label>
+        <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.group_placeholder")}"></label>
+        <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.owner_placeholder")}"></label>
         <div class="inspector-field task-status-help" data-hover-help="${esc(t("help.progress_knob_stop"))}"><span><button type="button" class="status-help-trigger" aria-describedby="floating-help">${t("calendar.status")}</button></span><div class="task-progress-control" style="${paletteStyle(task.color)}"><div class="task-progress-track"><div class="task-progress-fill"></div><button type="button" id="task-progress-knob" aria-describedby="floating-help" class="task-progress-knob" role="slider" aria-label="${t("inspector.task_progress")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${taskProgress(task)}"></button></div><output id="task-progress-label"></output></div></div>
-        <label id="ins-task-blocker-row" class="inspector-field${task.status === 'blocked' ? '' : ' hidden'}"><span>${t("inspector.stopped_waiting_reason")}</span><input id="ins-task-blocker" class="text-input" value="${esc(task.blocker || '')}" placeholder="${t("inspector.e_g_checking_component_delivery")}"></label>
+        <label id="ins-task-blocker-row" class="inspector-field${task.status === 'blocked' ? '' : ' hidden'}"><span>${t("inspector.stopped_waiting_reason")}</span><input id="ins-task-blocker" class="text-input" value="${esc(task.blocker || '')}" placeholder="${t("inspector.blocker_placeholder")}"></label>
         <div class="inspector-field property-relations"><span>${t("inspector.task_connections")} <small>${t("inspector.select_multiple_tasks")}</small></span><div class="inspector-relations"><table aria-label="${t("inspector.predecessors_and_successors")}"><thead><tr><th scope="col" class="relation-heading">${t("timeline.task")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="task-relations-help">i</button><span id="task-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}</span></span></th><th scope="col">${t("inspector.predecessors")}</th><th scope="col">${t("inspector.successors")}</th></tr></thead><tbody>${relatedTasks.map((item) => `<tr><th scope="row">${esc(item.name)}</th><td><input type="checkbox" class="ins-task-dependency" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t("inspector.predecessors")}" ${task.dependencies.includes(item.id) ? 'checked' : ''}></td><td><input type="checkbox" class="ins-task-successor" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t("inspector.successors")}" ${(item.dependencies || []).includes(task.id) ? 'checked' : ''}></td></tr>`).join('') || `<tr><td colspan="3">${t("inspector.no_other_tasks_to_connect")}</td></tr>`}</tbody></table></div></div>
-        <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.inspection_results_contact_details_etc")}">${esc(task.notes || '')}</textarea></label>
+        <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="${t("inspector.tags_placeholder")}"></label>
+        <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.notes_placeholder")}">${esc(task.notes || '')}</textarea></label>
         </div>
         <small class="task-autosave-state" role="status" aria-live="polite">${t("inspector.changes_are_saved_when_you_leave")}</small>
         <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button complete-button" id="ins-task-complete" type="button">${t("task.complete")}</button></div>
@@ -990,6 +1074,7 @@ function renderInspector() {
     $('#task-inspector').innerHTML = `<div class="inspector-empty"><span>⌁</span><b>${t("inspector.select_a_task")}</b><small>${t("inspector.click_a_task_name_or_bar")}</small></div>`;
   }
   bindInspector(project, task);
+  bindTagColors();
   if (project && !project.is_unassigned) $('#ins-project-delete').onclick = () => deleteInspectorItem('projects', project.id, project.name);
   if (project && !project.is_unassigned) $('#ins-project-complete').onclick = () => completeProject(project.id);
   if (task) $('#ins-task-delete').onclick = () => deleteInspectorItem('tasks', task.id, task.name);
@@ -1085,7 +1170,7 @@ function saveProjectField(projectId, fields) {
   return request;
 }
 function bindProjectAutoSave(form, project) {
-  const fieldNames = { 'ins-project-name': 'name', 'ins-project-color': 'color', 'ins-project-start': 'start_date', 'ins-project-calendar': 'calendar_type', 'ins-project-group': 'group_name', 'ins-project-tags': 'tags' };
+  const fieldNames = { 'ins-project-name': 'name', 'ins-project-order': 'sort_order', 'ins-project-color': 'color', 'ins-project-start': 'start_date', 'ins-project-calendar': 'calendar_type', 'ins-project-group': 'group_name', 'ins-project-tags': 'tags' };
   const inputs = $$('input, select', form);
   const saved = new Map(inputs.map(input => [input.id, input.value]));
   const queued = new Map();
@@ -1103,7 +1188,7 @@ function bindProjectAutoSave(form, project) {
     if (value === (queued.has(input.id) ? queued.get(input.id) : saved.get(input.id))) return;
     const invalid = !input.checkValidity() || (key === 'name' && !value.trim()) || (key === 'start_date' && !value);
     if (invalid) {
-      errors.set(input.id, key === 'name' ? t("inspector.enter_a_project_name") : t("inspector.enter_a_valid_date"));
+      errors.set(input.id, key === 'name' ? t("inspector.enter_a_project_name") : key === 'sort_order' ? t("inspector.valid_project_order") : t("inspector.enter_a_valid_date"));
       input.setAttribute('aria-invalid', 'true');
       showStatus();
       return;
@@ -1114,7 +1199,15 @@ function bindProjectAutoSave(form, project) {
     pending++;
     showStatus();
     try {
-      const updated = await saveProjectField(project.id, { [key]: value });
+      const updated = await saveProjectField(project.id, { [key]: key === 'sort_order' ? Number(value) : value });
+      if (key === 'sort_order') {
+        const refreshed = await api('/api/state');
+        for (const item of state.data.projects) {
+          const fresh = refreshed.projects.find(p=>p.id === item.id);
+          if (fresh) item.sort_order = fresh.sort_order;
+        }
+        $('#sort-select').value = 'manual';
+      }
       saved.set(input.id, value);
       errors.delete(input.id);
       if (input.value === value) input.removeAttribute('aria-invalid');
@@ -1253,7 +1346,19 @@ function bindInspector(project, task) {
 let taskSaveQueue = Promise.resolve();
 function saveTaskFields(taskId, fields) {
   const request = taskSaveQueue.catch(() => {}).then(async () => {
-    const project = await api(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'PATCH', body: JSON.stringify(fields) });
+    let project;
+    if (Object.hasOwn(fields, 'sort_order')) {
+      const current = state.data.projects.find(item => item.tasks.some(task => task.id === taskId));
+      const tasks = [...(current?.tasks || [])].sort((a,b)=>a.sort_order-b.sort_order);
+      const position = fields.sort_order;
+      if (!Number.isInteger(position) || position < 1 || position > tasks.length) throw new Error(t("task.check_the_input_value"));
+      const anchor = tasks[position - 1];
+      const after = tasks.findIndex(task=>task.id === taskId) < position - 1;
+      project = await api(`/api/tasks/${encodeURIComponent(taskId)}/order`, {method:'PATCH',body:JSON.stringify({anchor_id:anchor.id,after})});
+      $('#sort-select').value = 'manual';
+    } else {
+      project = await api(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'PATCH', body: JSON.stringify(fields) });
+    }
     const current = state.data.projects.find(item => item.id === project.id);
     if (current) { current.tasks = project.tasks; current.progress = project.progress; current.updated_at = project.updated_at; }
     if (state.view === 'timeline') {
@@ -1266,7 +1371,7 @@ function saveTaskFields(taskId, fields) {
   return request;
 }
 function bindTaskAutoSave(form, task) {
-  const names = { name:'name', color:'color', 'planned-start':'planned_start', 'planned-finish':'planned_finish', 'actual-start':'actual_start', 'actual-finish':'actual_finish', group:'group_name', tags:'tags', owner:'owner', status:'status', blocker:'blocker', notes:'notes' };
+  const names = { name:'name', order:'sort_order', color:'color', 'planned-start':'planned_start', 'planned-finish':'planned_finish', 'actual-start':'actual_start', 'actual-finish':'actual_finish', group:'group_name', tags:'tags', owner:'owner', status:'status', blocker:'blocker', notes:'notes' };
   const inputs = $$('input, select, textarea', form);
   const saved = new Map(inputs.map(input => [input, input.type === 'checkbox' ? input.checked : input.value]));
   const queued = new Map();
@@ -1289,7 +1394,7 @@ function bindTaskAutoSave(form, task) {
       fields.dependencies = $$('.ins-task-dependency:checked', form).map(node => node.value);
       fields.successors = $$('.ins-task-successor:checked', form).map(node => node.value);
       affected = $$('.inspector-relations input', form);
-    } else fields[names[input.id.replace('ins-task-', '')]] = value;
+    } else fields[names[input.id.replace('ins-task-', '')]] = input.id === 'ins-task-order' ? Number(value) : value;
     const snapshot = affected.map(node => [node, node.type === 'checkbox' ? node.checked : node.value]);
     for (const [node, val] of snapshot) queued.set(node, val);
     errors.delete(input); pending++; showStatus();
@@ -1404,6 +1509,44 @@ function shiftIsoDate(value, days) {
   return dateKey(shifted);
 }
 
+function projectTemplatePayload(project, name) {
+  if (!name.trim()) throw new Error(t('template.enter_a_template_name'));
+  if (!project?.tasks?.length) throw new Error(t('template.import_empty'));
+  const tasks = [...project.tasks].sort((a,b) => (a.sort_order || 0)-(b.sort_order || 0));
+  const keys = new Map(tasks.map((task,index) => [task.id,`task_${index+1}`]));
+  if (tasks.some(task => !/^\d{4}-\d{2}-\d{2}$/.test(task.planned_start || '') || !/^\d{4}-\d{2}-\d{2}$/.test(task.planned_finish || '') || task.planned_finish < task.planned_start)) throw new Error(t('template.import_dates_invalid'));
+  const start = tasks.map(task => task.planned_start).sort()[0];
+  return {name:name.trim(),description:'',project_color:project.color,calendar_type:'calendar',tasks:tasks.map(task => ({
+    key:keys.get(task.id),name:task.name,start_day:dayDiff(start,task.planned_start)+1,
+    duration_value:dayDiff(task.planned_start,task.planned_finish)+1,duration_unit:'days',
+    dependencies:(task.dependencies || []).filter(id => keys.has(id)).map(id => keys.get(id)),
+    owner:task.owner || '',handoff:task.handoff || '',color:task.color
+  }))};
+}
+async function openProjectTemplateImport() {
+  try {
+    await templateSaveQueue;
+    const latest = await api('/api/state');
+    const projects = latest.projects.filter(project => !project.is_unassigned && project.id !== '__unassigned__' && project.tasks.length);
+    if (!projects.length) { toast(t('template.import_empty')); return; }
+    const body = `<div class="form-grid"><label class="form-field full"><span class="field-label">${t('timeline.project')}</span><select id="template-source-project" class="select-input">${projects.map(project => `<option value="${esc(project.id)}">${esc(project.name)}</option>`).join('')}</select></label><label class="form-field full"><span class="field-label">${t('template.template_name')}</span><input id="import-template-name" class="text-input" value="${esc(projects[0].name)}" required></label></div>`;
+    const footer = `<span></span><button type="button" id="confirm-template-import" class="button button-primary">${t('template.save')}</button>`;
+    openModal(t('template.import_project'),t('template.import_description'),body,footer,() => {
+      $('#template-source-project').addEventListener('change',event => { $('#import-template-name').value=projects.find(project=>project.id===event.target.value).name; });
+      $('#confirm-template-import').addEventListener('click',async event => {
+        const button=event.currentTarget;button.disabled=true;
+        try {
+          const project=projects.find(project=>project.id===$('#template-source-project').value);
+          const saved=await api('/api/templates',{method:'POST',body:JSON.stringify(projectTemplatePayload(project,$('#import-template-name').value))});
+          state.data.templates.push(saved);state.selectedTemplateId=saved.id;state.draft=normalizedTemplate(saved);
+          state.templateTaskKey='__project__';state.templateProjectCollapsed=false;
+          closeModal();renderTemplates();
+        } catch(error) { if ($('#modal-error')) setModalError(error.message); else toast(error.message); }
+        finally { if (button.isConnected) button.disabled=false; }
+      });
+    });
+  } catch(error) { toast(error.message); }
+}
 function normalizedTemplate(template) {
   const idToKey = Object.fromEntries(template.tasks.map((task) => [task.id, task.key]));
   return { ...template, tasks: template.tasks.map((task) => ({ ...task, dependencies: task.dependencies.map((id) => idToKey[id] || id) })) };
@@ -1499,12 +1642,36 @@ function renderTemplateGantt() {
   }
   const requiredDays = Math.max(45, ...rows.map(row => row.end));
   state.templateVisibleDays = Math.max(state.templateVisibleDays, 45 + Math.ceil((requiredDays - 45) / 15) * 15);
-  const px = state.templateZoom || 46, label = 254, days = state.templateVisibleDays;
+  const labelsExpanded = mobileLayout() ? Boolean(state.mobileLabelsExpanded) : state.desktopLabelsExpanded !== false;
+  const px = state.templateZoom || 46, label = labelsExpanded ? 254 : 36, days = state.templateVisibleDays;
+  chart.style.setProperty('--label-width', `${label}px`);
+  chart.classList.toggle('labels-collapsed', !labelsExpanded);
   const projectStart = rows.length ? Math.min(...rows.map(r => r.start)) : 1;
   const projectEnd = Math.max(1, ...rows.map(r => r.end));
   const projectRow = `<div class="gantt-row project-row ${state.templateTaskKey === '__project__' ? 'selected-row' : ''}"><div class="gantt-left project-left"><button class="project-select" data-template-project aria-pressed="${state.templateTaskKey === '__project__'}"><i class="group-dot" style="background:${colorPalette(state.draft.project_color || projectColors[0]).base}"></i><span class="project-name">${esc(state.draft.name || t("template.new_project"))}</span><span class="project-meta">${rows.length}${t("template.tasks")}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="project-summary-bar" data-template-project style="left:${(projectStart-1)*px}px;width:${(projectEnd-projectStart+1)*px}px;${paletteStyle(state.draft.project_color || projectColors[0], 'bar')}"><span>${templateDayLabel(projectStart)}–${templateDayLabel(projectEnd)}</span></button></div></div>`;
   const scroll = chart.scrollLeft, scrollTop = chart.scrollTop;
-  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left">${t("timeline.project_task")}</div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day" data-day="${i+1}" title="${esc(templateDayLabel(i+1))}" aria-label="${esc(templateDayLabel(i+1))}"><span>${templateDayLabel(i+1)}</span></div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" draggable="true" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left gantt-head-left"><button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button></div><div class="gantt-right date-axis">${Array.from({length:days},(_,i)=>`<div class="template-day" data-day="${i+1}" title="${esc(templateDayLabel(i+1))}" aria-label="${esc(templateDayLabel(i+1))}"><span>${templateDayLabel(i+1)}</span></div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" draggable="true" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px"><button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  const content = $('.template-chart-content', chart), body = $('.gantt-body', chart);
+  let width = label;
+  if (mobileLayout() && labelsExpanded) {
+    width = Math.ceil(Math.max(120, ...$$('.project-name, .task-name', chart).map(name => {
+      const range = document.createRange(); range.selectNodeContents(name);
+      const button = name.closest('button'), style = getComputedStyle(button);
+      return range.getBoundingClientRect().width + (button.querySelector('.group-dot, .task-state')?.getBoundingClientRect().width || 0) +
+        (parseFloat(style.columnGap) || 0) + (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    }))) + 2;
+  }
+  chart.style.setProperty('--label-width', `${width}px`);
+  content.style.width = body.style.width = `${width + days*px}px`;
+  $('.gantt-head-left', chart).addEventListener('click', event => {
+    const from = $('.gantt-head-left', chart).getBoundingClientRect().width;
+    if (labelWidthFrame !== null) { cancelAnimationFrame(labelWidthFrame); labelWidthFrame = null; }
+    if (mobileLayout()) state.mobileLabelsExpanded = !labelsExpanded;
+    else state.desktopLabelsExpanded = !labelsExpanded;
+    renderTemplateGantt();
+    animateGanttLabelWidth(chart, from, renderTemplateConnections);
+    if (event.detail === 0) $('.gantt-label-toggle', chart).focus();
+  });
   fitTemplateDayLabels(chart);
   $('#add-template-task').addEventListener('click', addTemplateTask);
   renderTemplateConnections();
@@ -1532,14 +1699,14 @@ function attachTemplateDrag() {
   let drag = null, suppressClick = false;
   chart.addEventListener('click', event => {
     if (suppressClick) { suppressClick=false; return; }
-    if (event.target.closest('[data-template-project]')) { syncDraftFromEditor(); queueTemplateSave(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); return; }
+    if (event.target.closest('[data-template-project]')) { syncDraftFromEditor(); queueTemplateSave(); state.templateProjectCollapsed = !mobileLayout() && state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); setMobileDrawer('inspector'); return; }
     const button = event.target.closest('[data-template-select],.dependency-link[data-task-select]');
     if (!button) return;
-    syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=button.dataset.templateSelect || button.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor();
+    syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=button.dataset.templateSelect || button.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor(); setMobileDrawer('inspector');
   });
   chart.addEventListener('keydown', event => {
     if (!['Enter', ' '].includes(event.key) || !event.target.matches('.dependency-link')) return;
-    event.preventDefault(); syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=event.target.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor();
+    event.preventDefault(); syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=event.target.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor(); setMobileDrawer('inspector');
   });
   chart.addEventListener('pointerdown', event => {
     const bar=event.target.closest('.template-bar');
@@ -1659,10 +1826,10 @@ function renderTemplateEditorContent() {
         <div class="schedule-legend"><span>${t("timeline.predecessor_successor_legend")}</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
-      <aside class="inspector" aria-label="${t("template.template_properties")}"><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span></div>
+      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${mobileLayout() && !document.body.classList.contains('inspector-open') ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
         <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.template_properties")}</span><small>${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
           <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
-          <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code></div></div>
+          <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code>${randomColorButton()}</div></div>
           <label class="inspector-field"><span>${t("inspector.start_date")}</span><input class="text-input" value="D+0" disabled></label>
           <label class="inspector-field"><span>${t("template.default_calendar")} ${formInfo("template-default-calendar-help", t("template.default_calendar"), t("template.default_calendar_help"))}</span><select id="template-inspector-calendar" class="select-input"><option value="working" ${draft.calendar_type !== 'calendar' ? 'selected' : ''}>${t("inspector.5_day_week_mon_fri")}</option><option value="calendar" ${draft.calendar_type === 'calendar' ? 'selected' : ''}>${t("inspector.7_day_week")}</option></select></label>
           <label class="inspector-field"><span>${t("inspector.group")}</span><input class="text-input" disabled></label>
@@ -1674,7 +1841,7 @@ function renderTemplateEditorContent() {
     </div>`;
   $('#template-project-accordion').addEventListener('click', () => { syncDraftFromEditor(); queueTemplateSave(); state.templateProjectCollapsed = state.templateTaskKey === '__project__' && !state.templateProjectCollapsed; state.templateTaskKey='__project__'; renderTemplateEditor(); });
   $('#template-task-accordion').addEventListener('click', () => { syncDraftFromEditor(); queueTemplateSave(); state.templateTaskCollapsed = taskOpen; state.templateTaskKey=selectedTask?.key; renderTemplateEditor(); });
-  $('#template-zoom').addEventListener('input', event => { state.templateZoom=Number(event.target.value); event.target.nextElementSibling.textContent=`${Math.round(state.templateZoom/46*100)}%`; renderTemplateGantt(); });
+  $('#template-zoom').addEventListener('input', event => { state.templateZoom=Number(event.target.value); persistUi(); event.target.nextElementSibling.textContent=`${Math.round(state.templateZoom/46*100)}%`; renderTemplateGantt(); });
   $('#template-cascade-setting').addEventListener('change', event => setCascadeSetting(event.target.checked));
   $('#template-inspector-calendar').addEventListener('change', event => { draft.calendar_type = event.target.value; });
   renderTemplateGantt();
@@ -1737,7 +1904,7 @@ function setTemplateRelation(tasks, taskKey, otherKey, successor, checked) {
 function templateTaskRow(task, index, tasks) {
   const field = (label, content) => `<label class="inspector-field"><span>${label}</span>${content}</label>`;
   return `${field(t("timeline.task_name"),`<input class="text-input template-task-name" data-key="${esc(task.key)}" value="${esc(task.name)}">`)}
-    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"><code>${esc(task.color || taskColors[index % taskColors.length])}</code></div></div>
+    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"><code>${esc(task.color || taskColors[index % taskColors.length])}</code>${randomColorButton()}</div></div>
     ${taskDateGrid(`<input class="text-input template-start-day" type="number" min="0" max="9999" aria-label="${t("template.start_d")}" required>`, `<input class="text-input template-end-day" type="number" min="0" max="9999" aria-label="${t("template.finish_d")}" required>`, `<input class="text-input" type="date" aria-label="${t("inspector.actual_start")}" disabled>`, `<input class="text-input" type="date" aria-label="${t("inspector.actual_finish")}" disabled>`)}
     <div class="inspector-field"><span>D+ <span class="info-tip"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-relative-help">i</button><span id="template-relative-help" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></span><div class="template-relative-help"><button type="button" class="button button-small template-auto-days">${t("template.auto_schedule_from_predecessors")}</button></div></div>
     <div class="inspector-field"><span>${t("template.duration")}</span><div class="duration-field"><input class="text-input template-task-duration" data-key="${esc(task.key)}" type="number" min="1" max="520" value="${esc(task.duration_value)}" aria-label="${t("template.duration")}"><select class="select-input template-task-unit" data-key="${esc(task.key)}" aria-label="${t("template.duration_unit")}"><option value="days" ${task.duration_unit==='days'?'selected':''}>${t("common.days")}</option><option value="weeks" ${task.duration_unit==='weeks'?'selected':''}>${t("common.weeks")}</option></select></div></div>
@@ -1901,8 +2068,207 @@ function setModalError(message) { $('#modal-error').textContent = message; }
 function formInfo(id, label, text) {
   return `<span class="info-tip"><button type="button" class="info-tip-button form-info-button" aria-label="${esc(label)}" aria-describedby="${id}">i</button><span id="${id}" class="info-tip-text" role="tooltip">${esc(text)}</span></span>`;
 }
-function newProjectColor(seed) {
-  const used = new Set(state.data.projects.map(project => colorPalette(project.color).base));
+function normalizeGroupName(value) { return String(value || '').normalize('NFKC').trim().replace(/\s+/g,' '); }
+function groupKey(value) { return normalizeGroupName(value).toLowerCase(); }
+function groupNames() {
+  const names = state.data.projects.flatMap(project => [project.group_name,...project.tasks.map(task => task.group_name)]).map(normalizeGroupName).filter(Boolean).sort();
+  return [...new Map([...names].reverse().map(name => [groupKey(name),name])).values()].sort();
+}
+function canonicalGroupName(value) {
+  return groupNames().find(name => groupKey(name) === groupKey(value)) || normalizeGroupName(value);
+}
+function ownerNames() {
+  const tasks=[...state.data.projects.flatMap(project=>project.tasks),...state.data.templates.flatMap(template=>template.tasks),...(state.draft?.tasks || [])];
+  const names=tasks.map(task=>normalizeGroupName(task.owner)).filter(Boolean).sort();
+  return [...new Map([...names].reverse().map(name=>[groupKey(name),name])).values()].sort();
+}
+function matchingCategoryNames(names, value) {
+  const key=groupKey(value);
+  return key ? names.filter(name=>groupKey(name).includes(key)) : [];
+}
+function bindGroupSuggestions() {
+  // A body-level popover avoids clipping by the inspector's scroll container.
+  const menu=document.createElement('div');menu.className='group-suggestions';menu.setAttribute('popover','manual');document.body.append(menu);
+  let active=null, selected=-1;
+  const close=()=>{if(menu.matches(':popover-open')) menu.hidePopover();active=null;};
+  const show=input=>{
+    active=input;selected=-1;const names=isOwner(input)?ownerNames():groupNames();const matches=matchingCategoryNames(names,input.value);
+    if (!matches.length) {close();return;}
+    menu.innerHTML=matches.map(name=>`<button type="button">${esc(name)}</button>`).join('');
+    const rect=input.getBoundingClientRect();menu.style.left=`${rect.left}px`;menu.style.top=`${rect.bottom+3}px`;menu.style.width=`${rect.width}px`;
+    if(!menu.matches(':popover-open'))menu.showPopover();
+  };
+  const isOwner=node=>node.matches?.('#ins-task-owner,#edit-task-owner,.template-task-owner');
+  const isGroup=node=>node.matches?.('#ins-project-group,#ins-task-group') || isOwner(node);
+  document.addEventListener('focusin',event=>{if(isGroup(event.target))show(event.target);});
+  document.addEventListener('input',event=>{if(isGroup(event.target))show(event.target);});
+  menu.addEventListener('pointerdown',event=>{if(event.target.closest('button'))event.preventDefault();});
+  menu.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||!active)return;const input=active;input.value=button.textContent;input.dispatchEvent(new Event('input',{bubbles:true}));close();input.blur();});
+  document.addEventListener('blur',event=>{if(isGroup(event.target)){const input=event.target;input.value=isOwner(input)?(ownerNames().find(name=>groupKey(name)===groupKey(input.value)) || normalizeGroupName(input.value)):canonicalGroupName(input.value);close();}},true);
+  document.addEventListener('keydown',event=>{
+    if(event.target!==active || !menu.matches(':popover-open'))return;
+    if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close();return;}
+    const buttons=[...menu.querySelectorAll('button')];
+    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+      event.preventDefault();selected=(selected+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;
+      buttons.forEach((button,index)=>button.classList.toggle('selected',index===selected));
+    } else if(event.key==='Enter' && selected>=0){event.preventDefault();event.stopImmediatePropagation();buttons[selected].click();}
+  },true);
+  document.addEventListener('scroll',event=>{if(!menu.contains(event.target))close();},true);
+}
+function firstTagColor(text, colors) {
+  return text.split(',').map(tag=>colors[groupKey(tag)]).find(color=>/^#[0-9a-f]{6}$/i.test(color || '')) || null;
+}
+function mergeTagTokens(existing, text) {
+  return [...new Map([...existing,...text.split(',')].map(tag=>[groupKey(tag),normalizeGroupName(tag)]).filter(([key])=>key)).values()];
+}
+function bindTagColors() {
+  $('#tag-palette-popover')?.remove();
+  for(const input of $$('#ins-project-tags,#ins-task-tags')) {
+    const row=input.closest('.inspector-field');
+    const container=document.createElement('div');container.className=row.className;
+    const title=document.createElement('span');title.textContent=t('inspector.tags');
+    container.append(title);row.replaceWith(container);
+    input.type='hidden';container.append(input);
+    const editor=document.createElement('div');editor.className='tag-token-editor';
+    const chips=document.createElement('div');chips.className='tag-token-list';
+    const entry=document.createElement('input');entry.className='text-input tag-entry';entry.autocomplete='off';
+    entry.placeholder=t('tags.add_hint');entry.setAttribute('aria-label',t('inspector.tags'));
+    editor.append(chips,entry);container.append(editor);
+    let tags=mergeTagTokens([],input.value);
+    const saveTags=()=>{
+      input.value=tags.join(', ');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+      input.dispatchEvent(new Event('blur'));
+    };
+    const render=()=>{
+      chips.innerHTML=tags.map(tag=>`<button type="button" class="colored-tag" data-tag="${esc(tag)}" aria-haspopup="dialog" style="color:${state.data.tag_colors?.[groupKey(tag)] || 'var(--muted)'}">${esc(tag)}</button>`).join('');
+    };
+    const commit=()=>{
+      if(!entry.value.trim())return;
+      tags=mergeTagTokens(tags,entry.value);entry.value='';render();saveTags();
+    };
+    entry.addEventListener('keydown',event=>{
+      if(event.isComposing || event.keyCode===229)return;
+      if(event.key==='Backspace' && entry.value==='' && tags.length) {
+        event.preventDefault();event.stopPropagation();
+        tags.pop();render();saveTags();
+      } else if(event.key===',' || event.key==='Enter') {event.preventDefault();event.stopPropagation();commit();}
+    });
+    entry.addEventListener('input',event=>{if(!event.isComposing && entry.value.includes(','))commit();});
+    entry.addEventListener('compositionend',()=>{if(entry.value.includes(','))commit();});
+    entry.addEventListener('blur',commit);
+    editor.addEventListener('click',event=>{
+      if(event.target===editor || event.target===chips)entry.focus();
+    });
+    chips.addEventListener('click',event=>{
+      const button=event.target.closest('button[data-tag]');if(!button)return;
+      $('#tag-palette-popover')?.remove();
+      const tag=button.dataset.tag;
+      const popup=document.createElement('div');popup.id='tag-palette-popover';popup.className='tag-palette-popover';
+      popup.setAttribute('popover','auto');popup.setAttribute('role','dialog');popup.setAttribute('aria-label',t('tags.color'));
+      const current=state.data.tag_colors?.[groupKey(tag)] || '#5872d9';
+      popup.innerHTML=`<strong>${esc(tag)}</strong><div class="tag-swatches">${projectColors.map(color=>`<button type="button" data-color="${color}" style="background:${color}" aria-label="${color}"></button>`).join('')}</div><label class="tag-custom-color">${t('tags.color')}<input type="color" value="${current}" aria-label="${t('tags.color')}"></label><button type="button" class="button" data-random>${t('inspector.random_color')}</button><button type="button" class="button" data-remove>${t('tags.remove')}</button><small role="status"></small>`;
+      document.body.append(popup);popup.showPopover();
+      const rect=button.getBoundingClientRect();
+      popup.style.left=`${Math.max(8,Math.min(rect.left,innerWidth-popup.offsetWidth-8))}px`;
+      popup.style.top=`${Math.max(8,Math.min(rect.bottom+5,innerHeight-popup.offsetHeight-8))}px`;
+      let busy=false;
+      const selectColor=async color=>{
+        if(busy)return;busy=true;
+        const controls=[...popup.querySelectorAll('button,input')];controls.forEach(node=>node.disabled=true);
+        const status=popup.querySelector('[role=status]');status.textContent=t('inspector.saving');
+        try {
+          const result=await api('/api/settings/tag-color',{method:'PATCH',body:JSON.stringify({tag,color})});
+          state.data.tag_colors={...(state.data.tag_colors || {}),[result.key]:result.color};
+          for(const node of $$('button.colored-tag[data-tag]')) if(groupKey(node.dataset.tag)===result.key)node.style.color=result.color;
+          popup.querySelector('input').value=result.color;status.textContent=t('inspector.saved_automatically');
+        } catch(error) {status.textContent=error.message;}
+        finally {busy=false;controls.forEach(node=>node.disabled=false);}
+      };
+      popup.addEventListener('click',event=>{
+        const selected=event.target.closest('button');if(!selected)return;
+        if(selected.hasAttribute('data-remove')) {
+          tags=tags.filter(value=>groupKey(value)!==groupKey(tag));render();saveTags();popup.hidePopover();popup.remove();entry.focus();
+        } else if(selected.hasAttribute('data-random')) selectColor(newProjectColor(crypto.randomUUID(),[popup.querySelector('input').value]));
+        else if(selected.dataset.color)selectColor(selected.dataset.color);
+      });
+      popup.querySelector('input').addEventListener('change',event=>selectColor(event.target.value));
+    });
+    render();
+  }
+}
+// A manual choice is a stable anchor; random variants never replace it.
+let manualColorAnchors = {};
+try { manualColorAnchors = JSON.parse(localStorage.getItem('mygantt-manual-colors') || '{}') || {}; } catch {}
+function colorAnchorKey(input) {
+  if (input.id === 'ins-project-color') {
+    const project=state.data.projects.find(project=>project.id===state.selection?.id || project.tasks.some(task=>task.id===state.selection?.id));
+    return project ? `project:${project.id}` : null;
+  }
+  if (input.id === 'ins-task-color') return `task:${state.selection?.id}`;
+  if (input.id === 'template-project-color') return `template:${state.draft?.id || state.selectedTemplateId || 'draft'}`;
+  if (input.classList.contains('template-task-color')) return `template-task:${state.draft?.id || state.selectedTemplateId || 'draft'}:${input.dataset.key}`;
+  return null;
+}
+function manualColorVariant(anchor, excluded, seed) {
+  const rgb=[1,3,5].map(i=>parseInt(anchor.slice(i,i+2),16)/255);
+  const max=Math.max(...rgb),min=Math.min(...rgb),delta=max-min,light=(max+min)/2;
+  let hue=0;
+  if(delta) {
+    hue=max===rgb[0]?(rgb[1]-rgb[2])/delta+(rgb[1]<rgb[2]?6:0):max===rgb[1]?(rgb[2]-rgb[0])/delta+2:(rgb[0]-rgb[1])/delta+4;
+    hue/=6;
+  }
+  const saturation=delta ? delta/(1-Math.abs(2*light-1)) : 0;
+  const used=new Set([anchor.toLowerCase(),'#5872d9',...excluded.map(value=>String(value).toLowerCase())]);
+  let random=2166136261;
+  for(const char of seed) random=Math.imul(random^char.charCodeAt(0),16777619)>>>0;
+  for(let attempt=0;attempt<4096;attempt++) {
+    random=(Math.imul(random,1664525)+1013904223)>>>0;
+    const h=(hue+((random%13)-6)/360+1)%1;
+    const s=Math.max(0,Math.min(1,saturation+(((random>>>8)%17)-8)/100));
+    const l=Math.max(.06,Math.min(.94,light+(((random>>>16)%25)-12)/100));
+    const a=(delta ? s : 0)*Math.min(l,1-l);
+    const channel=n=>{const k=(n+h*12)%12;return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1))));};
+    const color='#'+[channel(0),channel(8),channel(4)].map(v=>v.toString(16).padStart(2,'0')).join('');
+    if(!used.has(color)) return color;
+  }
+  return anchor;
+}
+function randomColorButton() {
+  return `<button type="button" class="random-color-button" aria-label="${t('inspector.random_color')}" title="${t('inspector.random_color')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7a8 8 0 0 0-14-1L3 9m0-6v6h6M4 17a8 8 0 0 0 14 1l3-3m0 6v-6h-6"/></svg></button>`;
+}
+function bindRandomColorButtons() {
+  document.addEventListener('input', event => {
+    const input=event.target;
+    if(!input.matches('input[type="color"]') || input.dataset.randomizing === 'true') return;
+    if(input.id==='project-color') { input.dataset.manualAnchor=input.value; return; }
+    const key=colorAnchorKey(input);
+    if(!key) return;
+    manualColorAnchors[key]=input.value;
+    try { localStorage.setItem('mygantt-manual-colors',JSON.stringify(manualColorAnchors)); } catch {}
+  }, true);
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.random-color-button');
+    if (!button) return;
+    const input = button.closest('.color-field').querySelector('input[type="color"]');
+    const used = [input.value, ...state.data.projects.flatMap(project => project.tasks.map(task => task.color)),
+      ...state.data.templates.flatMap(template => [template.project_color, ...template.tasks.map(task => task.color)]),
+      ...(state.draft ? [state.draft.project_color, ...state.draft.tasks.map(task => task.color)] : [])];
+    const tagsInput=input.id==='ins-task-color'?$('#ins-task-tags'):input.id==='ins-project-color'?$('#ins-project-tags'):null;
+    const tagAnchor=firstTagColor(tagsInput?.value || '',state.data.tag_colors || {});
+    const anchor=tagAnchor || manualColorAnchors[colorAnchorKey(input)];
+    input.value = /^#[0-9a-f]{6}$/i.test(anchor || '') ? manualColorVariant(anchor,used,crypto.randomUUID()) : newProjectColor(crypto.randomUUID(),used);
+    input.nextElementSibling.textContent = input.value;
+    input.dataset.randomizing='true';
+    try {
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+      input.dispatchEvent(new Event('change', {bubbles:true}));
+    } finally { delete input.dataset.randomizing; }
+  });
+}
+function newProjectColor(seed, excluded = []) {
+  const used = new Set(['#5872d9', ...excluded.map(color => String(color).toLowerCase()), ...state.data.projects.map(project => colorPalette(project.color).base)]);
   for (let attempt = 0; ; attempt++) {
     let hash = 2166136261;
     for (const char of `${seed}:${attempt}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
@@ -1912,6 +2278,7 @@ function newProjectColor(seed) {
 }
 function openInstantiate() { openProjectCreate(true); }
 function openProjectCreate(useTemplate) {
+  if (!useTemplate) return createScheduleItem('project');
   if (useTemplate && !state.data.templates.length) { toast(t("template.create_a_schedule_template_first")); switchView('templates'); return; }
   const options = state.data.templates.map((template) => `<option value="${esc(template.id)}">${esc(template.name)} · ${template.tasks.length}${t("template.tasks")}</option>`).join('');
   const requestId = crypto.randomUUID();
@@ -1919,7 +2286,7 @@ function openProjectCreate(useTemplate) {
   const body = `<div class="form-grid">
     <div class="project-identity-row full">
       <label class="form-field project-color-field"><span class="field-label">${t("common.color")}</span><input id="project-color" type="color" value="${initialColor}" aria-label="${t("project.new_project_color")}"></label>
-      <label class="form-field project-name-field"><span class="field-label">${t("project.project_production_batch_name")}</span><input id="project-name" class="text-input" autocomplete="off" placeholder="${t("project.e_g_markos_main_board_50ea")}" autofocus></label>
+      <label class="form-field project-name-field"><span class="field-label">${t("project.project_production_batch_name")}</span><input id="project-name" class="text-input" autocomplete="off" placeholder="${t("project.name_placeholder")}" autofocus></label>
     </div>
     ${useTemplate ? `<label class="form-field full"><span class="field-label">${t("project.template_to_apply")}</span><select id="project-template" class="select-input">${options}</select></label>` : ''}
     <label class="form-field"><span class="field-label">${t("inspector.start_date")}</span><input id="project-start" type="date" class="text-input" value="${todayInput()}"></label>
@@ -1938,6 +2305,11 @@ function openProjectCreate(useTemplate) {
       button.disabled = true;
       try {
       const project = await api(useTemplate ? '/api/instantiate' : '/api/projects', { method: 'POST', body: JSON.stringify({ request_id: requestId, name: $('#project-name').value.trim(), template_id: $('#project-template')?.value, start_date: $('#project-start').value, calendar_type: $('#project-calendar').value, color: $('#project-color').value }) });
+        const manualAnchor=$('#project-color')?.dataset.manualAnchor;
+        if(manualAnchor) {
+          manualColorAnchors[`project:${project.id}`]=manualAnchor;
+          try { localStorage.setItem('mygantt-manual-colors',JSON.stringify(manualColorAnchors)); } catch {}
+        }
         closeModal(); state.filterProject = project.id; state.selection = { type: 'project', id: project.id }; state.inspectorOpen = 'project'; persistUi(); switchView('timeline'); await loadState(); toast(useTemplate ? t("project.created_tasks", {p0:project.name,p1:project.tasks.length}) : t("project.empty_created"));
       } catch (error) { setModalError(error.message); button.disabled = false; }
     });
@@ -1954,14 +2326,14 @@ function openTaskEditor(projectId, taskId) {
     <label class='form-field full'><span class='field-label'>${t("timeline.task_name")}</span><input id='edit-task-name' class='text-input' value='${esc(task.name)}' required></label>
     <label class='form-field'><span class='field-label'>${t("timeline.planned_start")}</span><input id='edit-task-planned-start' type='date' class='text-input' value='${esc(task.planned_start)}' required></label>
     <label class='form-field'><span class='field-label'>${t("timeline.planned_finish")}</span><input id='edit-task-planned-finish' type='date' class='text-input' value='${esc(task.planned_finish)}' required></label>
-    <label class='form-field'><span class='field-label'>${t("timeline.owner_vendor")}</span><input id='edit-task-owner' class='text-input' value='${esc(task.owner)}' placeholder='${t("project.department_or_vendor")}'></label>
+    <label class='form-field'><span class='field-label'>${t("timeline.owner_vendor")}</span><input id='edit-task-owner' class='text-input' value='${esc(task.owner)}' placeholder='${t("inspector.owner_placeholder")}'></label>
     <label class='form-field'><span class='field-label'>${t("calendar.status")}</span><select id='edit-task-status' class='select-input'>${Object.entries(statusNames).map(([key, name]) => `<option value='${key}' ${task.status === key ? 'selected' : ''}>${name}</option>`).join('')}</select></label>
     <label class='form-field full cascade-inline'><input data-cascade-dependents type='checkbox' ${state.cascadeDependents ? 'checked' : ''}><span>${t("project.move_connected_successors")}</span></label>
     <div class='form-field full schedule-note'><span>↳</span><span>${t("project.shift_all_successor_planned_dates_by")}</span></div>
     <label class='form-field full'><span class='field-label'>${t("inspector.predecessors")} <span style='font-weight:400;color:#a2aab5'> ${t("project.all_selected_predecessors_must_finish_before")}</span></span><div class='dependency-box'>${depMarkup}</div></label>
-    <label class='form-field full'><span class='field-label'>${t("inspector.stopped_waiting_reason")}</span><input id='edit-task-blocker' class='text-input' value='${esc(task.blocker)}' placeholder='${t("inspector.e_g_checking_component_delivery")}'></label>
+    <label class='form-field full'><span class='field-label'>${t("inspector.stopped_waiting_reason")}</span><input id='edit-task-blocker' class='text-input' value='${esc(task.blocker)}' placeholder='${t("inspector.blocker_placeholder")}'></label>
     <div class='form-field full'><span class='field-label'>${t("inspector.actual_dates")}</span><div class='actual-grid'><label><input id='edit-task-actual-start' type='date' class='text-input' value='${esc(task.actual_start)}'><div class='form-help'>${t("inspector.actual_start")}</div></label><label><input id='edit-task-actual-finish' type='date' class='text-input' value='${esc(task.actual_finish)}'><div class='form-help'>${t("project.actual_completion_date")}</div></label></div></div>
-    <label class='form-field full'><span class='field-label'>${t("inspector.notes")}</span><textarea id='edit-task-notes' class='text-area' rows='2' placeholder='${t("inspector.inspection_results_contact_details_etc")}'>${esc(task.notes)}</textarea></label>
+    <label class='form-field full'><span class='field-label'>${t("inspector.notes")}</span><textarea id='edit-task-notes' class='text-area' rows='2' placeholder='${t("inspector.notes_placeholder")}'>${esc(task.notes)}</textarea></label>
   </div></div>`;
   const footer = `<button id='mark-complete' class='button complete-button'>${t("inspector.complete_today")}</button>
         <button class="button danger-button" id="ins-task-delete" type="button">${t("task.delete")}</button><div class='modal-footer-right'><button id='cancel-task' class='button'>${t("timeline.cancel")}</button><button id='save-task' class='button button-primary'>${t("project.save_changes")}</button></div>`;
@@ -2044,6 +2416,14 @@ function bindTaskReordering() {
   }
   function stop() { clearPreview(); $$('.task-order-dragging',chart).forEach(row=>row.classList.remove('task-order-dragging')); dragged = null; }
   chart.addEventListener('dragstart',event=>{
+    const projectLabel = event.target.closest('.project-select[data-collapse]');
+    if (projectLabel && $('#sort-select').value === 'manual') {
+      dragged = {id:projectLabel.dataset.collapse,type:'project'};
+      event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData('text/plain',dragged.id);
+      projectLabel.closest('.project-row').classList.add('task-order-dragging');
+      return;
+    }
     const label = event.target.closest('.task-label[data-task-select]');
     if (!label) {event.preventDefault();return;}
     dragged = {id:label.dataset.taskSelect,projectId:label.dataset.project};
@@ -2061,6 +2441,16 @@ function bindTaskReordering() {
     const rect = row?.getBoundingClientRect();
     const target = label ? {projectId:label.dataset.project,taskId:label.dataset.taskSelect,after:event.clientY > rect.top+rect.height/2} : folderId ? {projectId:folderId} : null;
     const manual = $('#sort-select').value === 'manual';
+    if (dragged.type === 'project') {
+      if (!manual || !folderId || folderId === dragged.id || folderId === '__unassigned__') return;
+      insertion = {anchor_id:folderId,after:event.clientY > rect.top+rect.height/2};
+      event.preventDefault(); event.dataTransfer.dropEffect='move';
+      row.classList.add(insertion.after?'task-insert-after':'task-insert-before');
+      const wrap=$('#gantt-wrap'), bounds=wrap.getBoundingClientRect();
+      if(event.clientY>bounds.bottom-45) wrap.scrollTop+=15;
+      else if(event.clientY<bounds.top+90) wrap.scrollTop-=15;
+      return;
+    }
     insertion = taskDropPlacement(dragged,target,manual);
     if (!insertion) {event.dataTransfer.dropEffect='none';return;}
     event.preventDefault();event.dataTransfer.dropEffect='move';
@@ -2077,9 +2467,14 @@ function bindTaskReordering() {
   chart.addEventListener('drop',async event=>{
     if (!dragged || !insertion) {stop();return;}
     event.preventDefault();
-    const taskId=dragged.id, fields=insertion;
+    const taskId=dragged.id, fields=insertion, isProject=dragged.type === 'project';
     stop();
     const request=taskSaveQueue.catch(()=>{}).then(async()=>{
+      if (isProject) {
+        await api(`/api/projects/${encodeURIComponent(taskId)}/order`,{method:'PATCH',body:JSON.stringify(fields)});
+        await loadState();
+        return;
+      }
       const {project_id, ...position}=fields;
       const project=await api(`/api/tasks/${encodeURIComponent(taskId)}/placement`,{method:'PATCH',body:JSON.stringify({directory_id:project_id ? `project:${project_id}` : 'root',...position})});
       if (state.filterProject) state.filterProject=project.id;
@@ -2217,6 +2612,134 @@ function bindMobileSearch() {
   dialog.addEventListener('close', () => button.focus());
   window.matchMedia('(max-width: 760px)').addEventListener('change', event => { if (!event.matches && dialog.open) dialog.close(); });
 }
+function scrollTimelineToToday() {
+  const wrap = $('#gantt-wrap');
+  if (state.layout !== 'gantt' || wrap.classList.contains('hidden')) return;
+  const offset = dayDiff(timelineCalendarRange().start,dateKey(timelineReferenceTime));
+  // The sticky label column occupies the same width in the content and viewport.
+  wrap.scrollLeft = Math.max(0, offset * state.zoom);
+  bindTimelineCalendarScroll();
+}
+function rowRenameKey(device = navigator) {
+  const platform = device.userAgentData?.platform || device.platform || '';
+  if (/mac/i.test(platform)) return 'Enter';
+  if (/win/i.test(platform)) return 'F2';
+  const agent = device.userAgent || '';
+  if (/Macintosh|Mac OS X/i.test(agent)) return 'Enter';
+  if (/Windows/i.test(agent)) return 'F2';
+  return /Safari/i.test(agent) && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(agent) ? 'Enter' : 'F2';
+}
+let inlineNameEditor = null;
+function startInlineRowRename(selection) {
+  if (inlineNameEditor) return;
+  const project = state.data.projects.find(project => selection.type === 'project' ? project.id === selection.id : project.tasks.some(task => task.id === selection.id));
+  const item = selection.type === 'project' ? project : project?.tasks.find(task => task.id === selection.id);
+  if (!item) return;
+  const selector = selection.type === 'project' ? `.project-select[data-collapse="${CSS.escape(selection.id)}"]` : `.task-label[data-task-select="${CSS.escape(selection.id)}"]`;
+  const button = $(selector, $('#gantt'));
+  if (!button) return;
+  const cell = button.closest('.gantt-left'), input = document.createElement('input');
+  input.type='text';input.className='inline-row-name';input.value=item.name;
+  input.setAttribute('aria-label',t(selection.type === 'project' ? 'project.project_production_batch_name' : 'timeline.task_name'));
+  input.autocomplete='off';
+  button.hidden=true;cell.append(input);inlineNameEditor=input;
+  let saving=false;
+  const save = async () => {
+    if (saving) return;
+    const name=input.value.trim();
+    if (!name) { input.setAttribute('aria-invalid','true');input.focus();return; }
+    saving=true;input.disabled=true;
+    try {
+      if (name !== item.name) {
+        if(selection.type==='project') Object.assign(project,await saveProjectField(selection.id,{name}));
+        else await saveTaskFields(selection.id,{name});
+      }
+      inlineNameEditor=null;renderSidebar();renderTimeline();
+      $(selector,$('#gantt'))?.focus({preventScroll:true});
+    } catch(error) {
+      saving=false;input.disabled=false;input.setAttribute('aria-invalid','true');toast(error.message);input.focus();
+    }
+  };
+  input.addEventListener('keydown',event=>{
+    event.stopPropagation();
+    if((event.key==='Enter'||event.key==='Escape')&&!event.isComposing){event.preventDefault();save();}
+  });
+  input.addEventListener('input',()=>{
+    input.removeAttribute('aria-invalid');
+    const field=selection.type==='project'?$('#ins-project-name'):$('#ins-task-name');
+    if(field) field.value=input.value;
+    const heading=selection.type==='project'?$('#project-context-label'):$('#task-context-label');
+    if(heading){heading.textContent=input.value;heading.title=input.value;}
+  });
+  input.addEventListener('blur',save);
+  input.addEventListener('click',event=>event.stopPropagation());
+  input.addEventListener('pointerdown',event=>event.stopPropagation());
+  input.focus({preventScroll:true});input.select();
+}
+function bindRowClipboard() {
+  const editable = event => event.target.closest('input,textarea,select,[contenteditable],.modal,[role="dialog"]');
+  document.addEventListener('copy', event => {
+    if (editable(event) || state.view !== 'timeline' || !state.selection || !event.clipboardData) return;
+    if (window.getSelection()?.toString()) return;
+    const {type, id} = state.selection;
+    if (!['project','task'].includes(type) || id === '__unassigned__') return;
+    event.clipboardData.setData('text/plain', JSON.stringify({myganttRow:1, kind:type, source_id:id}));
+    event.preventDefault();
+    toast(t("clipboard.copied"));
+  });
+  let pasting = false;
+  document.addEventListener('paste', async event => {
+    if (editable(event) || state.view !== 'timeline' || !event.clipboardData) return;
+    let row;
+    try { row = JSON.parse(event.clipboardData.getData('text/plain')); } catch { return; }
+    if (row?.myganttRow !== 1 || !['project','task'].includes(row.kind) || typeof row.source_id !== 'string') return;
+    event.preventDefault();
+    if (pasting) return;
+    pasting = true;
+    const selection = state.selection ? {...state.selection} : null;
+    try {
+      await Promise.all([taskSaveQueue, ...projectSaveQueues.values()]);
+      const payload = {kind:row.kind, source_id:row.source_id};
+      if (row.kind === 'task' && selection) {
+        const target = state.data.projects.find(p=>selection.type === 'project' ? p.id === selection.id : p.tasks.some(task=>task.id === selection.id));
+        if (target) {
+          payload.project_id = target.id;
+          if (selection.type === 'task') payload.anchor_id = selection.id;
+        }
+      }
+      const result = await api('/api/duplicate', {method:'POST',body:JSON.stringify(payload)});
+      state.selection = result.selection; state.inspectorOpen = result.selection.type;
+      if (state.filterProject) state.filterProject = result.project.id;
+      state.hiddenProjects.delete(result.project.id); state.collapsedProjects.delete(result.project.id);
+      $('#sort-select').value = 'manual';
+      persistUi(); await loadState();
+      toast(t("clipboard.pasted"));
+    } catch(error) { toast(error.message); }
+    finally { pasting = false; }
+  });
+}
+
+function bindRowRenameShortcut() {
+  let selectedRow = null;
+  document.addEventListener('click', event => {
+    const row = event.target.closest('#gantt .task-label, #gantt .project-select');
+    selectedRow = row ? {type:row.dataset.taskSelect ? 'task' : 'project',id:row.dataset.taskSelect || row.dataset.collapse} : null;
+  }, true); // Capture before the chart click handler replaces the selected row DOM.
+  document.addEventListener('keydown', event => {
+    if (event.isComposing || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== rowRenameKey()) return;
+    if (event.target.closest('input,textarea,select,[contenteditable="true"],.modal')) return;
+    if (state.view !== 'timeline' || state.layout !== 'gantt') return;
+    const row = event.target.closest('#gantt .task-label, #gantt .project-select');
+    const selection = row ? {type:row.dataset.taskSelect ? 'task' : 'project',id:row.dataset.taskSelect || row.dataset.collapse} : selectedRow;
+    if (!selection?.id) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    state.selection = selection; state.inspectorOpen = selection.type;
+    persistUi(); renderInspector();
+    setMobileDrawer(null);
+    startInlineRowRename(selection);
+    selectedRow = null;
+  }, true);
+}
 function syncLayoutToggle() {
   const button = $('#mobile-layout-toggle');
   button.dataset.currentLayout = state.layout;
@@ -2226,18 +2749,24 @@ function syncLayoutToggle() {
   $$('[data-layout]').forEach(item => item.classList.toggle('selected', item.dataset.layout === state.layout));
 }
 function mobileLayout() { return window.matchMedia('(max-width: 760px)').matches; }
+function activeMobileInspector() { return state.view === 'templates' ? $('#template-inspector') : $('#mobile-inspector'); }
 let mobileDrawerReturnFocus = null;
 function setMobileDrawer(panel) {
   if (!mobileLayout()) panel = null;
   if (panel) mobileDrawerReturnFocus = document.activeElement;
+  // The template inspector is recreated on selection. Commit its offscreen
+  // position before opening so its first appearance also slides in.
+  if (panel === 'inspector' && !document.body.classList.contains('inspector-open')) {
+    activeMobileInspector()?.getBoundingClientRect();
+  }
   document.body.classList.toggle('menu-open', panel === 'menu');
   document.body.classList.toggle('inspector-open', panel === 'inspector');
   $('#mobile-menu-toggle').setAttribute('aria-expanded', String(panel === 'menu'));
   $('#drawer-backdrop').hidden = !panel;
-  const sidebar = $('.sidebar'), inspector = $('#mobile-inspector');
+  const sidebar = $('.sidebar'), inspector = activeMobileInspector();
   sidebar.inert = mobileLayout() && panel !== 'menu';
-  inspector.inert = mobileLayout() && panel !== 'inspector';
-  if (panel) (panel === 'menu' ? sidebar : inspector).querySelector('[data-close-drawer]').focus();
+  for (const item of $$('#mobile-inspector, #template-inspector')) item.inert = mobileLayout() && (panel !== 'inspector' || item !== inspector);
+  if (panel) (panel === 'menu' ? sidebar : inspector)?.querySelector('[data-close-drawer]')?.focus();
   else if (mobileDrawerReturnFocus?.isConnected) { mobileDrawerReturnFocus.focus(); mobileDrawerReturnFocus = null; }
 }
 function bindMobileMenuSwipe() {
@@ -2282,13 +2811,13 @@ function bindMobileDrawers() {
   bindMobileMenuSwipe();
   $('#mobile-menu-toggle').addEventListener('click', () => setMobileDrawer(document.body.classList.contains('menu-open') ? null : 'menu'));
   $('#drawer-backdrop').addEventListener('click', () => setMobileDrawer(null));
-  $$('[data-close-drawer]').forEach(button => button.addEventListener('click', () => setMobileDrawer(null)));
+  document.addEventListener('click', event => { if (event.target.closest('[data-close-drawer]')) setMobileDrawer(null); });
   $('.sidebar').addEventListener('click', event => {
     if (event.target.closest('.nav-item, .side-project, .template-card')) setMobileDrawer(null);
   });
   document.addEventListener('keydown', event => {
     if (!mobileLayout()) return;
-    const panel = document.body.classList.contains('menu-open') ? $('.sidebar') : document.body.classList.contains('inspector-open') ? $('#mobile-inspector') : null;
+    const panel = document.body.classList.contains('menu-open') ? $('.sidebar') : document.body.classList.contains('inspector-open') ? activeMobileInspector() : null;
     if (!panel) return;
     if (event.key === 'Escape') { event.preventDefault(); setMobileDrawer(null); }
     if (event.key === 'Tab') {
@@ -2298,7 +2827,7 @@ function bindMobileDrawers() {
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   });
-  window.matchMedia('(max-width: 760px)').addEventListener('change', () => { setMobileDrawer(null); renderTimeline(); });
+  window.matchMedia('(max-width: 760px)').addEventListener('change', () => { setMobileDrawer(null); renderTimeline(); if (state.draft) renderTemplateEditor(); });
   setMobileDrawer(null);
 }
 
@@ -2320,6 +2849,10 @@ function bindChartAutoRefresh() {
   });
 }
 function attachEvents() {
+  bindGroupSuggestions();
+  bindRandomColorButtons();
+  bindRowRenameShortcut();
+  bindRowClipboard();
   $('#holiday-country-select').addEventListener('change', async event => {
     const select = event.target;
     const previous = state.data.holiday_country || 'KR';
@@ -2354,6 +2887,7 @@ function attachEvents() {
   $('#new-project').addEventListener('click', openInstantiate);
   $('#new-project-side').addEventListener('click', openInstantiate);
   $('#create-template').addEventListener('click', createTemplate);
+  $('#import-project-template').addEventListener('click', openProjectTemplateImport);
   $('#export-calendar').addEventListener('click', () => { window.location.href = '/api/export/calendar.ics'; });
   $('#search-filter').addEventListener('input', renderTimeline);
   $('#status-filter').addEventListener('change', renderTimeline);
@@ -2362,14 +2896,20 @@ function attachEvents() {
     state.layout = button.dataset.layout;
     syncLayoutToggle();
     renderTimeline();
+    scrollTimelineToToday();
   }));
   $('#mobile-layout-toggle').addEventListener('click', () => {
     state.layout = state.layout === 'gantt' ? 'list' : 'gantt';
     syncLayoutToggle();
     renderTimeline();
+    scrollTimelineToToday();
   });
   syncLayoutToggle();
   const zoomSlider = $('#zoom-slider');
+  zoomSlider.value = state.zoom;
+  const initialZoomLabel = `${Math.round(state.zoom / 46 * 100)}%`;
+  $('#zoom-value').textContent = initialZoomLabel;
+  zoomSlider.setAttribute('aria-valuetext', initialZoomLabel);
   let zoomFrame = null;
   zoomSlider.addEventListener('input', () => {
     const value = Math.max(24, Math.min(62, Number(zoomSlider.value)));
@@ -2384,18 +2924,13 @@ function attachEvents() {
       const halfVisible = Math.max(0, wrap.clientWidth - ($('.gantt-head-left', $('#gantt'))?.getBoundingClientRect().width || 254)) / 2;
       const centerDay = (oldLeft + halfVisible) / state.zoom;
       state.zoom = value;
+      persistUi();
       renderTimeline({ preserveInspector: true });
       wrap.scrollLeft = oldLeft === 0 ? 0 : centerDay * value - halfVisible;
       wrap.scrollTop = oldTop;
     });
   });
-  $('#today-button').addEventListener('click', () => {
-    const wrap = $('#gantt-wrap');
-    if (state.layout === 'gantt' && !wrap.classList.contains('hidden')) {
-      const line = $('.today-line', $('#gantt'));
-      if (line) wrap.scrollLeft = Math.max(0, (mobileLayout() ? 132 : 254) + Number(line.style.left.replace('px', '')) - wrap.clientWidth / 2);
-    }
-  });
+  $('#today-button').addEventListener('click', scrollTimelineToToday);
   $('#gantt').addEventListener('pointerdown', (event) => {
     const handle = event.target.closest('.resize-handle');
     const bar = handle?.closest('.task-bar, .actual-task-bar') || event.target.closest('.task-bar, .actual-task-bar');
@@ -2496,7 +3031,12 @@ function attachEvents() {
     const collapse = event.target.closest('[data-collapse]');
     if (collapse) {
       const projectId = collapse.dataset.collapse;
+      state.selection = { type: 'project', id: projectId };
+      state.inspectorOpen = 'project';
+      persistUi();
+      renderInspector();
       projectMotion.toggle(projectId);
+      if (mobileLayout()) setMobileDrawer('inspector');
       return;
     }
     if (event.target.closest('.resize-handle')) { event.preventDefault(); return; }

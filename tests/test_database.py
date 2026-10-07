@@ -16,6 +16,22 @@ class DatabaseTests(unittest.TestCase):
   def tearDown(self):
     self.temp.cleanup()
 
+  def test_group_names_share_canonical_spelling_across_projects_and_tasks(self):
+    with self.db.connection() as db:
+      project = db.execute("SELECT id FROM projects LIMIT 1").fetchone()[0]
+      db.execute("UPDATE projects SET group_name='Team A' WHERE id=?", (project,))
+      self.assertEqual(self.db._canonical_group(db, '  ＴＥＡＭ   a '), 'Team A')
+      self.assertEqual(self.db._canonical_group(db, ' New  Group '), 'New Group')
+      self.assertEqual(self.db._canonical_group(db, '   '), '')
+
+  def test_owner_names_share_canonical_spelling(self):
+    with self.db.connection() as db:
+      task = db.execute("SELECT id FROM project_tasks LIMIT 1").fetchone()[0]
+      db.execute("UPDATE project_tasks SET owner='Team A' WHERE id=?", (task,))
+      self.assertEqual(self.db._canonical_owner(db, ' ＴＥＡＭ   a '), 'Team A')
+      self.assertEqual(self.db._canonical_owner(db, '  New  Team '), 'New Team')
+      self.assertEqual(self.db._canonical_owner(db, '  '), '')
+
   def custom_template(self):
     return {
       "name": "서비스 릴리스 검증",

@@ -19,7 +19,7 @@ test('body and endpoint drags save relative days; cancellation keeps original',(
     const handlers={}; const task={key:'a',name:'A',start_day:3,duration_value:4,duration_unit:'days',dependencies:[]};
     const chart={addEventListener:(type,fn)=>handlers[type]=fn};
     const bar={dataset:{templateSelect:'a'},style:{},setPointerCapture(){}};
-    const c={state:{draft:{tasks:[task]}},$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''},renderTemplateEditor(){},renderTemplateGantt(){},renderTemplateConnections(){},queueTemplateSave(){saves++;},syncDraftFromEditor(){},toast(){}};
+    const c={state:{draft:{tasks:[task]}},$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''},renderTemplateEditor(){},renderTemplateGantt(){},renderTemplateConnections(){},queueTemplateSave(){saves++;},syncDraftFromEditor(){},toast(){}};
     withI18n(vm.createContext(c));vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function attachTemplateDrag(', 'function renderTemplateEditor('),c);
     c.attachTemplateDrag();
     const event={button:0,isPrimary:true,pointerId:1,clientX:100,preventDefault(){},target:{closest:s=>s==='.template-bar'?bar:edge?{dataset:{templateEdge:edge}}:null}};
@@ -82,7 +82,7 @@ test('invalid negative successor position rejects entire edit atomically',()=>{
 
 test('template inspector shares schedule date grid and disables execution-only fields',()=>{
   const c={esc:value=>String(value??''),taskColors:['#5872d9'],paletteStyle:()=>''};withI18n(vm.createContext(c));
-  vm.runInContext(block('function taskDateGrid(', 'function renderInspector(')+block('function templateTaskRow(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
+  vm.runInContext(block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateTaskRow(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
   const task={key:'a',name:'Template task',duration_value:2,duration_unit:'days',dependencies:[],handoff:'Keep this note'};
   const html=c.templateTaskProperties(task,0,[task]);
   assert.match(html,/class="task-date-grid"/);
@@ -96,8 +96,8 @@ test('template inspector shares schedule date grid and disables execution-only f
 });
 
 test('template scroll range starts at 45 days and grows by 15 only at the right edge',()=>{
- const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:''};
- const c={fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{addEventListener(){},textContent:''}};
+ const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:'',style:{setProperty(){}},classList:{toggle(){}}};
+ const c={mobileLayout:()=>false,fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''}};
  Object.defineProperty(chart,'scrollWidth',{get:()=>254+c.state.templateVisibleDays*46});
  withI18n(vm.createContext(c));vm.runInContext(block('function renderTemplateGantt(', 'function renderTemplateConnections('),c);
  c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);

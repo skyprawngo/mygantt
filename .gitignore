@@ -15,3 +15,6 @@ logs/
 .venv/
 venv/
 library-reference/
+# Private development synchronization state
+/devtools/db-sync/*.json
+/devtools/db-sync/sync-backups/

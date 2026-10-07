@@ -157,6 +157,9 @@ def make_handler(database: Database):
       try:
         payload = self._body()
         parts = path.strip("/").split("/")
+        if path == "/api/duplicate":
+          self._json(database.duplicate_row(payload), 201)
+          return
         if path == "/api/projects":
           self._json(database.create_project(payload), 201)
           return
@@ -221,6 +224,9 @@ def make_handler(database: Database):
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        if path == "/api/settings/tag-color":
+          self._json(database.set_tag_color(payload["tag"], payload.get("color", "")))
+          return
         if path == "/api/settings/holiday-calendar":
           self._json(database.set_holiday_country(payload["holiday_country"]))
           return
@@ -229,6 +235,12 @@ def make_handler(database: Database):
             raise ScheduleError("이동할 프로젝트를 지정하세요.")
           project = database.place_task(path.split("/")[-2], payload["directory_id"], payload.get("anchor_id"), payload.get("after", False))
           self._json(project if project else {"error": "작업을 찾을 수 없습니다."}, 200 if project else 404)
+          return
+        if path.startswith("/api/projects/") and path.endswith("/order"):
+          if set(payload) != {"anchor_id", "after"}:
+            raise ScheduleError("삽입할 프로젝트와 방향을 지정하세요.")
+          project = database.reorder_project(urllib.parse.unquote(path.split("/")[-2]), payload["anchor_id"], payload["after"])
+          self._json(project if project else {"error": "프로젝트를 찾을 수 없습니다."}, 200 if project else 404)
           return
         if path.startswith("/api/tasks/") and path.endswith("/order"):
           if set(payload) != {"anchor_id", "after"}:

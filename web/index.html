@@ -55,7 +55,7 @@
         <div class="breadcrumbs"><span><span data-i18n="navigation.production_management">생산 관리</span></span><b>›</b><strong id="breadcrumb-title"><span data-i18n="navigation.all_schedules">전체 일정</span></strong><span class="info-tip page-info"><button type="button" class="info-tip-button" aria-label="화면 설명" aria-describedby="page-description" data-i18n-attrs="aria-label:navigation.page_help">i</button><span id="page-description" class="info-tip-text" role="tooltip"><span data-i18n="navigation.view_each_project_s_daily_schedule">프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.</span></span></span></div>
         <div class="topbar-actions">
           <span class="saved-indicator" id="storage-indicator"><i></i> <span id="storage-indicator-name"><span data-i18n="navigation.checking_storage_location">저장 위치 확인 중</span></span></span>
-          <button id="export-calendar" class="button button-quiet"><span>↗</span> <span data-i18n="navigation.export_ics">.ics 내보내기</span></button>
+          <button id="import-project-template" type="button" class="button button-primary hidden" data-i18n="template.import_project">일정에서 템플릿 만들기</button>
           <button id="new-project" class="button button-primary"><span>＋</span> <span data-i18n="navigation.add_batch">배치 추가</span></button>
         </div>
       </header>
@@ -79,7 +79,7 @@
                 </div>
               </div>
               <div class="schedule-legend"><span><i class="legend-swatch saturday-swatch"></i><span data-i18n="timeline.saturday">토요일</span></span><span><i class="legend-swatch sunday-swatch"></i><span data-i18n="timeline.sunday">일요일</span></span><span><i class="legend-swatch holiday-swatch"></i><span data-i18n="timeline.public_holiday">공휴일</span></span><span class="dependency-legend-label" title="선행 작업 완료 → 후행 작업 시작" data-i18n-attrs="title:timeline.predecessor_finishes_successor_starts"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg><span data-i18n="timeline.predecessor_successor_legend">선⋅후행 작업</span></span><span id="range-label" class="legend-date-range"><span data-i18n="timeline.loading">불러오는 중</span></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="일정 기준 도움말" aria-describedby="schedule-rules-tooltip" data-i18n-attrs="aria-label:timeline.calendar_help">i</button><span id="schedule-rules-tooltip" class="info-tip-text" role="tooltip"><b><span data-i18n="inspector.calendar">일정 기준</span></b><br><span data-i18n="timeline.new_projects_using_a_5_day">새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></span></div>
-              <div id="gantt-wrap" class="gantt-wrap"><div id="gantt" class="gantt"></div></div>
+              <div id="gantt-wrap" class="gantt-wrap" tabindex="0"><div id="gantt" class="gantt"></div></div>
               <div id="list-wrap" class="list-wrap hidden"></div>
               <div id="empty-state" class="empty-state hidden"><div class="empty-icon">▤</div><strong><span data-i18n="timeline.no_matching_schedules">조건에 맞는 일정이 없습니다</span></strong><span><span data-i18n="timeline.try_a_different_search_or_status">검색어나 상태 필터를 바꿔보세요.</span></span></div>
             </div>
@@ -110,6 +110,10 @@
             <h2 id="general-title" data-i18n="settings.general">일반</h2>
             <dl class="settings-details"><div><dt><label for="language-select" data-i18n="settings.language">언어</label></dt><dd><select id="language-select" class="select-input"><option value="KR" data-i18n="language.KR">한국어 (KR)</option><option value="US" data-i18n="language.US">English (US)</option><option value="JP" data-i18n="language.JP">日本語 (JP)</option></select></dd></div></dl>
             <p class="settings-note" data-i18n="settings.languageHelp">이 기기의 UI 언어를 선택합니다. 작업명과 메모 등 사용자 입력은 변경하지 않습니다.</p>
+          </section>
+          <section class="settings-card" aria-labelledby="export-title">
+            <h2 id="export-title" data-i18n="settings.export_schedule">일정 내보내기</h2>
+            <button id="export-calendar" type="button" class="button button-quiet"><span aria-hidden="true">↗</span> <span data-i18n="navigation.export_ics">.ics 내보내기</span></button>
           </section>
           <section class="settings-card" aria-labelledby="app-info-title">
             <h2 id="app-info-title"><span data-i18n="settings.app_info">앱 정보</span></h2>

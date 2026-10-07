@@ -7,7 +7,7 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../web/app.
 function harness(api) {
   const state = {view:'timeline',data:{projects:[{id:'p',name:'new project name',tasks:[],progress:0}]}};
   const renders=[];
-  const context={state,api,renderSidebar(){},renderTimeline(options){renders.push(options);}};
+  const context={state,api,$:()=>({value:'manual'}),renderSidebar(){},renderTimeline(options){renders.push(options);}};
   withI18n(vm.createContext(context));
   vm.runInContext(source.slice(source.indexOf('let taskSaveQueue ='),source.indexOf('function bindTaskAutoSave(')),context);
   return {...context,renders};
@@ -47,4 +47,15 @@ test('Backspace clears the whole date; only optional actual dates save empty',as
   assert.equal(input.value,'');assert.equal(prevented,true);assert.equal(patches.length,required?0:1);
   if(!required)assert.equal(patches[0].actual_start,'');
  }
+});
+test('numeric task order resolves insertion against full project order in the save queue',async()=>{
+ const calls=[];
+ const h=harness(async(path,options)=>{calls.push({path,...JSON.parse(options.body)});return {id:'p',tasks:[{id:'c',sort_order:1},{id:'a',sort_order:2},{id:'b',sort_order:3}],progress:0};});
+ h.state.data.projects[0].tasks=[{id:'a',sort_order:1},{id:'b',sort_order:2},{id:'c',sort_order:3}];
+ await h.saveTaskFields('c',{sort_order:1});
+ assert.deepEqual(calls[0],{path:'/api/tasks/c/order',anchor_id:'a',after:false});
+ await h.saveTaskFields('c',{sort_order:3});
+ assert.deepEqual(calls[1],{path:'/api/tasks/c/order',anchor_id:'b',after:true});
+ await assert.rejects(h.saveTaskFields('c',{sort_order:0}));
+ assert.equal(calls.length,2);
 });

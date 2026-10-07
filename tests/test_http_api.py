@@ -48,6 +48,22 @@ class HttpApiTests(unittest.TestCase):
       content_type = response.headers.get("Content-Type", "")
       return raw.decode("utf-8") if "text/calendar" in content_type else json.loads(raw)
 
+  def test_project_order_endpoint(self):
+    from urllib.error import HTTPError
+    projects = self.call('/api/state')['projects']
+    first, last = projects[0]['id'], projects[-1]['id']
+    self.call(f'/api/projects/{last}/order', 'PATCH', {'anchor_id':first, 'after':False})
+    result = self.call('/api/state')['projects']
+    self.assertEqual(result[0]['id'], last)
+    self.assertEqual([p['sort_order'] for p in result], list(range(1,len(result)+1)))
+    for body in ({'anchor_id':first}, {'anchor_id':first,'after':1}):
+      with self.assertRaises(HTTPError) as error:
+        self.call(f'/api/projects/{last}/order', 'PATCH', body)
+      self.assertEqual(error.exception.code, 400)
+    with self.assertRaises(HTTPError) as error:
+      self.call('/api/projects/missing/order', 'PATCH', {'anchor_id':first,'after':False})
+    self.assertEqual(error.exception.code, 404)
+
   def test_country_calendar_settings_and_holiday_query(self):
     from urllib.error import HTTPError
     options = self.call('/api/holiday-calendars')

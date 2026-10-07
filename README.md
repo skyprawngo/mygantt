@@ -71,3 +71,7 @@ cp data/mygantt.sqlite3 data/mygantt-backup.sqlite3
 Public holiday lookups use an external API; project and task data are not included in those requests. In Settings, choose South Korea, Japan, the United States, Canada, the United Kingdom, Germany, France, or Australia. The selection applies to all devices using the same server. Only national public holidays are included; state and regional holidays are excluded. New projects using the five-day calendar skip weekends and holidays for the selected country, while the seven-day calendar counts every date. Changing the country does not alter existing task dates.
 
 The default address is accessible only from the computer running the server. For a server accessible from phones and other devices, see the [Ubuntu deployment guide](deploy/ubuntu/README.md).
+
+### Development DB sync (disabled by default)
+
+Optional paired local/server synchronization is separate from normal web-server startup. Both peers require explicit private configuration and SSH authentication. No personal connection settings are included. See [development synchronization](devtools/db-sync/README.md) for setup and disabling instructions.

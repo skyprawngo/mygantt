@@ -1,4 +1,12 @@
 [
+{"textID": "tags.add_hint", "KR": "태그 입력 후 쉼표 또는 Enter", "US": "Type a tag, then comma or Enter", "JP": "タグを入力し、カンマまたはEnter"},
+{"textID": "tags.remove", "KR": "태그 제거", "US": "Remove tag", "JP": "タグを削除"},
+{"textID": "tags.color", "KR": "태그 색상", "US": "Tag color", "JP": "タグの色"},
+{"textID": "tags.color_help", "KR": "색상이 지정된 첫 태그가 랜덤 색상의 기준입니다.", "US": "The first colored tag determines the random color family.", "JP": "色が設定された最初のタグをランダム色の基準にします。"},
+  {"textID":"clipboard.copied","KR":"행을 복사했습니다.","US":"Row copied.","JP":"行をコピーしました。"},
+  {"textID":"clipboard.pasted","KR":"행을 붙여넣었습니다.","US":"Row pasted.","JP":"行を貼り付けました。"},
+  {"textID":"inspector.valid_project_order","KR":"프로젝트 개수 이내의 양의 정수를 입력하세요.","US":"Enter a positive integer within the project count.","JP":"プロジェクト数以内の正の整数を入力してください。"},
+  {"textID":"directory.drag_project","KR":"드래그하여 프로젝트 순서 변경 (기본 정렬)","US":"Drag to reorder projects (manual order)","JP":"ドラッグしてプロジェクトの順序を変更（手動順）"},
   {
     "textID": "status.planned",
     "KR": "예정",
@@ -570,10 +578,10 @@
     "JP": "グループ"
   },
   {
-    "textID": "inspector.e_g_markos_q4_2026",
-    "KR": "예: MARKOS · 2026 4분기",
-    "US": "e.g. MARKOS · Q4 2026",
-    "JP": "例：MARKOS · 2026年第4四半期"
+    "textID": "inspector.group_placeholder",
+    "KR": "그룹 이름 입력",
+    "US": "Enter a group name",
+    "JP": "グループ名を入力"
   },
   {
     "textID": "inspector.tags",
@@ -588,10 +596,10 @@
     "JP": "カンマ区切り"
   },
   {
-    "textID": "inspector.e_g_main_board_urgent",
-    "KR": "예: MAIN보드, 긴급",
-    "US": "e.g. MAIN board, urgent",
-    "JP": "例：MAINボード, 緊急"
+    "textID": "inspector.tags_placeholder",
+    "KR": "예: 중요, 검토 필요",
+    "US": "e.g. Important, needs review",
+    "JP": "例：重要、要確認"
   },
   {
     "textID": "inspector.5_day_week_excludes_weekends_and",
@@ -672,22 +680,10 @@
     "JP": "実績終了日"
   },
   {
-    "textID": "inspector.e_g_outsourced_work",
-    "KR": "예: 외주 작업",
-    "US": "e.g. Outsourced work",
-    "JP": "例：外注作業"
-  },
-  {
-    "textID": "inspector.e_g_inspection_waiting",
-    "KR": "예: 검사, 대기",
-    "US": "e.g. Inspection, waiting",
-    "JP": "例：検査, 待機"
-  },
-  {
-    "textID": "inspector.department_or_vendor",
-    "KR": "부서 또는 업체",
-    "US": "Department or vendor",
-    "JP": "部署または会社"
+    "textID": "inspector.owner_placeholder",
+    "KR": "담당자 또는 팀 이름",
+    "US": "Person or team name",
+    "JP": "担当者またはチーム名"
   },
   {
     "textID": "inspector.task_progress",
@@ -702,10 +698,10 @@
     "JP": "中止 / 待機理由"
   },
   {
-    "textID": "inspector.e_g_checking_component_delivery",
-    "KR": "예: 부품 납기 확인 중",
-    "US": "e.g. Checking component delivery",
-    "JP": "例：部品の納期を確認中"
+    "textID": "inspector.blocker_placeholder",
+    "KR": "중지 또는 대기 사유 입력",
+    "US": "Enter a reason for pausing or waiting",
+    "JP": "中止または待機の理由を入力"
   },
   {
     "textID": "inspector.task_connections",
@@ -756,10 +752,10 @@
     "JP": "メモ"
   },
   {
-    "textID": "inspector.inspection_results_contact_details_etc",
-    "KR": "검사 결과, 연락 사항 등",
-    "US": "Inspection results, contact details, etc.",
-    "JP": "検査結果、連絡事項など"
+    "textID": "inspector.notes_placeholder",
+    "KR": "추가 내용이나 참고 사항 입력",
+    "US": "Enter additional details or notes",
+    "JP": "補足や参考事項を入力"
   },
   {
     "textID": "inspector.changes_are_saved_when_you_leave",
@@ -1254,10 +1250,10 @@
     "JP": "プロジェクト / 生産バッチ名"
   },
   {
-    "textID": "project.e_g_markos_main_board_50ea",
-    "KR": "예: MARKOS MAIN보드 50EA",
-    "US": "e.g. MARKOS MAIN board 50EA",
-    "JP": "例：MARKOS MAINボード 50EA"
+    "textID": "project.name_placeholder",
+    "KR": "프로젝트 이름 입력",
+    "US": "Enter a project name",
+    "JP": "プロジェクト名を入力"
   },
   {
     "textID": "project.template_to_apply",
@@ -1330,12 +1326,6 @@
     "KR": "다른 작업을 추가하면 연결할 수 있습니다.",
     "US": "Add another task to create a connection.",
     "JP": "他の作業を追加すると接続できます。"
-  },
-  {
-    "textID": "project.department_or_vendor",
-    "KR": "담당 부서 또는 업체",
-    "US": "Department or vendor",
-    "JP": "担当部署または会社"
   },
   {
     "textID": "project.move_connected_successors",
@@ -2578,5 +2568,41 @@
     "KR": "템플릿으로 프로젝트 추가 시 사용할 기본값입니다. 실제 일정 기준은 프로젝트 추가 창에서 변경할 수 있으며, 템플릿의 D+ 작업 배치는 바뀌지 않습니다.",
     "US": "Sets the default in the project creation dialog. You can change the calendar there; the template’s D+ task positions stay unchanged.",
     "JP": "テンプレートからプロジェクトを作成する際の既定値です。作成画面で変更でき、テンプレートのD+作業配置は変わりません。"
+  },
+  {
+    "textID": "settings.export_schedule",
+    "KR": "일정 내보내기",
+    "US": "Export schedules",
+    "JP": "スケジュールのエクスポート"
+  },
+  {
+    "textID": "template.import_project",
+    "KR": "일정에서 템플릿 만들기",
+    "US": "Create template from schedule",
+    "JP": "スケジュールからテンプレートを作成"
+  },
+  {
+    "textID": "template.import_description",
+    "KR": "예정 작업일을 기준으로 첫 작업을 D+0에 맞춥니다. 날짜 간격을 유지하도록 주 7일 기준으로 저장하며, 실제 작업일·진행 상태는 복사하지 않습니다. 원본 일정은 유지됩니다.",
+    "US": "Planned dates are converted relative to the first task (D+0), using calendar days to preserve gaps. Actual dates and progress are not copied. The source schedule stays unchanged.",
+    "JP": "予定日を基準に最初の作業をD+0とし、日付の間隔を維持するため週7日で保存します。実績日・進捗はコピーせず、元の予定は保持します。"
+  },
+  {
+    "textID": "template.import_empty",
+    "KR": "작업이 있는 프로젝트가 필요합니다.",
+    "US": "A project with tasks is required.",
+    "JP": "作業のあるプロジェクトが必要です。"
+  },
+  {
+    "textID": "template.import_dates_invalid",
+    "KR": "모든 작업의 예정 시작일과 종료일을 확인해 주세요.",
+    "US": "Check the planned start and finish dates of all tasks.",
+    "JP": "すべての作業の予定開始日と終了日を確認してください。"
+  },
+  {
+    "textID": "inspector.random_color",
+    "KR": "랜덤 색상 적용",
+    "US": "Apply random color",
+    "JP": "ランダムな色を適用"
   }
 ]

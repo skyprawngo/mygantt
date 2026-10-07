@@ -6,11 +6,11 @@ class Input extends EventTarget {
  checkValidity(){return true} setAttribute(k,v){this.attrs[k]=v} removeAttribute(k){delete this.attrs[k]} blur(){this.dispatchEvent(new Event('blur'))}
 }
 (async()=>{
- const name=new Input('ins-project-name','A'),group=new Input('ins-project-group','');
- const inputs=[name,group],status={textContent:'',style:{setProperty(){}},classList:{toggle(){}}},form=new EventTarget();form.isConnected=true;
+ const name=new Input('ins-project-name','A'),group=new Input('ins-project-group',''),order=new Input('ins-project-order','2');
+ const inputs=[name,group,order],status={textContent:'',style:{setProperty(){}},classList:{toggle(){}}},form=new EventTarget();form.isConnected=true;
  const project={id:'p',name:'A',group_name:'',tasks:[{id:'t'}]};
  const calls=[];const controls=[];
- const ctx=withI18n(vm.createContext({Map,Promise,encodeURIComponent,state:{data:{projects:[project]},view:'timeline'},$:()=>status,$$:()=>inputs,renderSidebar(){},renderTimeline(options){assert.equal(options.preserveInspector,true)},toast(){},api(path,options){calls.push(JSON.parse(options.body));return new Promise((resolve,reject)=>controls.push({resolve,reject}))}}));
+ const ctx=withI18n(vm.createContext({Map,Promise,encodeURIComponent,state:{data:{projects:[project]},view:'timeline'},$:()=>status,$$:()=>inputs,renderSidebar(){},renderTimeline(options){assert.equal(options.preserveInspector,true)},toast(){},api(path,options){if(path==='/api/state') return Promise.resolve({projects:[{...project,sort_order:1}]});calls.push(JSON.parse(options.body));return new Promise((resolve,reject)=>controls.push({resolve,reject}))}}));
  vm.runInContext(source.slice(source.indexOf('const projectSaveQueues'),source.indexOf('function bindInspector(')),ctx);
  vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc(')),ctx);
  ctx.bindProjectAutoSave(form,project);
@@ -23,5 +23,6 @@ class Input extends EventTarget {
  group.blur();await tick();assert.equal(calls.length,3);assert.deepEqual(calls[2],{group_name:'still typing'});
  controls[2].resolve({...project,group_name:'still typing'});await tick();assert.equal(status.textContent,'자동 저장됨');assert.equal(project.tasks[0].id,'t');
  name.value=' ';name.blur();await tick();assert.equal(calls.length,3);assert.match(status.textContent,/이름/);
+ order.value='1';order.blur();await tick();assert.deepEqual(calls[3],{sort_order:1});controls[3].resolve({...project,sort_order:1});await tick();assert.equal(project.sort_order,1);
  console.log('PASS: unchanged blur, per-field patches, ordered saves, retained draft, failure/retry, invalid name, preserved task data.');
 })().catch(e=>{console.error(e);process.exit(1)});

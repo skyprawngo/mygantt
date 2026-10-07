@@ -1,0 +1,13 @@
+const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+const source=fs.readFileSync('web/app.js','utf8');
+function context(){const c={state:{},timelineReferenceTime:new Date(2026,9,7)};vm.createContext(c);for(const [a,b] of [['function dateFrom(','function fmtDate('],['function calendarMonthOffset(','function bindTimelineCalendarScroll(']])vm.runInContext(source.slice(source.indexOf(a),source.indexOf(b)),c);return c;}
+test('empty calendar starts two months before today and ends three months after',()=>{const c=context();assert.equal(c.timelineCalendarRange().start,'2026-08-07');assert.equal(c.timelineCalendarRange().end,'2027-01-07');c.state.calendarRange.start='2026-07-07';assert.equal(c.timelineCalendarRange().start,'2026-07-07');});
+test('month offsets clamp month ends and cross year/leap boundaries',()=>{const c=context();assert.equal(c.calendarMonthOffset('2026-03-31',-1),'2026-02-28');assert.equal(c.calendarMonthOffset('2024-03-31',-1),'2024-02-29');assert.equal(c.calendarMonthOffset('2026-12-15',1),'2027-01-15');});
+test('left extension preserves visible date and ignores vertical scroll; right extends once',()=>{const c=context();const wrap={scrollLeft:200,scrollTop:80,clientWidth:500,scrollWidth:10000};let renders=0,holidays=0;c.$=()=>wrap;c.state.zoom=46;c.state.layout='gantt';c.extendTimelineCalendar=()=>renders++;c.refreshCalendarHolidays=()=>holidays++;vm.runInContext(source.slice(source.indexOf('function bindTimelineCalendarScroll('),source.indexOf('let calendarHolidayRequest')),c);c.timelineCalendarRange();c.bindTimelineCalendarScroll();wrap.scrollLeft=100;wrap.onscroll();assert.equal(c.state.calendarRange.start,'2026-07-07');assert.equal(wrap.scrollLeft,100+31*46);assert.equal(wrap.scrollTop,80);wrap.onscroll();assert.equal(renders,1);wrap.scrollLeft=9400;wrap.onscroll();assert.equal(c.state.calendarRange.end,'2027-02-07');assert.equal(renders,2);assert.equal(holidays,2);});
+
+test('today aligns with the frozen column boundary at any zoom, and leaves list scrolling alone',()=>{
+ const c=context(),wrap={scrollLeft:0,scrollTop:90,classList:{contains:()=>false}};c.$=()=>wrap;c.bindTimelineCalendarScroll=()=>{};
+ vm.runInContext(source.slice(source.indexOf('function scrollTimelineToToday('),source.indexOf('function syncLayoutToggle(')),c);
+ c.state.layout='gantt';for(const zoom of [24,46,62]){c.state.zoom=zoom;c.scrollTimelineToToday();assert.equal(wrap.scrollLeft,61*zoom);assert.equal(wrap.scrollTop,90);}
+ c.state.layout='list';wrap.scrollLeft=123;c.scrollTimelineToToday();assert.equal(wrap.scrollLeft,123);
+});

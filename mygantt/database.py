@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import unicodedata
 import sqlite3
 import threading
 import uuid
@@ -151,6 +152,7 @@ class Database:
       """)
       self._migrate(db)
       migrate(db, now_iso())
+      self._migrate_project_order(db)
       # Retain existing Korean cache rows while introducing country/year keys.
       if "country" not in {row[1] for row in db.execute("PRAGMA table_info(holiday_cache)")}:
         db.execute("ALTER TABLE holiday_cache RENAME TO holiday_cache_legacy")
@@ -170,6 +172,7 @@ class Database:
         if count == 0 and not db.execute("SELECT 1 FROM projects LIMIT 1").fetchone():
           self._seed(db)
         db.execute("INSERT INTO schema_migrations(migration_key,applied_at) VALUES ('sample-initialized',?)", (now_iso(),))
+      self._normalize_project_order(db)
       for row in db.execute("SELECT id FROM projects").fetchall():
         self._normalize_task_order(db, row[0])
 
@@ -208,7 +211,7 @@ class Database:
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
         task.get("id") or new_id(), template_id, task["key"], task["name"], int(task["duration_value"]),
         task["duration_unit"], json.dumps(task.get("dependencies", []), ensure_ascii=False),
-        task.get("owner", ""), task.get("handoff", ""), self._validate_color(task.get("color")) or TASK_COLORS[index % len(TASK_COLORS)], int(task.get("sort_order", index)), task.get("start_day"),
+        self._canonical_owner(db, task.get("owner", "")), task.get("handoff", ""), self._validate_color(task.get("color")) or TASK_COLORS[index % len(TASK_COLORS)], int(task.get("sort_order", index)), task.get("start_day"),
       ))
 
   def _insert_project_tasks(self, db: sqlite3.Connection, project_id: str, tasks: list[dict[str, Any]]) -> None:
@@ -217,7 +220,7 @@ class Database:
       names = ["id", "project_id", "template_task_key", "name", "dependencies", "owner", "handoff", "blocker", "status", "planned_start", "planned_finish", "actual_start", "actual_finish", "notes", "color", "group_name", "tags", "sort_order"]
       values = [
         task.get("id") or new_id(), project_id, task.get("template_task_key", task.get("key", "")), task["name"],
-        json.dumps(task.get("dependencies", []), ensure_ascii=False), task.get("owner", ""), task.get("handoff", ""), task.get("blocker", ""), task.get("status", "todo"),
+        json.dumps(task.get("dependencies", []), ensure_ascii=False), self._canonical_owner(db, task.get("owner", "")), task.get("handoff", ""), task.get("blocker", ""), task.get("status", "todo"),
         task.get("planned_start", ""), task.get("planned_finish", ""), task.get("actual_start", ""), task.get("actual_finish", ""), task.get("notes", ""),
         task.get("color", TASK_COLORS[index % len(TASK_COLORS)]), str(task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False), int(task.get("sort_order", index)),
       ]
@@ -235,6 +238,98 @@ class Database:
     for order, row in enumerate(rows, 1):
       if row["sort_order"] != order:
         db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (order, row["id"]))
+
+  @staticmethod
+  def _normalize_project_order(db):
+    # Keep assigned relative order; append unnumbered legacy projects in their
+    # original display order. This also repairs gaps and duplicate numbers.
+    rows = db.execute("""SELECT id,sort_order FROM projects WHERE id!='__unassigned__'
+      ORDER BY CASE WHEN sort_order > 0 THEN 0 ELSE 1 END,
+               CASE WHEN sort_order > 0 THEN sort_order END,start_date,name,id""").fetchall()
+    for order, row in enumerate(rows, 1):
+      if row["sort_order"] != order:
+        db.execute("UPDATE projects SET sort_order=? WHERE id=?", (order, row["id"]))
+
+  def _migrate_project_order(self, db):
+    if "sort_order" in {row[1] for row in db.execute("PRAGMA table_info(projects)")}:
+      return
+    db.execute("ALTER TABLE projects ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
+    rows = db.execute("SELECT id FROM projects WHERE id!='__unassigned__' ORDER BY start_date,name,id").fetchall()
+    for order, row in enumerate(rows, 1):
+      db.execute("UPDATE projects SET sort_order=? WHERE id=?", (order, row[0]))
+    db.execute("""UPDATE directory_entries SET sort_order=(SELECT sort_order FROM projects WHERE projects.id=directory_entries.project_id) WHERE kind='project'""")
+    db.execute("""CREATE TRIGGER project_order_append AFTER INSERT ON projects
+      WHEN NEW.id!='__unassigned__'
+      BEGIN
+        UPDATE projects SET sort_order=(SELECT COALESCE(MAX(sort_order),0)+1 FROM projects WHERE id!=NEW.id AND id!='__unassigned__') WHERE id=NEW.id;
+      END""")
+    db.execute("""CREATE TRIGGER directory_project_order AFTER UPDATE OF sort_order ON projects
+      WHEN NEW.id!='__unassigned__'
+      BEGIN
+        INSERT INTO directory_entries(id,parent_id,kind,project_id,name,sort_order)
+        VALUES ('project:'||NEW.id,'root','project',NEW.id,NEW.name,NEW.sort_order)
+        ON CONFLICT(id) DO UPDATE SET sort_order=excluded.sort_order;
+      END""")
+
+  def duplicate_row(self, payload):
+    kind, source_id = payload.get("kind"), payload.get("source_id")
+    if kind not in {"project", "task"} or not isinstance(source_id, str):
+      raise ScheduleError("복사할 행이 올바르지 않습니다.")
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      table = "projects" if kind == "project" else "project_tasks"
+      source = db.execute(f"SELECT * FROM {table} WHERE id=?", (source_id,)).fetchone()
+      if not source or source_id == UNASSIGNED_PROJECT_ID:
+        raise ScheduleError("복사할 행을 찾을 수 없습니다.")
+      def insert(table, record):
+        columns = list(record)
+        db.execute(f"INSERT INTO {table} ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", list(record.values()))
+      if kind == "project":
+        project = dict(source)
+        project_id = new_id()
+        project.update(id=project_id, created_at=now_iso(), updated_at=now_iso())
+        insert("projects", project)
+        tasks = [dict(row) for row in db.execute("SELECT * FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (source_id,))]
+        ids = {task["id"]: new_id() for task in tasks}
+        for task in tasks:
+          task.update(id=ids[task["id"]], project_id=project_id,
+                      dependencies=json.dumps([ids[dep] for dep in json_load(task["dependencies"], []) if dep in ids]))
+          insert("project_tasks", task)
+        return {"project": self._project(db, project_id), "selection": {"type":"project", "id":project_id}}
+      project_id = payload.get("project_id") or source["project_id"]
+      if not isinstance(project_id, str) or not self._project(db, project_id):
+        raise ScheduleError("붙여넣을 프로젝트를 찾을 수 없습니다.")
+      ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (project_id,))]
+      anchor = payload.get("anchor_id")
+      if anchor is not None and anchor not in ids:
+        raise ScheduleError("삽입 위치가 올바르지 않습니다.")
+      task = dict(source)
+      task.update(id=new_id(), project_id=project_id, sort_order=len(ids)+1)
+      if project_id != source["project_id"]:
+        task["dependencies"] = "[]"
+      insert("project_tasks", task)
+      ids.insert(ids.index(anchor)+1 if anchor else len(ids), task["id"])
+      for order, ident in enumerate(ids, 1):
+        db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (order, ident))
+      db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
+      return {"project":self._project(db, project_id), "selection":{"type":"task", "id":task["id"]}}
+
+  def reorder_project(self, project_id, anchor_id, after=False):
+    if not isinstance(anchor_id, str) or type(after) is not bool:
+      raise ScheduleError("삽입 위치가 올바르지 않습니다.")
+    with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
+      ids = [row[0] for row in db.execute("SELECT id FROM projects WHERE id!='__unassigned__' ORDER BY sort_order,id")]
+      if project_id == UNASSIGNED_PROJECT_ID or anchor_id not in ids:
+        raise ScheduleError("프로젝트 사이에만 순서를 지정할 수 있습니다.")
+      if project_id not in ids:
+        return None
+      if project_id != anchor_id:
+        ids.remove(project_id)
+        ids.insert(ids.index(anchor_id) + int(after), project_id)
+        for order, ident in enumerate(ids, 1):
+          db.execute("UPDATE projects SET sort_order=? WHERE id=?", (order, ident))
+      return self._project(db, project_id)
 
   def reorder_task(self, task_id, anchor_id, after=False):
     if not isinstance(anchor_id, str) or type(after) is not bool:
@@ -395,8 +490,20 @@ class Database:
   def state(self) -> dict[str, Any]:
     with self.connection() as db:
       templates = [self._template(db, row[0]) for row in db.execute("SELECT id FROM templates ORDER BY name")]
-      projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY start_date, name")]
-      return {"templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
+      projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY sort_order, id")]
+      return {"tag_colors": {row[0][10:]: row[1] for row in db.execute("SELECT key,value FROM app_settings WHERE key LIKE 'tag_color:%'")}, "templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
+
+  def set_tag_color(self, tag, color):
+    key = " ".join(unicodedata.normalize("NFKC", str(tag)).split()).lower()
+    if not key or len(key) > 200:
+      raise ValueError("Invalid tag name")
+    color = self._validate_color(color)
+    with self.connection() as db:
+      if color:
+        db.execute("INSERT INTO app_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", ("tag_color:" + key, color))
+      else:
+        db.execute("DELETE FROM app_settings WHERE key=?", ("tag_color:" + key,))
+    return {"key": key, "color": color}
 
   def holiday_country(self):
     with self.connection() as db:
@@ -512,7 +619,7 @@ class Database:
       used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
       if not color or color in used:
         color = self._next_project_color(db)
-      group_name = str(payload.get("group_name", "")).strip()
+      group_name = self._canonical_group(db, payload.get("group_name", ""))
       tags = json.dumps(self._normalize_tags(payload.get("tags", [])), ensure_ascii=False)
       db.execute("INSERT INTO projects (id, name, template_id, template_name, start_date, calendar_type, color, group_name, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (project_id, name, template_id, template["name"], start_date, calendar_type, color, group_name, tags, stamp, stamp))
       snapshot = []
@@ -569,13 +676,23 @@ class Database:
   def update_project(self, project_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
     if project_id == UNASSIGNED_PROJECT_ID:
       raise ScheduleError("프로젝트 없음 그룹의 속성은 변경할 수 없습니다.")
-    allowed = {"name", "start_date", "calendar_type", "color", "group_name", "tags"}
+    allowed = {"name", "start_date", "calendar_type", "color", "group_name", "tags", "sort_order"}
     if set(fields) - allowed:
       raise ScheduleError("수정할 수 없는 프로젝트 필드입니다.")
     with self.connection() as db:
+      db.execute("BEGIN IMMEDIATE")
       project = self._project(db, project_id)
       if not project:
         return None
+      if "sort_order" in fields:
+        order = fields["sort_order"]
+        ids = [row[0] for row in db.execute("SELECT id FROM projects WHERE id!='__unassigned__' ORDER BY sort_order,id")]
+        if type(order) is not int or not 1 <= order <= len(ids):
+          raise ScheduleError(f"프로젝트 순서는 1부터 {len(ids)} 사이의 정수여야 합니다.")
+        ids.remove(project_id)
+        ids.insert(order - 1, project_id)
+        for position, ident in enumerate(ids, 1):
+          db.execute("UPDATE projects SET sort_order=? WHERE id=?", (position, ident))
       updated = {**project, **fields}
       if not str(updated.get("name", "")).strip():
         raise ScheduleError("프로젝트 이름을 입력하세요.")
@@ -584,7 +701,7 @@ class Database:
         raise ScheduleError("달력 유형은 working 또는 calendar여야 합니다.")
       color = self._validate_color(updated.get("color")) or project["color"]
       tags = json.dumps(self._normalize_tags(updated.get("tags", [])), ensure_ascii=False)
-      group_name = str(updated.get("group_name", "")).strip()
+      group_name = self._canonical_group(db, updated.get("group_name", ""))
       db.execute("UPDATE projects SET name=?, start_date=?, calendar_type=?, color=?, group_name=?, tags=?, updated_at=? WHERE id=?", (str(updated["name"]).strip(), updated["start_date"], updated["calendar_type"], color, group_name, tags, now_iso(), project_id))
       # Saved task dates are concrete values. Changing project metadata must
       # not silently recalculate or overwrite any existing task range.
@@ -697,7 +814,9 @@ class Database:
       raise ScheduleError("프로젝트 없음 그룹은 삭제할 수 없습니다.")
     with self.connection() as db:
       db.execute("BEGIN IMMEDIATE")
-      return db.execute("DELETE FROM projects WHERE id=?", (project_id,)).rowcount > 0
+      removed = db.execute("DELETE FROM projects WHERE id=?", (project_id,)).rowcount > 0
+      self._normalize_project_order(db)
+      return removed
 
   def delete_task(self, task_id: str) -> bool:
     with self.connection() as db:
@@ -763,7 +882,8 @@ class Database:
       if not str(new_target.get("name", "")).strip():
         raise ScheduleError("작업명을 입력하세요.")
       new_target["color"] = self._validate_color(new_target.get("color")) or target["color"]
-      new_target["group_name"] = str(new_target.get("group_name", "")).strip()
+      new_target["owner"] = self._canonical_owner(db, new_target.get("owner", ""))
+      new_target["group_name"] = self._canonical_group(db, new_target.get("group_name", ""))
       new_target["tags"] = self._normalize_tags(new_target.get("tags", []))
       actual_start = str(new_target.get("actual_start", "") or "")
       actual_finish = str(new_target.get("actual_finish", "") or "")
@@ -790,7 +910,7 @@ class Database:
       for task in scheduled:
         if task["id"] == task_id:
           db.execute("""UPDATE project_tasks SET name=?, dependencies=?, owner=?, handoff=?, blocker=?, status=?, planned_start=?, planned_finish=?, actual_start=?, actual_finish=?, notes=?, color=?, group_name=?, tags=?, progress=? WHERE id=?""", (
-            task["name"], json.dumps(task["dependencies"], ensure_ascii=False), task.get("owner", ""), task.get("handoff", ""), task.get("blocker", ""), task.get("status", "todo"),
+            task["name"], json.dumps(task["dependencies"], ensure_ascii=False), self._canonical_owner(db, task.get("owner", "")), task.get("handoff", ""), task.get("blocker", ""), task.get("status", "todo"),
             task["planned_start"], task["planned_finish"], task.get("actual_start", ""), task.get("actual_finish", ""), task.get("notes", ""),
             task.get("color", ""), str(task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False), task.get("progress", 0), task["id"],
           ))
@@ -803,8 +923,31 @@ class Database:
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)
 
+  def _canonical_owner(self, db, value):
+    name = " ".join(unicodedata.normalize("NFKC", str(value or "")).split())
+    if not name:
+      return ""
+    for row in db.execute("SELECT owner FROM project_tasks UNION SELECT owner FROM template_tasks ORDER BY owner"):
+      existing = " ".join(unicodedata.normalize("NFKC", row[0] or "").split())
+      if existing.lower() == name.lower():
+        return existing
+    return name
+
+  def _canonical_group(self, db, value):
+    name = " ".join(unicodedata.normalize("NFKC", str(value or "")).split())
+    key = name.lower()
+    if not key:
+      return ""
+    rows = db.execute("SELECT group_name FROM projects UNION SELECT group_name FROM project_tasks ORDER BY group_name")
+    for row in rows:
+      existing = " ".join(unicodedata.normalize("NFKC", row[0] or "").split())
+      if existing.lower() == key:
+        return existing
+    return name
+
   def _next_project_color(self, db: sqlite3.Connection) -> str:
     used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
+    used.add("#5872d9")  # Reserved default UI color, never assign randomly.
     seed = f"{now_iso()}:{new_id()}"
     attempt = 0
     while True:
