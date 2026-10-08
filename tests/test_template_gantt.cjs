@@ -82,7 +82,7 @@ test('invalid negative successor position rejects entire edit atomically',()=>{
 
 test('template inspector shares schedule date grid and disables execution-only fields',()=>{
   const c={esc:value=>String(value??''),taskColors:['#5872d9'],paletteStyle:()=>''};withI18n(vm.createContext(c));
-  vm.runInContext(block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateDurationDays(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
+  vm.runInContext(block('const paletteCache', 'function esc(')+block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateDurationDays(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
   const task={key:'a',name:'Template task',duration_value:2,duration_unit:'days',dependencies:[],handoff:'Keep this note'};
   const html=c.templateTaskProperties(task,0,[task]);
   assert.match(html,/class="task-date-grid"/);
@@ -95,6 +95,8 @@ test('template inspector shares schedule date grid and disables execution-only f
   assert.match(html,/textarea[^>]*template-task-handoff[^>]*>Keep this note/);
   assert.ok(html.indexOf('template-task-name') < html.indexOf('task-date-grid'));
   assert.match(html,/inspector-actions/);
+  assert.match(html,/relation-position-marker/);
+  assert.match(html,/--relation-marker-color:#5872d9/);
 });
 
 test('template scroll range starts at 45 days and grows by 15 only at the right edge',()=>{
