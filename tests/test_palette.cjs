@@ -13,7 +13,7 @@ test('arbitrary hex colors retain base, darken and lighten monotonically with va
 });
 test('incoming connection uses dark color as soon as the successor starts',()=>{
  for(const progress of [0,10,50,90,100]){
-  const t={color:'#a45ca8',progress};assert.equal(c.connectionColor(t),c.colorPalette(t.color)[progress>0?'dark':'base']);
+  const t={color:'#a45ca8',progress};assert.equal(c.connectionColor(t),c.colorPalette(t.color)[progress>0?'progress':'base']);
  }
  assert.notEqual(c.connectionColor({color:'#ff0000',progress:10}),c.connectionColor({color:'#0000ff',progress:100}));
  assert.match(c.paletteStyle('#abc','project'),/--project-dark:/);
@@ -22,4 +22,18 @@ test('incoming connection uses dark color as soon as the successor starts',()=>{
 test('black text is reserved for very light backgrounds, not brown or midtones',()=>{
  for(const hex of ['#b48527','#b96749','#a45ca8','#5872d9','#999999','#abcdef']) assert.equal(c.colorPalette(hex).ink,'#ffffff',hex);
  for(const hex of ['#ffffff','#eeeeee','#fff5d6','#e8f4ff','#ffff00']) assert.equal(c.colorPalette(hex).ink,'#000000',hex);
+});
+
+test('progress saturates muted hues and darkens vivid or neutral colors',()=>{
+ const channels=hex=>hex.slice(1).match(/../g).map(x=>parseInt(x,16));
+ const saturation=rgb=>(Math.max(...rgb)-Math.min(...rgb))/(Math.max(...rgb)||1);
+ for(const hex of ['#aaa5f3','#eeaaaa','#90a090']) {
+  const base=channels(hex), progress=channels(c.colorPalette(hex).progress);
+  assert.ok(saturation(progress)>saturation(base));
+  assert.equal(Math.max(...progress),Math.max(...base));
+ }
+ for(const hex of ['#ff0000','#800000','#4060ff','#888888','#ffffff']) {
+  const p=c.colorPalette(hex);assert.equal(p.progress,p.dark);
+ }
+ assert.equal(c.colorPalette('#000000').progress,'#000000');
 });

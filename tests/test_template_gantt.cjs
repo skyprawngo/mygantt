@@ -82,13 +82,15 @@ test('invalid negative successor position rejects entire edit atomically',()=>{
 
 test('template inspector shares schedule date grid and disables execution-only fields',()=>{
   const c={esc:value=>String(value??''),taskColors:['#5872d9'],paletteStyle:()=>''};withI18n(vm.createContext(c));
-  vm.runInContext(block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateTaskRow(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
+  vm.runInContext(block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateDurationDays(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
   const task={key:'a',name:'Template task',duration_value:2,duration_unit:'days',dependencies:[],handoff:'Keep this note'};
   const html=c.templateTaskProperties(task,0,[task]);
   assert.match(html,/class="task-date-grid"/);
   assert.match(html,/template-start-day/);
   assert.match(html,/template-end-day/);
-  assert.equal((html.match(/type="date"[^>]*disabled/g)||[]).length,2);
+  assert.equal((html.match(/type="date"[^>]*disabled/g)||[]).length,0);
+  assert.ok(!html.includes('template-auto-days'));
+  assert.equal((html.match(/class="relative-day-input"/g)||[]).length,2);
   assert.match(html,/role="slider"[^>]*disabled/);
   assert.match(html,/textarea[^>]*template-task-handoff[^>]*>Keep this note/);
   assert.ok(html.indexOf('template-task-name') < html.indexOf('task-date-grid'));
@@ -99,7 +101,7 @@ test('template scroll range starts at 45 days and grows by 15 only at the right 
  const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:'',style:{setProperty(){}},classList:{toggle(){}}};
  const c={mobileLayout:()=>false,fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''}};
  Object.defineProperty(chart,'scrollWidth',{get:()=>254+c.state.templateVisibleDays*46});
- withI18n(vm.createContext(c));vm.runInContext(block('function renderTemplateGantt(', 'function renderTemplateConnections('),c);
+ withI18n(vm.createContext(c));vm.runInContext(block('function templateWeekendMarkup(', 'function renderTemplateConnections('),c);
  c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);
  chart.scrollLeft=100;chart.onscroll();assert.equal(c.state.templateVisibleDays,45);
  chart.scrollLeft=chart.scrollWidth-chart.clientWidth;chart.onscroll();assert.equal(c.state.templateVisibleDays,60);
@@ -119,4 +121,33 @@ test('template day headers progressively remove D and plus to fit their own cell
  }
  c.fitTemplateDayLabels({querySelectorAll:()=>[{dataset:{day:'1'},clientWidth:12,querySelector:()=>text}]});
  assert.equal(text.textContent,'D');
+});
+test('D+5 through D+8 gives four days; editing duration retains D+5 start',()=>{
+ const task={key:'a',name:'A',start_day:6,duration_value:4,duration_unit:'days',dependencies:[]};
+ const start={value:'5',addEventListener(type,fn){this[type]=fn;}},end={value:'8',addEventListener(type,fn){this[type]=fn;}};
+ const duration={value:4},unit={value:'days'},fields={dataset:{templateDays:'a'},closest:()=>({})};
+ const c={state:{draft:{tasks:[task]},cascadeDependents:false},$$:()=>[fields],$:s=>s==='.template-start-day'?start:s==='.template-end-day'?end:s==='.template-task-duration'?duration:unit,renderTemplateGantt(){},toast(message){throw Error(message);}};
+ withI18n(vm.createContext(c));
+ vm.runInContext(block('function templateSchedule(', 'function renderTemplateGantt(')+block('function attachTemplateDayFields(', 'function renderTemplateEditor(')+block('function updateTemplateField(', 'let templateSaveQueue'),c);
+ c.attachTemplateDayFields();end.input();assert.equal(task.duration_value,4);assert.equal(task.start_day,6);
+ c.updateTemplateField({dataset:{key:'a'},value:'2',classList:{contains:name=>name==='template-task-duration'}});
+ const row=c.templateSchedule([task])[0];assert.equal(row.start-1,5);assert.equal(row.end-1,6);
+});
+
+test('legacy weeks display as day counts using the template calendar',()=>{
+ const c={};vm.createContext(c);vm.runInContext(block('function templateDurationDays(', 'function templateTaskRow('),c);
+ assert.equal(c.templateDurationDays({duration_value:2,duration_unit:'weeks'},'working'),10);
+ assert.equal(c.templateDurationDays({duration_value:2,duration_unit:'weeks'},'calendar'),14);
+ assert.equal(c.templateDurationDays({duration_value:4,duration_unit:'days'}),4);
+ assert.ok(!source.includes('template-task-unit'));
+});
+
+test('template weekends follow five-day boundaries or seven-day shading',()=>{
+ const c={};vm.createContext(c);vm.runInContext(block('function templateWeekendMarkup(', 'function renderTemplateGantt('),c);
+ const working=c.templateWeekendMarkup(16,10,'working');
+ assert.match(working,/left:60px/);assert.match(working,/left:110px/);assert.ok(!working.includes('weekend-saturday'));
+ const calendar=c.templateWeekendMarkup(16,10,'calendar');
+ assert.match(calendar,/weekend-saturday" style="left:60px/);assert.match(calendar,/weekend-sunday" style="left:70px/);
+ assert.match(calendar,/weekend-saturday" style="left:130px/);assert.match(calendar,/weekend-sunday" style="left:140px/);
+ assert.ok(!calendar.includes('template-week-break'));
 });

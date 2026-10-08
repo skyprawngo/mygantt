@@ -33,7 +33,7 @@
       <nav class="primary-nav" aria-label="주 메뉴" data-i18n-attrs="aria-label:navigation.main_navigation">
         <button class="nav-item active" data-view="timeline"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M4 3v18h17M8 6h7M8 11h12M12 16h8"/></svg></span> <span data-i18n="navigation.all_schedules">전체 일정</span> <span class="nav-count" id="project-count">0</span></button>
         <button class="nav-item" data-view="templates"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"/></svg></span> <span data-i18n="navigation.schedule_templates">일정 템플릿</span></button>
-        <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true">⚙</span> <span data-i18n="navigation.settings">설정</span></button>
+        <button class="nav-item" data-view="settings"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="m9.5 3-.5 3a7 7 0 0 0-1.7 1L4.5 6l-2 3.5L5 11a7 7 0 0 0 0 2l-2.5 1.5 2 3.5 2.8-1a7 7 0 0 0 1.7 1l.5 3h5l.5-3a7 7 0 0 0 1.7-1l2.8 1 2-3.5L19 13a7 7 0 0 0 0-2l2.5-1.5-2-3.5-2.8 1A7 7 0 0 0 15 6l-.5-3z"/><circle cx="12" cy="12" r="3"/></svg></span> <span data-i18n="navigation.settings">설정</span></button>
       </nav>
       <section id="sidebar-project-section">
         <div class="sidebar-section-head"><span><span data-i18n="navigation.production_batches">생산 배치</span></span><button id="new-project-side" class="icon-button" title="새 프로젝트" data-i18n-attrs="title:template.new_project">＋</button></div>
@@ -51,7 +51,7 @@
 
     <main class="main-area">
       <header class="topbar">
-        <button id="mobile-menu-toggle" class="mobile-only icon-button" aria-label="메뉴 열기" aria-controls="mobile-navigation" aria-expanded="false" data-i18n-attrs="aria-label:navigation.open_menu">☰</button>
+        <button id="mobile-menu-toggle" class="icon-button sidebar-toggle" aria-label="사이드바 토글" aria-controls="mobile-navigation" aria-expanded="false" data-i18n-attrs="aria-label:navigation.toggle_sidebar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M5.5 8h1M5.5 12h1M5.5 16h1"/></svg></button>
         <div class="breadcrumbs"><span><span data-i18n="navigation.production_management">생산 관리</span></span><b>›</b><strong id="breadcrumb-title"><span data-i18n="navigation.all_schedules">전체 일정</span></strong><span class="info-tip page-info"><button type="button" class="info-tip-button" aria-label="화면 설명" aria-describedby="page-description" data-i18n-attrs="aria-label:navigation.page_help">i</button><span id="page-description" class="info-tip-text" role="tooltip"><span data-i18n="navigation.view_each_project_s_daily_schedule">프로젝트별 공정을 날짜 단위로 보고, 오른쪽에서 선택한 항목을 편집합니다.</span></span></span></div>
         <div class="topbar-actions">
           <span class="saved-indicator" id="storage-indicator"><i></i> <span id="storage-indicator-name"><span data-i18n="navigation.checking_storage_location">저장 위치 확인 중</span></span></span>
@@ -109,7 +109,11 @@
           <section class="settings-card" aria-labelledby="general-title">
             <h2 id="general-title" data-i18n="settings.general">일반</h2>
             <dl class="settings-details"><div><dt><label for="language-select" data-i18n="settings.language">언어</label></dt><dd><select id="language-select" class="select-input"><option value="KR" data-i18n="language.KR">한국어 (KR)</option><option value="US" data-i18n="language.US">English (US)</option><option value="JP" data-i18n="language.JP">日本語 (JP)</option></select></dd></div></dl>
-            <p class="settings-note" data-i18n="settings.languageHelp">이 기기의 UI 언어를 선택합니다. 작업명과 메모 등 사용자 입력은 변경하지 않습니다.</p>
+            <dl class="settings-details"><div><dt><label for="timezone-select" data-i18n="settings.timezone">시간대</label></dt><dd><select id="timezone-select" class="select-input"></select></dd></div></dl>
+          <section class="settings-subsection">
+            <dl class="settings-details"><div><dt><label for="holiday-country-select" data-i18n="calendar.country_label">공휴일 캘린더</label></dt><dd><select id="holiday-country-select" class="select-input"></select></dd></div></dl>
+            <div id="holiday-settings" aria-live="polite"><span data-i18n="settings.checking_public_holiday_data">공휴일 자료 확인 중</span></div>
+          </section>
           </section>
           <section class="settings-card" aria-labelledby="export-title">
             <h2 id="export-title" data-i18n="settings.export_schedule">일정 내보내기</h2>
@@ -119,13 +123,6 @@
             <h2 id="app-info-title"><span data-i18n="settings.app_info">앱 정보</span></h2>
             <dl class="settings-details"><div><dt><span data-i18n="settings.app">앱</span></dt><dd><span data-i18n="common.mygantt_production_schedule">MyGantt · 생산 일정</span></dd></div><div><dt><span data-i18n="settings.version">버전</span></dt><dd id="app-version"><span data-i18n="settings.checking">확인 중</span></dd></div></dl>
           </section>
-          <section class="settings-card" aria-labelledby="holiday-info-title">
-            <h2 id="holiday-info-title"><span data-i18n="settings.public_holiday_data">공휴일 자료</span></h2>
-            <p class="settings-description"><span data-i18n="settings.data_used_to_display_south_korean">선택한 국가의 전국 공휴일을 표시합니다. 주·지역 한정 공휴일은 제외됩니다.</span></p>
-            <dl class="settings-details"><div><dt><label for="holiday-country-select" data-i18n="calendar.country_label">국가 캘린더</label></dt><dd><select id="holiday-country-select" class="select-input"></select></dd></div></dl>
-            <div id="holiday-settings" aria-live="polite"><span data-i18n="settings.checking_public_holiday_data">공휴일 자료 확인 중</span></div>
-            <p class="settings-note"><span data-i18n="settings.new_projects_use_public_holiday_data">새 프로젝트의 주 5일 일정 계산에 공휴일 자료를 사용합니다. 기존 작업 날짜는 유지됩니다.</span></p>
-          </section>
         </div>
       </section>
     </main>
@@ -134,6 +131,8 @@
   <div id="toast" class="toast" role="status"></div>
   <script src="/i18n.js" defer></script>
   <script src="/project-motion.js" defer></script>
+  <script src="/timezones.js" defer></script>
+  <script src="/mutations.js" defer></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

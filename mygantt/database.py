@@ -207,11 +207,12 @@ class Database:
   def _insert_template_tasks(self, db: sqlite3.Connection, template_id: str, tasks: list[dict[str, Any]]) -> None:
     for index, task in enumerate(tasks):
       db.execute("""INSERT INTO template_tasks
-        (id, template_id, task_key, name, duration_value, duration_unit, dependencies, owner, handoff, color, sort_order, start_day)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
+        (id, template_id, task_key, name, duration_value, duration_unit, dependencies, owner, handoff, color, sort_order, start_day, group_name, tags)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", (
         task.get("id") or new_id(), template_id, task["key"], task["name"], int(task["duration_value"]),
         task["duration_unit"], json.dumps(task.get("dependencies", []), ensure_ascii=False),
         self._canonical_owner(db, task.get("owner", "")), task.get("handoff", ""), self._validate_color(task.get("color")) or TASK_COLORS[index % len(TASK_COLORS)], int(task.get("sort_order", index)), task.get("start_day"),
+        self._canonical_group(db, task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False),
       ))
 
   def _insert_project_tasks(self, db: sqlite3.Connection, project_id: str, tasks: list[dict[str, Any]]) -> None:
@@ -231,6 +232,14 @@ class Database:
       placeholders = ", ".join("?" for _ in names)
       db.execute(f"INSERT INTO project_tasks ({', '.join(names)}) VALUES ({placeholders})", values)
     self._normalize_task_order(db, project_id)
+
+  @staticmethod
+  def _write_order(db, table, ids):
+    # Only internal table names are accepted; all row values stay parameterized.
+    if table not in {"projects", "project_tasks"}:
+      raise ValueError("Unsupported ordering table")
+    db.executemany(f"UPDATE {table} SET sort_order=? WHERE id=? AND sort_order IS NOT ?",
+                   [(order, ident, order) for order, ident in enumerate(ids, 1)])
 
   @staticmethod
   def _normalize_task_order(db, project_id):
@@ -309,8 +318,7 @@ class Database:
         task["dependencies"] = "[]"
       insert("project_tasks", task)
       ids.insert(ids.index(anchor)+1 if anchor else len(ids), task["id"])
-      for order, ident in enumerate(ids, 1):
-        db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (order, ident))
+      self._write_order(db, "project_tasks", ids)
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return {"project":self._project(db, project_id), "selection":{"type":"task", "id":task["id"]}}
 
@@ -327,8 +335,7 @@ class Database:
       if project_id != anchor_id:
         ids.remove(project_id)
         ids.insert(ids.index(anchor_id) + int(after), project_id)
-        for order, ident in enumerate(ids, 1):
-          db.execute("UPDATE projects SET sort_order=? WHERE id=?", (order, ident))
+        self._write_order(db, "projects", ids)
       return self._project(db, project_id)
 
   def reorder_task(self, task_id, anchor_id, after=False):
@@ -346,8 +353,7 @@ class Database:
       if anchor_id != task_id:
         ids.remove(task_id)
         ids.insert(ids.index(anchor_id) + int(after), task_id)
-        for index, ident in enumerate(ids, 1):
-          db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
+        self._write_order(db, "project_tasks", ids)
         db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)
 
@@ -364,10 +370,14 @@ class Database:
       db.execute("INSERT OR IGNORE INTO schema_migrations VALUES (?, ?)", (migration_key, now_iso()))
     columns = {
       "templates": {
+        "group_name": "TEXT NOT NULL DEFAULT ''",
+        "tags": "TEXT NOT NULL DEFAULT '[]'",
         "project_color": "TEXT NOT NULL DEFAULT ''",
         "calendar_type": "TEXT NOT NULL DEFAULT 'working'",
       },
       "template_tasks": {
+        "group_name": "TEXT NOT NULL DEFAULT ''",
+        "tags": "TEXT NOT NULL DEFAULT '[]'",
         "color": "TEXT NOT NULL DEFAULT ''",
         "start_day": "INTEGER",
       },
@@ -462,9 +472,10 @@ class Database:
     for task in db.execute("SELECT * FROM template_tasks WHERE template_id=? ORDER BY sort_order", (template_id,)):
       item = dict(task)
       item["key"] = item.pop("task_key")
+      item["tags"] = json_load(item.get("tags"), [])
       item["dependencies"] = json_load(item.pop("dependencies"), [])
       tasks.append(item)
-    return {**dict(row), "tasks": tasks}
+    return {**dict(row), "tags": json_load(row["tags"], []), "tasks": tasks}
 
   def _project(self, db: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
     row = db.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
@@ -575,6 +586,8 @@ class Database:
         template_id = new_id()
         project_color = self._validate_color(payload.get("project_color")) or self._next_template_color(db)
         db.execute("INSERT INTO templates (id, name, description, project_color, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)", (template_id, name, payload.get("description", ""), project_color, stamp, stamp))
+      metadata = db.execute("SELECT group_name, tags FROM templates WHERE id=?", (template_id,)).fetchone()
+      db.execute("UPDATE templates SET group_name=?, tags=? WHERE id=?", (self._canonical_group(db, payload.get("group_name", metadata["group_name"])), json.dumps(self._normalize_tags(payload.get("tags", json_load(metadata["tags"], []))), ensure_ascii=False), template_id))
       basis = payload.get("calendar_type")
       if basis is not None:
         if basis not in {"working", "calendar"}:
@@ -619,8 +632,8 @@ class Database:
       used = {self._validate_color(row[0]) for row in db.execute("SELECT color FROM projects")}
       if not color or color in used:
         color = self._next_project_color(db)
-      group_name = self._canonical_group(db, payload.get("group_name", ""))
-      tags = json.dumps(self._normalize_tags(payload.get("tags", [])), ensure_ascii=False)
+      group_name = self._canonical_group(db, payload.get("group_name", template.get("group_name", "")))
+      tags = json.dumps(self._normalize_tags(payload.get("tags", template.get("tags", []))), ensure_ascii=False)
       db.execute("INSERT INTO projects (id, name, template_id, template_name, start_date, calendar_type, color, group_name, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (project_id, name, template_id, template["name"], start_date, calendar_type, color, group_name, tags, stamp, stamp))
       snapshot = []
       key_map = {task["key"]: new_id() for task in template["tasks"]}
@@ -635,7 +648,7 @@ class Database:
           "status": "todo", "blocker": "", "planned_start": "", "planned_finish": "",
           "actual_start": "", "actual_finish": "", "notes": "",
           "color": task.get("color") or TASK_COLORS[task["sort_order"] % len(TASK_COLORS)],
-          "group_name": "", "tags": [],
+          "group_name": task.get("group_name", ""), "tags": task.get("tags", []),
         })
       scheduled = [{**task, "planned_start": planned[task["template_task_key"]]["planned_start"], "planned_finish": planned[task["template_task_key"]]["planned_finish"]} for task in snapshot]
       self._insert_project_tasks(db, project_id, scheduled)
@@ -691,8 +704,7 @@ class Database:
           raise ScheduleError(f"프로젝트 순서는 1부터 {len(ids)} 사이의 정수여야 합니다.")
         ids.remove(project_id)
         ids.insert(order - 1, project_id)
-        for position, ident in enumerate(ids, 1):
-          db.execute("UPDATE projects SET sort_order=? WHERE id=?", (position, ident))
+        self._write_order(db, "projects", ids)
       updated = {**project, **fields}
       if not str(updated.get("name", "")).strip():
         raise ScheduleError("프로젝트 이름을 입력하세요.")
@@ -767,8 +779,7 @@ class Database:
         if anchor_id and anchor_id != task_id:
           ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (destination,)) if row[0] != task_id]
           ids.insert(ids.index(anchor_id) + int(after), task_id)
-          for index, ident in enumerate(ids, 1):
-            db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
+          self._write_order(db, "project_tasks", ids)
           db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), destination))
         return self._project(db, destination)
       stamp = now_iso()
@@ -789,8 +800,7 @@ class Database:
       if anchor_id:
         ids = [row[0] for row in db.execute("SELECT id FROM project_tasks WHERE project_id=? ORDER BY sort_order,id", (destination,)) if row[0] != task_id]
         ids.insert(ids.index(anchor_id) + int(after), task_id)
-        for index, ident in enumerate(ids, 1):
-          db.execute("UPDATE project_tasks SET sort_order=? WHERE id=?", (index, ident))
+        self._write_order(db, "project_tasks", ids)
       return self._project(db, destination)
 
   def complete_project(self, project_id: str) -> dict[str, Any] | None:
@@ -938,7 +948,7 @@ class Database:
     key = name.lower()
     if not key:
       return ""
-    rows = db.execute("SELECT group_name FROM projects UNION SELECT group_name FROM project_tasks ORDER BY group_name")
+    rows = db.execute("SELECT group_name FROM projects UNION SELECT group_name FROM project_tasks UNION SELECT group_name FROM templates UNION SELECT group_name FROM template_tasks ORDER BY group_name")
     for row in rows:
       existing = " ".join(unicodedata.normalize("NFKC", row[0] or "").split())
       if existing.lower() == key:

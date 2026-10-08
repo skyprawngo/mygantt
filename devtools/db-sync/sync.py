@@ -123,6 +123,11 @@ def apply(path, expected, desired):
             pk=next(c[0] for c in desired['schema'][table] if c[4])
             for key in before['tables'][table].keys()-desired['tables'][table].keys():
                 db.execute('DELETE FROM '+table+' WHERE '+pk+'=?',(key,))
+        # Inserts append project order through a DB trigger; restore snapshot order
+        # after all parent/child writes before synchronizing directory entries.
+        for key,row in desired['tables']['projects'].items():
+            if 'sort_order' in row:
+                db.execute('UPDATE projects SET sort_order=? WHERE id=?',(row['sort_order'],key))
         for key,order in desired['order'].items():
             db.execute("UPDATE directory_entries SET sort_order=? WHERE project_id=? AND kind='project'",(order,key))
         if db.execute('PRAGMA foreign_key_check').fetchone(): raise RuntimeError('Foreign key validation failed')

@@ -6,7 +6,7 @@ test('project drag submits insertion order and does not call task placement',asy
  const chart={addEventListener:(name,fn)=>events[name]=fn};
  const sort={value:'manual',addEventListener:()=>{}};
  const wrap={scrollTop:0,getBoundingClientRect:()=>({top:0,bottom:500})};
- const c={$:s=>({'#gantt':chart,'#sort-select':sort,'#gantt-wrap':wrap}[s]),$$:()=>[],taskSaveQueue:Promise.resolve(),api:async(path,options)=>requests.push([path,JSON.parse(options.body)]),loadState:async()=>{},toast:()=>{}};
+ const c={$:s=>({'#gantt':chart,'#sort-select':sort,'#gantt-wrap':wrap}[s]),$$:()=>[],taskSaveQueue:Promise.resolve(),api:async(path,options)=>requests.push([path,JSON.parse(options.body)]),loadState:async()=>{},renderTimeline(){},toast:()=>{}};
  vm.createContext(c);vm.runInContext(source.slice(source.indexOf('function bindTaskReordering('),source.indexOf('// A top-layer popover')),c);c.bindTaskReordering();
  const transfer={setData:()=>{}};
  events.dragstart({target:{closest:()=>({dataset:{collapse:'p3'},closest:()=>row})},dataTransfer:transfer});

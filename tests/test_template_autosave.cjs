@@ -6,7 +6,8 @@ const withI18n=require('./i18n_context.cjs');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../web/app.js'),'utf8');
 function harness(api){
  const draft={name:'Template',tasks:[{key:'a',name:'Task',duration_value:1,duration_unit:'days',dependencies:[]}]};
- const c={state:{draft,data:{templates:[]},view:'templates'},projectColors:['#123456'],taskColors:['#123456'],api,$:()=>null,$$:()=>[],syncDraftFromEditor(){},templateSchedule(){},renderTemplateList(){},toast(){}};
+ const c={state:{draft,data:{templates:[],projects:[]},view:'templates'},projectColors:['#123456'],taskColors:['#123456'],api,$:()=>null,$$:()=>[],syncDraftFromEditor(){},templateSchedule(){},renderTemplateList(){},toast(){}};
+ require('./mutation_context.cjs')(c,api);
  withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('let templateSaveQueue ='),source.indexOf('async function deleteTemplate(')),c);
  return c;
 }
@@ -14,7 +15,7 @@ test('new template saves serialize, adopt created ID, and retain live edits and 
  const calls=[];let release;
  const c=harness(async(path,options)=>{calls.push({path,...options}); if(calls.length===1)await new Promise(resolve=>release=resolve);return {id:'created',...JSON.parse(options.body)};});
  const draft=c.state.draft;
- c.queueTemplateSave();await Promise.resolve();
+ c.queueTemplateSave();await new Promise(resolve=>setImmediate(resolve));
  draft.tasks[0].name='Second';const pending=c.queueTemplateSave();
  draft.tasks[0].name='Still typing';release();await pending;
  assert.equal(calls.length,2);assert.equal(calls[0].method,'POST');assert.equal(calls[1].method,'PUT');
@@ -29,6 +30,19 @@ test('duplicate blur and change saves coalesce, failed save retries',async()=>{
 });
 test('invalid draft never sends request',async()=>{
  let count=0;const c=harness(async()=>{count++;});c.state.draft.name='';await c.queueTemplateSave();assert.equal(count,0);
+});
+test('template and task group/tag values survive queued saves and can be cleared',async()=>{
+ const payloads=[];
+ const c=harness(async(path,options)=>{const payload=JSON.parse(options.body);payloads.push(payload);return {id:'saved',...payload};});
+ Object.assign(c.state.draft,{group_name:'Production',tags:['Batch']});
+ Object.assign(c.state.draft.tasks[0],{group_name:'QA',tags:['Check']});
+ await c.queueTemplateSave();
+ assert.equal(payloads[0].group_name,'Production');assert.deepEqual(payloads[0].tags,['Batch']);
+ assert.equal(payloads[0].tasks[0].group_name,'QA');assert.deepEqual(payloads[0].tasks[0].tags,['Check']);
+ Object.assign(c.state.draft,{group_name:'',tags:[]});
+ Object.assign(c.state.draft.tasks[0],{group_name:'',tags:[]});
+ await c.queueTemplateSave();
+ assert.equal(payloads[1].group_name,'');assert.deepEqual(payloads[1].tasks[0].tags,[]);
 });
 test('focusout listener is registered once per render and ignores disabled fields',async()=>{
  const handlers=new Map();let calls=0;

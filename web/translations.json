@@ -1,4 +1,9 @@
 [
+{"textID":"navigation.toggle_sidebar","KR":"사이드바 열기/닫기","US":"Toggle sidebar","JP":"サイドバーを開く／閉じる"},
+{"textID":"template.duration_days","KR":"기간(일)","US":"Duration (days)","JP":"期間（日）"},
+{"textID": "settings.timezone", "KR": "시간대", "US": "Time zone", "JP": "タイムゾーン"},
+{"textID": "settings.server_timezone", "KR": "서버 시간대 (기본)", "US": "Server time zone (default)", "JP": "サーバーのタイムゾーン（既定）"},
+{"textID": "settings.timezone_help", "KR": "이 기기에만 적용됩니다. 일정의 시작일·종료일과 공휴일 국가는 바뀌지 않습니다.", "US": "Applies only to this device. Schedule dates and the holiday country stay unchanged.", "JP": "この端末にのみ適用されます。予定の日付や祝日の国は変更されません。"},
 {"textID": "tags.add_hint", "KR": "태그 입력 후 쉼표 또는 Enter", "US": "Type a tag, then comma or Enter", "JP": "タグを入力し、カンマまたはEnter"},
 {"textID": "tags.remove", "KR": "태그 제거", "US": "Remove tag", "JP": "タグを削除"},
 {"textID": "tags.color", "KR": "태그 색상", "US": "Tag color", "JP": "タグの色"},
@@ -2469,9 +2474,9 @@
   },
   {
     "textID": "calendar.country_label",
-    "KR": "국가 캘린더",
-    "US": "Country calendar",
-    "JP": "国のカレンダー"
+    "KR": "공휴일 캘린더",
+    "US": "Holiday calendar",
+    "JP": "祝日カレンダー"
   },
   {
     "textID": "calendar.group.asia",

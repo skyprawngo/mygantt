@@ -8,8 +8,9 @@ function harness(api) {
   const state = {view:'timeline',data:{projects:[{id:'p',name:'new project name',tasks:[],progress:0}]}};
   const renders=[];
   const context={state,api,$:()=>({value:'manual'}),renderSidebar(){},renderTimeline(options){renders.push(options);}};
+  require('./mutation_context.cjs')(context,api);
   withI18n(vm.createContext(context));
-  vm.runInContext(source.slice(source.indexOf('let taskSaveQueue ='),source.indexOf('function bindTaskAutoSave(')),context);
+  vm.runInContext(source.slice(source.indexOf('function saveTaskFields('),source.indexOf('function bindTaskAutoSave(')),context);
   return {...context,renders};
 }
 test('blur patches serialize and keep inspector drafts and project metadata intact',async()=>{
@@ -17,7 +18,7 @@ test('blur patches serialize and keep inspector drafts and project metadata inta
   const h=harness(async(path,options)=>{
     calls.push(JSON.parse(options.body));
     if(calls.length===1) await gate;
-    return {id:'p',name:'stale project name',tasks:[{id:'t',owner:'new owner'}],progress:0};
+    return {id:'p',name:'new project name',tasks:[{id:'t',owner:'new owner'}],progress:0};
   });
   const first=h.saveTaskFields('t',{owner:'new owner'});
   const second=h.saveTaskFields('t',{notes:'new notes'});
@@ -40,7 +41,7 @@ test('Backspace clears the whole date; only optional actual dates save empty',as
   const input={id:required?'ins-task-planned-start':'ins-task-actual-start',type:'date',tagName:'INPUT',value:'2026-10-04',required,checked:false,addEventListener(k,fn){events[k]=fn;},checkValidity(){return !required||!!this.value;},dispatchEvent(){},removeAttribute(){},setAttribute(){}};
   const status={textContent:'',classList:{toggle(){}}},form={isConnected:false,addEventListener(){}};
   const c={$$:()=>[input],$:()=>status,state:{cascadeDependents:false},Event,saveTaskFields:async(id,fields)=>{patches.push(fields);return {tasks:[]};},toast(){}};
-  withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
+  withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),c);vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
   c.bindTaskAutoSave(form,{id:'t'});
   let prevented=false;events.keydown({key:'Backspace',isComposing:false,preventDefault(){prevented=true;},stopPropagation(){}});
   await new Promise(resolve=>setImmediate(resolve));

@@ -39,3 +39,29 @@ mygantt-deploy --wait
 This command only writes a local request marker. The systemd path unit starts the same User=service-user restricted deploy service used by the daily timer. CI-success/current-main checks, local tests, backups, health checks and code rollback stay the same. No sudo or deployment credential is needed. The matching result distinguishes deployed, unchanged, waiting_for_ci, superseded and failure. A CI run started with GitHub workflow_dispatch does not itself wake this host: after CI finishes, run the local command or wait for the next 03:00.
 
 The provided Python server does not have automatic browser or Python reload. It reads HTML/JS/CSS files on each HTTP request, so frontend edits in a directly served local checkout require a browser refresh. Python imports are loaded at process startup and require a server restart. A 192.168.x.x URL alone does not prove which machine/checkout is serving it or that live reload is enabled. Ubuntu production serves the deployed commit directory, so local Mac source changes require a push, successful main CI and the daily/manual deployment before they appear there.
+
+## Display time zones
+
+The browser defaults to the application server's time zone reported by
+`/api/state` (`server_clock`). Detection uses the service's `TZ` environment first,
+then `/etc/localtime` and `/etc/timezone`. If an IANA name cannot be identified,
+the API reports the server's current UTC offset instead. Install the OS `tzdata`
+package and use an IANA name such as `Asia/Seoul` to retain daylight-saving rules.
+If the service sandbox hides the host zone files, explicitly provision
+`Environment=TZ=Asia/Seoul` in a host-managed systemd service override and restart
+the app service. This is host configuration, not a repository `.env` deployment.
+
+Settings → Time zone can override the default for one browser, stored in that
+browser's localStorage. Selecting “Server time zone (default)” restores automatic
+server-zone use. The list uses built-in `Intl.supportedValuesOf('timeZone')` IANA
+region/city identifiers, with a small fallback list for older browsers. A country
+may span several time zones, so this setting is independent of holiday country
+and language. No external timezone list download is required.
+
+Time zones apply to today's date, the current-time marker, Today navigation and
+new/complete task actions using today. Stored schedule start/finish dates are
+calendar dates, not UTC instants, and do not shift when changing time zones.
+Metadata timestamps remain stored in their existing format. The daily deployment
+timer still runs at **03:00 Asia/Seoul**, explicitly configured in its OnCalendar;
+a browser override or service TZ does not change the timer. Existing per-host
+private environment files remain outside release delivery.

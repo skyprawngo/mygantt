@@ -23,7 +23,7 @@ for (const type of ['project','task']) for (const key of ['Enter','Escape']) {
   const button={closest:()=>({append(){}}),focus(){}};
   const context={state:{data:{projects:[project]}},CSS:{escape:v=>v},document:{createElement:()=>input},t:v=>v,
    $:selector=>selector.startsWith('#ins-')?field:selector.endsWith('-context-label')?heading:button,
-   saveProjectField:async(id,fields)=>{writes.push({id,...fields});return fields;},
+   saveProjectField:async(id,fields)=>{writes.push({id,...fields});Object.assign(project,fields);return fields;},
    saveTaskFields:async(id,fields)=>{writes.push({id,...fields});Object.assign(task,fields);},
    renderSidebar(){},renderTimeline(){},toast(message){throw Error(message);}};
   vm.createContext(context);

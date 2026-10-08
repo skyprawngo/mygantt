@@ -18,6 +18,7 @@ from pathlib import Path
 from socketserver import ThreadingUnixStreamServer
 from typing import Any
 
+from .timezones import server_clock
 from .database import Database
 from .scheduler import ScheduleError, schedule_tasks
 
@@ -116,7 +117,7 @@ def make_handler(database: Database):
       path = parsed.path
       try:
         if path == "/api/state":
-          self._json({**database.state(), "storage": storage_location(database), "holiday_country": database.holiday_country()})
+          self._json({**database.state(), "storage": storage_location(database), "server_clock": server_clock(), "holiday_country": database.holiday_country()})
           return
         if path == "/api/holiday-calendars":
           from .holiday_calendar import CALENDARS

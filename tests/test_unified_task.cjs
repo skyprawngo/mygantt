@@ -74,6 +74,34 @@ test('aligned open-left curve rounds into the planned lower-left edge',()=>{
  assert.match(path,/ Q 0 29 0 25/);
  assert.doesNotMatch(path,/NaN|Infinity/);
 });
+test('start-only actual rounds the planned finish into the open curve with matching tangents',()=>{
+ const a={left:20,right:100,top:29,bottom:49,width:80};
+ const path=c.unifiedTaskShape(p,a,'right').path;
+ assert.match(path,/L 100 25 Q 100 29 96 29 C 76\.6 29 71\.4 49 48 49/);
+});
+for(const [dateCase,side,a,corner] of [
+ ['start only','right',{left:20,right:100,top:29,bottom:49,width:80},'100 29'],
+ ['finish only','left',{left:0,right:80,top:29,bottom:49,width:80},'0 29'],
+ ['both','',{left:20,right:120,top:29,bottom:49,width:100},'100 29'],
+]) {
+ for(const attachment of ['none','top','bottom','left','right']) test(`${dateCase}: ${attachment} attachment corner classification`,()=>{
+  const pr=[4,4,4,4];
+  if(attachment==='left') pr[0]=pr[3]=0;
+  if(attachment==='right') pr[1]=pr[2]=0;
+  const path=c.unifiedTaskShape(p,a,side,pr).path;
+  const square=side==='left'?attachment==='left':attachment==='right';
+  assert.equal(path.includes(` Q ${corner} `),!square);
+  assert.doesNotMatch(path,/NaN|Infinity/);
+ });
+}
+test('open curves remain finite at narrow widths and separated dates',()=>{
+ for(const width of [1,2,4,8,20,80,300]) for(const side of ['left','right']) {
+  const a={left:side==='left'?0:100-width,right:side==='left'?width:100,top:29,bottom:49,width};
+  const path=c.unifiedTaskShape(p,a,side).path;
+  assert.doesNotMatch(path,/NaN|Infinity/);
+  assert.equal((path.match(/M /g)||[]).length,1);
+ }
+});
 test('unified grips and masks are inline SVG without nested image decoding',()=>{
  const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
  const paint=c.unifiedTaskPaint({id:'a',progress:100,actual_finish:'2026-10-04'},bar(p),bar({left:0,right:80,top:29,bottom:49,width:80}),{left:0,top:0},0);
@@ -98,6 +126,17 @@ test('completed unified bars do not leave a light base-color halo beneath antial
  for(const progress of [90,100]) {
   const markup=c.unifiedTaskPaint({id:'a',color:'#27897f',progress},bar(p),bar({left:0,right:80,top:29,bottom:49,width:80}),{left:0,top:0},0);
   const fill=markup.match(/class="unified-task-paint"[^>]*fill="([^"]+)"/)[1];
-  assert.equal(fill,progress===100?c.colorPalette('#27897f').dark:c.colorPalette('#27897f').base);
+  assert.equal(fill,progress===100?c.colorPalette('#27897f').progress:c.colorPalette('#27897f').base);
  }
+});
+
+test('subpixel tier boundaries keep the open finish fillet instead of a near-zero radius',()=>{
+ const exact={left:20,right:100,top:29,bottom:49,width:80};
+ const expected=c.unifiedTaskShape(p,exact,'right').path;
+ for(const dx of [-.25,-.000001,.000001,.25]) for(const dy of [-.25,.25]) {
+  const actual={...exact,right:100+dx,top:29+dy,width:80+dx};
+  assert.equal(c.unifiedTaskShape(p,actual,'right').path,expected);
+ }
+ const left={left:0,right:80,top:29,bottom:49,width:80};
+ assert.equal(c.unifiedTaskShape(p,{...left,left:.25,top:29.25,width:79.75},'left').path,c.unifiedTaskShape(p,left,'left').path);
 });
