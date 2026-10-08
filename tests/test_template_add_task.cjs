@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),vm=requir
 const source=fs.readFileSync('web/app.js','utf8');
 function add(tasks,sync=()=>{}) {
  let saved=0;
- const c={state:{draft:{tasks}},syncDraftFromEditor:()=>sync(tasks),crypto:{randomUUID:()=> 'new-task-id'},taskColors:['#123456'],t:k=>k,renderTemplateEditor(){},queueTemplateSave(){saved++;},setMobileDrawer(){},$:()=>null};
+ const c={state:{draft:{tasks}},syncDraftFromEditor:()=>sync(tasks),ChartMutations:{randomUUID:()=> 'new-task-id'},taskColors:['#123456'],t:k=>k,renderTemplateEditor(){},queueTemplateSave(){saved++;},setMobileDrawer(){},$:()=>null};
  vm.createContext(c);
  vm.runInContext(source.slice(source.indexOf('function templateSchedule('),source.indexOf('// Apply one end-offset'))+source.slice(source.indexOf('function addTemplateTask('),source.indexOf('let quickCreatePending')),c);
  c.addTemplateTask();assert.equal(saved,1);return tasks.at(-1);

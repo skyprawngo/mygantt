@@ -34,7 +34,7 @@ test('actual end drag switches outgoing source live, saves only actual finish',a
  assert.equal(bar.style.width,'552px');
  assert.equal(h.context.dependencySourceKind(record),'actual');
  await h.handlers.pointerup(event);
- assert.deepEqual(h.calls,[{actual_finish:'2026-10-14',cascade_dependents:true}]);assert.equal(h.state.savingDates,false);
+ assert.deepEqual(h.calls,[{actual_finish:'2026-10-14',cascade_dependents:true}]);assert.equal(h.state.drag,null);
 });
 test('actual start drag leaves end and planned dates untouched',async()=>{
  const h=harness(record),{event}=h.begin('actual','start');
@@ -149,8 +149,8 @@ test('whole-bar release updates local dates before the server responds and survi
  assert.equal(h.state.data.projects[0].tasks[0].planned_finish,'2026-10-14');
  assert.equal(rendered,'2026-10-10');
  h.context.renderTimeline();assert.equal(rendered,'2026-10-10');
- assert.equal(h.state.savingDates,true);
- await new Promise(done=>setImmediate(done));resolve({});await saving;assert.equal(h.state.savingDates,false);
+ assert.equal(h.state.drag,null);
+ await new Promise(done=>setImmediate(done));resolve({});await saving;assert.equal(h.state.drag,null);
 });
 test('failed date save rolls back changed dates but preserves unrelated edits',async()=>{
  const h=harness(record),{event}=h.begin('actual','move');h.hold();
@@ -162,7 +162,7 @@ test('failed date save rolls back changed dates but preserves unrelated edits',a
  await new Promise(done=>setImmediate(done));h.context.send=async()=>({});reject(Error('offline'));await saving;await other;
  const task=h.state.data.projects[0].tasks[0];
  assert.equal(task.actual_start,record.actual_start);assert.equal(task.actual_finish,record.actual_finish);
- assert.equal(task.notes,'Typed while saving');assert.equal(h.state.savingDates,false);
+ assert.equal(task.notes,'Typed while saving');assert.equal(h.state.drag,null);
 });
 test('refresh failure after successful PATCH preserves committed dates',async()=>{
  const h=harness(record),{event}=h.begin('planned','move');h.hold();
@@ -175,7 +175,7 @@ test('another drag can begin while a previous save is pending without losing cap
  let release;h.context.send=()=>new Promise(resolve=>release=resolve);
  let {event}=h.begin('planned','move');h.hold();h.handlers.pointermove({...event,clientX:146});
  const first=h.handlers.pointerup(event);
- assert.equal(h.state.savingDates,true);
+ assert.equal(h.state.drag,null);
  const next=h.begin('planned','move');h.hold();
  assert.equal(h.state.drag.active,true);
  await new Promise(resolve=>setImmediate(resolve));h.context.send=async()=>({});release({});await first;

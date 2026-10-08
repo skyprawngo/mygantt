@@ -35,14 +35,14 @@
 .date-header.weekend{background:#f2f4f7}
 .date-header.weekend small{color:#7d91ae}
 .date-header:first-child .none{display:none}
-.date-header.holiday{background:#fff2f1;box-shadow:inset 0 -2px #de827d}
+.date-header.holiday{background:#fff1f0}
 .date-header.holiday b,.date-header.holiday small{color:#a84d4b}
 .date-header.today{box-shadow:inset 0 0 0 2px #6d7fe2;z-index:1}
 .gantt-body{position:relative}
 .calendar-shading{position:absolute;top:0;bottom:0;z-index:0;pointer-events:none;border-left:1px solid #e7ebf1;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--day-width, 46px) - 1px),#e7ebf1 calc(var(--day-width, 46px) - 1px),#e7ebf1 var(--day-width, 46px))}
 .date-shade{position:absolute;top:0;bottom:0;border-left:1px solid rgba(205,212,222,.18)}
 .date-shade.weekend-shade{background:rgba(235,239,245,.64)}
-.date-shade.holiday-shade{background:rgba(255,226,223,.66);box-shadow:inset 0 0 0 1px rgba(211,107,101,.24)}
+.date-shade.holiday-shade{background:rgba(239,173,173,.29)}
 .calendar-shading .today-line{position:absolute;top:0;bottom:0;width:2px;background:#6679dd;opacity:.85;z-index:4}
 .gantt-row{position:relative;display:flex;height:36px;border-bottom:1px solid #e9edf2;z-index:1}
 .gantt-row.project-row{height:38px;background:rgba(250,251,253,.84)}
@@ -141,9 +141,8 @@
 .holiday-status[data-substitute-warning="true"]{color:#a75445;font-weight:600}
 .date-header.saturday{background:#eef5ff}
 .date-header.saturday small{color:#6381aa}
-.date-header.sunday{background:#fff1f0}
+.date-header.sunday,.date-header.holiday{background:#fff1f0}
 .date-header.sunday small{color:#a96363}
-.date-header.holiday{background:#ffeae7;box-shadow:inset 0 -2px #de827d}
 .date-header.holiday b,.date-header.holiday small{color:#a84d4b}
 .gantt-row.project-row,.gantt-row.task-row{background:var(--project-surface)}
 .gantt-row.project-row .gantt-left,.gantt-row.task-row .gantt-left{background:var(--project-surface)}
@@ -154,9 +153,9 @@
 .gantt-right.project-timeline{background-color:var(--project-surface);background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--day-width,46px) - 1px),rgba(218,225,235,.66) calc(var(--day-width,46px) - 1px),rgba(218,225,235,.66) var(--day-width,46px));overflow:visible}
 .row-date-shading{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
 .row-date-shading .date-shade{top:0;bottom:0;z-index:1}
-.row-date-shading .date-shade.weekend-shade.weekend-saturday{background-color:rgba(165,202,246,.30)}
-.row-date-shading .date-shade.weekend-shade.weekend-sunday{background-color:rgba(239,173,173,.29)}
-.row-date-shading .date-shade.holiday-shade{background-color:rgba(255,180,169,.20);background-image:linear-gradient(rgba(255,180,169,.42),rgba(255,180,169,.42));box-shadow:inset 0 0 0 1px rgba(197,91,85,.34)}
+.row-date-shading .date-shade.weekend-shade.weekend-saturday:not(.holiday-shade){background-color:rgba(165,202,246,.30)}
+.row-date-shading .date-shade.weekend-shade.weekend-sunday,
+.row-date-shading .date-shade.holiday-shade{background:rgba(239,173,173,.29)}
 .project-timeline>.today-line{left:0;top:0;bottom:0;width:2px;z-index:3;opacity:.82}
 .project-timeline>.today-line:before{content:none}
 .project-timeline .project-summary-bar,.project-timeline .task-bar{z-index:4}
@@ -208,7 +207,7 @@
 .dependency-layer{position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none}
 .dependency-hidden-layer{position:absolute;inset:0;z-index:5;overflow:hidden;pointer-events:none}
 .dependency-hidden-layer *{pointer-events:none}
-.dependency-hidden-hatch{opacity:.7}
+.dependency-crossing-hatch{opacity:.7}
 .dependency-hidden-halo,.dependency-hidden-line{fill:none;stroke-dasharray:4 3;stroke-linejoin:round;vector-effect:non-scaling-stroke}
 .dependency-hidden-halo{stroke:white;stroke-width:3}
 .dependency-hidden-line{stroke:#344054;stroke-width:1.2}
@@ -251,7 +250,7 @@
 .inspector-relations table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px;color:#687588}
 .inspector-relations th,.inspector-relations td{padding:6px 4px;border-bottom:1px solid #edf0f4}
 .inspector-relations thead th{position:sticky;top:0;background:#f3f5fa;font-weight:600;z-index:1}
-.inspector-relations th:first-child{width:50%;text-align:left;overflow-wrap:anywhere}
+.inspector-relations th:first-child{width:64%;text-align:left;overflow-wrap:anywhere}
 .inspector-relations tbody th{font-weight:400}
 .inspector-relations td{text-align:center}
 .inspector-relations input{accent-color:#6376dd;margin:0;vertical-align:middle;cursor:pointer}
@@ -303,8 +302,6 @@
 .property-grid .derived-date{border:0;border-radius:0;background:white;padding:7px 8px}
 .property-grid .derived-date b{font-size:8px;overflow-wrap:anywhere}
 .property-grid .property-relations{display:block}
-.property-grid .property-relations>span{border-right:0;border-bottom:1px solid #e5e9ef}
-.property-grid .property-relations>span small{display:inline;width:auto;margin-left:4px}
 .property-grid .inspector-relations{border:0;border-radius:0;max-height:220px}
 .property-grid .inspector-relations th,.property-grid .inspector-relations td{border-right:1px solid #e5e9ef}
 .property-grid .inspector-relations tr>:last-child{border-right:0}
@@ -431,7 +428,7 @@
   pointer-events: none;
 }
 
-.inspector-relations .relation-heading{position:relative}
+.inspector-relations thead .relation-heading{position:sticky;top:0}
 .relation-info{margin-left:4px;vertical-align:middle}
 .relation-info .info-tip-text{top:100%;bottom:auto;left:3px;right:auto;width:230px;max-width:none;white-space:normal;text-align:left}
 
@@ -743,12 +740,14 @@ input:is(:not([type]),[type="text"],[type="search"],[type="url"],[type="tel"],[t
 .directory-drop-target>.gantt-left{box-shadow:inset 0 0 0 2px var(--blue);background:#edf0ff!important}
 .directory-drop-target>.gantt-left::after{content:attr(data-preview);position:absolute;left:8px;top:100%;padding:3px 6px;background:#5267e8;color:white;font-size:10px;border-radius:4px;white-space:nowrap;z-index:21;pointer-events:none}
 
-/* Animate the shared column geometry without making its sticky surface translucent. */
+/* Clip the moving column without changing text padding at animation boundaries. */
 :is(#gantt,#template-gantt).labels-width-animating .gantt-left{overflow:clip}
-:is(#gantt,#template-gantt).labels-width-animating :is(.task-name,.project-name,.task-owner,.project-meta,.gantt-label-title,.chart-header-info,.group-header-label){opacity:var(--label-content-opacity,1)}
-:is(#gantt,#template-gantt).labels-width-animating .task-label{padding-left:calc(14px + 15px * var(--label-content-opacity));padding-right:calc(7px * var(--label-content-opacity));gap:calc(7px * var(--label-content-opacity))}
-:is(#gantt,#template-gantt).labels-width-animating .unassigned-task-row .task-label{padding-left:calc(14px - 2px * var(--label-content-opacity))}
-@media(max-width:760px){:is(#gantt,#template-gantt).labels-width-animating .task-label{padding-left:calc(14px - 8px * var(--label-content-opacity))}}
+.gantt-add-button{display:flex;align-items:center;gap:6px;overflow:hidden}
+.gantt-add-icon{flex:0 0 14px;width:14px;text-align:center;font-size:14px}
+.gantt-add-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:is(#timeline-view,#templates-view) .labels-collapsed .gantt-add-button{justify-content:center;gap:0}
+:is(#timeline-view,#templates-view) .labels-collapsed .gantt-add-title{display:none}
+:is(#timeline-view,#templates-view) .labels-collapsed .gantt-add-button::before{content:none}
 
 /* Template inspectors use the schedule property grid, with execution-only fields disabled. */
 #templates-view .property-grid :disabled{background:#f4f6f9;color:#99a3b2;cursor:not-allowed;opacity:1}
@@ -834,13 +833,18 @@ input:is(:not([type]),[type="text"],[type="search"],[type="url"],[type="tel"],[t
 .tag-token-editor{grid-column:2 / -1;display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0;margin:0;padding:6px 8px;border:0;border-radius:0;background:white;cursor:text;justify-content:flex-start}
 .tag-token-editor:focus-within{outline:2px solid #8c9bec;outline-offset:-2px}
 .tag-token-list{display:contents}
-.tag-token-editor .colored-tag{border-radius:999px;padding:3px 9px;max-width:100%}
+.tag-token-editor .colored-tag{border-radius:5px;padding:3px 9px;max-width:100%}
 button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap:anywhere;white-space:normal}
 .tag-token-editor .tag-entry{flex:1 1 2ch;width:2ch;min-width:2ch;max-width:100%;height:28px;min-height:28px;padding:2px 3px;border:0;border-radius:0;background:transparent;box-shadow:none;outline:none}
 .tag-token-editor .tag-entry:focus{border:0;box-shadow:none;outline:none}
 .tag-palette-popover{position:fixed;inset:auto;margin:0;width:248px;max-width:calc(100vw - 16px);box-sizing:border-box;padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:white;color:var(--ink);box-shadow:0 8px 32px #0003}
 .tag-palette-popover:popover-open{display:grid;gap:10px}
-.tag-palette-popover strong{overflow-wrap:anywhere}
+.tag-palette-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tag-palette-heading strong{min-width:0;overflow-wrap:anywhere}
+.tag-palette-heading .tag-remove-button{flex:none}
+.tag-palette-popover .tag-random-button{justify-self:start;display:inline-flex;align-items:center;justify-content:center;width:52px;height:32px;border:1px solid var(--line);border-radius:999px;background:var(--soft);color:var(--blue)}
+.tag-palette-popover .tag-random-button:hover{background:#edf0ff;border-color:var(--blue)}
+.tag-palette-popover button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .tag-swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
 .tag-swatches button{height:28px;border:1px solid #0002;border-radius:5px;cursor:pointer}
 .tag-custom-color{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -855,6 +859,59 @@ button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap
 .tag-token-editor .tag-entry{font:inherit;color:var(--ink);appearance:none}
 .tag-token-editor .colored-tag{flex:0 0 auto}
 #mobile-menu-toggle.sidebar-toggle{display:inline-flex;flex-shrink:0;width:34px;height:34px}
-@media(min-width:761px){body.sidebar-collapsed .sidebar{display:none}}
+@media(min-width:761px){
+ .sidebar{margin-left:0;}
+ body.sidebar-collapsed .sidebar{margin-left:calc(-1 * var(--sidebar-width,246px));visibility:hidden}
+}
 .settings-subsection{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
 .settings-subsection h3{margin:0 0 12px;font-size:13px;font-weight:600}
+
+
+/* Shared gentle acceleration/deceleration for navigation and property panels. */
+:root{--motion-duration:180ms;--motion-ease:linear}
+@media(max-width:760px){
+ .sidebar,:is(#mobile-inspector,#template-inspector){transition:transform var(--motion-duration) var(--motion-ease),visibility 0s var(--motion-duration)}
+ .menu-open .sidebar,.inspector-open :is(#mobile-inspector,#template-inspector){transition-delay:0s;visibility:visible}
+}
+.drawer-backdrop{opacity:1;visibility:visible;transition:opacity var(--motion-duration) var(--motion-ease),visibility 0s}
+.drawer-backdrop[hidden]{display:block;opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--motion-duration) var(--motion-ease),visibility 0s var(--motion-duration)}
+.toast{transition:opacity 240ms var(--motion-ease),transform 240ms var(--motion-ease)}
+.side-project-swipe>.side-project-row{transition:transform var(--motion-duration) var(--motion-ease)}
+.side-project-swipe.swipe-dragging>.side-project-row{transition:none}
+@media(prefers-reduced-motion:reduce){
+ .sidebar,:is(#mobile-inspector,#template-inspector),.drawer-backdrop,.drawer-backdrop[hidden],.toast,.side-project-swipe>.side-project-row,body.sidebar-collapsed .sidebar{transition:none}
+}
+
+/* Native transform transitions retain opaque sticky labels above SVG. */
+.project-fold-animating > .gantt-row{background:transparent!important;border-bottom-color:transparent}
+
+@media(min-width:761px){.main-area{overflow:clip}}
+
+.inspector-relations .relation-project-heading th{background:var(--soft);color:var(--ink);font-weight:600;text-align:left;white-space:normal;overflow-wrap:anywhere;padding:7px 6px}
+
+.inspector-relations .relation-project-name{display:block;color:var(--muted);font-size:.9em;margin-bottom:3px;overflow-wrap:anywhere}
+.inspector-relations .relation-current-task{color:#9aa3b0;background:var(--soft)}
+.inspector-relations input:disabled{cursor:default;opacity:.4}
+.inspector-relations .relation-add-cell{padding:0}
+.relation-add-cell button{width:100%;min-height:32px;border:0;background:transparent;color:var(--blue);font-size:20px}
+.relation-add-cell button:hover{background:#edf0ff}
+.external-relation-picker{position:fixed;inset:auto;margin:0;width:280px;max-width:calc(100vw - 16px);padding:14px;border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 32px #0003;background:var(--paper);color:var(--ink)}
+.external-relation-picker:popover-open{display:grid;gap:12px}
+.external-relation-picker label{display:grid;gap:5px;color:var(--muted);font-size:11px}
+.external-relation-picker select{width:100%;min-height:34px}
+.external-relation-picker p{margin:0;color:var(--muted);font-size:11px}
+.external-relation-picker .button{justify-content:center}
+
+.inspector-relations .relation-task-label{display:flex;align-items:center;gap:5px;min-width:0}
+.inspector-relations .relation-project-badge{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;min-width:16px;height:16px;padding:0 2px;box-sizing:border-box;border-radius:3px;font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1}
+.inspector-relations .relation-task-dot{flex:0 0 8px;width:8px;height:8px;border-radius:50%}
+.inspector-relations .relation-task-name{min-width:0;overflow-wrap:anywhere}
+
+.inspector-relations .relation-project-badge[hidden]{display:none}
+
+.property-grid .inspector-relations .relation-position-marker td{height:3px;padding:0;border:0;background:var(--relation-marker-color);line-height:0}
+
+/* Text stays above crossing hatching, below the opaque sticky label column. */
+.bar-label-overlay{position:absolute;display:flex;align-items:center;box-sizing:border-box;overflow:clip;z-index:6;pointer-events:none}
+.has-label-overlay>.bar-text{visibility:hidden}
+.gantt-body .gantt-row>.gantt-left,#template-gantt .gantt-row>.gantt-left{z-index:7}

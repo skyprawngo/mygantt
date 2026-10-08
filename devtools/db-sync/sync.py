@@ -100,9 +100,15 @@ def backup(path):
     return str(dest)
 
 def apply(path, expected, desired):
+    validate_task_links(desired)
     saved = backup(path)
     with connect(path) as db:
         db.execute('BEGIN IMMEDIATE')
+        tasks=desired['tables']['project_tasks']
+        cross_project=any(tasks[dep]['project_id']!=row['project_id']
+                          for row in tasks.values() for dep in json.loads(row.get('dependencies') or '[]'))
+        if cross_project and not db.execute("SELECT 1 FROM sqlite_master WHERE type='view' AND name='task_links'").fetchone():
+            raise RuntimeError('Cross-project links require the peer application migration first')
         before=snapshot(db)
         if digest(before)!=expected: raise RuntimeError('Database changed during synchronization; retry')
         if before['schema']!=desired['schema']: raise RuntimeError('Schema mismatch; update applications first')
@@ -148,6 +154,23 @@ def groups(value):
     for key,row in tables['app_settings'].items(): result['setting:'+key]=row
     return result
 
+def validate_task_links(value):
+    tasks=value['tables']['project_tasks']
+    incoming={key:set(json.loads(row.get('dependencies') or '[]')) for key,row in tasks.items()}
+    outgoing={key:[] for key in tasks}
+    for key,deps in incoming.items():
+        if key in deps or not deps <= tasks.keys():
+            raise RuntimeError('Invalid cross-project dependency reference')
+        for dep in deps: outgoing[dep].append(key)
+    ready=[key for key,deps in incoming.items() if not deps]
+    visited=0
+    while ready:
+        key=ready.pop();visited+=1
+        for child in outgoing[key]:
+            incoming[child].remove(key)
+            if not incoming[child]:ready.append(child)
+    if visited!=len(tasks):raise RuntimeError('Cross-project dependency cycle')
+
 def merge(base,local,remote):
     if not base['schema']==local['schema']==remote['schema']: raise RuntimeError('Schema mismatch; update applications first')
     b,l,r=map(groups,(base,local,remote)); merged={}; conflicts=[]
@@ -171,6 +194,8 @@ def merge(base,local,remote):
         if prefix=='project':
             result['tables']['project_creation_requests'].update(value['requests'])
             if value['order'] is not None: result['order'][id]=value['order']
+    try: validate_task_links(result)
+    except RuntimeError: return None,['cross-project-dependencies']
     return result,[]
 
 def watch(path):

@@ -74,4 +74,31 @@ class SyncGateTests(unittest.TestCase):
         self.assertIn('--pair-id test-pair',command[-1])
         self.assertNotIn('--db',command[-1])
 
+
+    def test_cross_project_graph_validation(self):
+        import json
+        valid={'tables':{'project_tasks':{'a':{'dependencies':'[]'},'b':{'dependencies':'["a"]'}}}}
+        sync.validate_task_links(valid)
+        valid['tables']['project_tasks']['a']['dependencies']=json.dumps(['b'])
+        with self.assertRaisesRegex(RuntimeError,'cycle'):sync.validate_task_links(valid)
+        valid['tables']['project_tasks']['a']['dependencies']='["missing"]'
+        with self.assertRaisesRegex(RuntimeError,'reference'):sync.validate_task_links(valid)
+
+    def test_old_peer_rejects_cross_project_data_before_writing(self):
+        from mygantt.database import Database
+        import copy
+        with tempfile.TemporaryDirectory() as directory:
+            path=pathlib.Path(directory)/'old.db'
+            database=Database(path,seed_samples=False,holiday_fetcher=lambda year:[])
+            tasks=[]
+            for name in ('P','Q'):
+                project=database.create_project({'name':name,'start_date':'2026-10-01'})
+                tasks.append(database.create_task(project['id'],{'name':name,'planned_start':'2026-10-01','planned_finish':'2026-10-02'})['tasks'][0]['id'])
+            with database.connection() as db:db.execute('DROP VIEW task_links')
+            before=sync.read(path);desired=copy.deepcopy(before)
+            desired['tables']['project_tasks'][tasks[1]]['dependencies']='["'+tasks[0]+'"]'
+            with self.assertRaisesRegex(RuntimeError,'migration first'):
+                sync.apply(path,sync.digest(before),desired)
+            self.assertEqual(sync.read(path),before)
+
 if __name__=='__main__':unittest.main()

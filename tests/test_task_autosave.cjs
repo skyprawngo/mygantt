@@ -40,7 +40,7 @@ test('Backspace clears the whole date; only optional actual dates save empty',as
   const events={},patches=[];
   const input={id:required?'ins-task-planned-start':'ins-task-actual-start',type:'date',tagName:'INPUT',value:'2026-10-04',required,checked:false,addEventListener(k,fn){events[k]=fn;},checkValidity(){return !required||!!this.value;},dispatchEvent(){},removeAttribute(){},setAttribute(){}};
   const status={textContent:'',classList:{toggle(){}}},form={isConnected:false,addEventListener(){}};
-  const c={$$:()=>[input],$:()=>status,state:{cascadeDependents:false},Event,saveTaskFields:async(id,fields)=>{patches.push(fields);return {tasks:[]};},toast(){}};
+  const c={ChartEditing:require('../web/editing.js'),chartMutations:{resolveId:id=>id},document:{},$$:()=>[input],$:()=>status,state:{cascadeDependents:false,data:{projects:[]}},Event,saveTaskFields:async(id,fields)=>{patches.push(fields);return {tasks:[]};},toast(){}};
   withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),c);vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
   c.bindTaskAutoSave(form,{id:'t'});
   let prevented=false;events.keydown({key:'Backspace',isComposing:false,preventDefault(){prevented=true;},stopPropagation(){}});

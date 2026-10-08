@@ -42,3 +42,27 @@
 - `python3 -m unittest tests.test_mutation_contract`: 실제 SQLite 계산과 프론트 미리보기 비교.
 - `test_mutations.cjs`: 응답 대기 중 즉시 반영, 연속 편집/실패, 관계 복구, 임시 ID 치환, 오래된 조회 무시, 저장 후 조회 실패.
 - 격리 DB + PATCH 8초 지연 서버에서 브라우저의 ‘저장 중…’ 상태와 변경된 간트 표시를 확인. 사용자의 실제 일정 DB에는 테스트 변경을 기록하지 않음.
+
+## Cross-project connections
+
+Schedule dependencies use globally unique task UUIDs; the owner project UUID is
+already stored on each task. `cross-project-dependencies-v1` adds the `task_links`
+view exposing predecessor/successor task and project UUIDs without duplicating
+ownership. JSON predecessor arrays remain the compatibility write format, so old
+records and sync baselines are preserved. A deletion trigger removes incoming
+references even for project cascade deletes and sync writes. Moving a task keeps
+both incoming and outgoing links. Templates remain self-contained and importing a
+project into a template includes only internal connections.
+
+Schedule edits validate cycles across the entire workspace and cascade calendar-day
+offsets across project boundaries. Responses include `affected_projects` when other
+projects changed, allowing the optimistic journal to adopt all authoritative values.
+Undo restores the whole linked graph atomically. Sync validates the merged graph
+before applying it, rejects cycles/dangling endpoints, and refuses cross-project
+records on a peer without the new migration.
+
+Startup backs up existing DBs before the additive migration. Deploy the updated
+backend and sync helper on both peers before using cross-project links in production.
+The migration adds a view/trigger and leaves existing schedule rows and the core
+sync table schema untouched. Do not roll back to an old backend while cross-project
+links exist: its same-project validation cannot edit those tasks.

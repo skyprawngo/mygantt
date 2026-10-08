@@ -10,7 +10,7 @@ test('native clipboard events copy rows, paste after selection, and leave text f
  events.copy(event);assert.equal(JSON.parse(clipboard['text/plain']).source_id,'a');
  await events.paste(event);
  assert.deepEqual(calls[0],['/api/duplicate',{kind:'task',source_id:'a',project_id:'p',anchor_id:'a'}]);
- assert.equal(state.selection.id,'copy');assert.equal(prevented,2);
+ assert.equal(state.selection.id,'a','response callbacks leave selection to the optimistic journal');assert.equal(prevented,2);
  const textEvent={...event,target:{closest:()=>({})}};
  events.copy(textEvent);await events.paste(textEvent);assert.equal(prevented,2);assert.equal(calls.length,1);
  clipboard['text/plain']='ordinary text';await events.paste(event);assert.equal(calls.length,1);

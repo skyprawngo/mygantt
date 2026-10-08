@@ -39,7 +39,7 @@ test('cascade uses later finish, shifts a diamond once, retains actual dates and
 test('order, cross-project placement and rejected delete restore graph and exact position',async()=>{
   const data=initial();data.projects.push({id:'q',tasks:[]});const h=harness(data);
   let save=h.write('/api/tasks/b/order',{anchor_id:'a',after:false});assert.deepEqual(h.tasks.map(t=>t.id),['b','a']);await tick();h.calls[0].resolve(h.view.projects[0]);await save;
-  save=h.write('/api/tasks/a/placement',{directory_id:'project:q'});assert.deepEqual(h.view.projects[0].tasks[0].dependencies,[]);assert.equal(h.view.projects[1].tasks[0].id,'a');
+  save=h.write('/api/tasks/a/placement',{directory_id:'project:q'});assert.deepEqual(h.view.projects[0].tasks[0].dependencies,['a']);assert.equal(h.view.projects[1].tasks[0].id,'a');
   await tick();h.calls[1].resolve(h.view.projects[1]);await save;
   save=h.write('/api/projects/q',{},'DELETE');const failed=assert.rejects(save);assert.equal(h.view.projects.length,1);await tick();h.calls[2].reject(Error('offline'));await failed;
   assert.equal(h.view.projects[1].tasks[0].id,'a');
@@ -84,4 +84,59 @@ test('template instantiation previews explicit offsets, weekdays and known holid
   const add=h.write('/api/projects/p/tasks',{name:'Added',planned_start:'2026-10-08',planned_finish:'2026-10-08'},'POST');const temp=h.view.projects[0].tasks.at(-1).id;
   await tick();h.calls[1].resolve({...h.view.projects[0],tasks:h.view.projects[0].tasks.map(t=>({...t,id:t.id===temp?'created-task':t.id}))});await add;
   assert.equal(h.journal.resolveId(temp),'created-task');assert.equal(h.view.projects[0].tasks.length,3);
+});
+
+test('LAN HTTP without randomUUID generates unique v4 IDs and saves progress', async () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const webcrypto = require('node:crypto').webcrypto;
+  const context = vm.createContext({
+    crypto: {getRandomValues: bytes => webcrypto.getRandomValues(bytes)},
+    structuredClone,
+  });
+  vm.runInContext(fs.readFileSync(require.resolve('../web/mutations.js'), 'utf8'), context);
+  const api = context.ChartMutations;
+  const ids = Array.from({length:100}, () => api.randomUUID());
+  assert.equal(new Set(ids).size, 100);
+  ids.forEach(id => assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/));
+  let view, sent;
+  const journal = api.create({initial:initial(), publish:data => {view=data;},
+    send:async (path, options) => {
+      sent={path, fields:JSON.parse(options.body)};
+      return {...initial().projects[0], tasks:[task('a',{progress:70,status:'doing'}),task('b')]};
+    },
+  });
+  await journal.mutate('/api/tasks/a', {method:'PATCH',body:JSON.stringify({progress:70,status:'doing'})});
+  assert.equal(sent.path, '/api/tasks/a');
+  assert.equal(sent.fields.progress, 70);
+  assert.equal(view.projects[0].tasks[0].progress, 70);
+  assert.equal(journal.pendingCount, 0);
+});
+
+test('undo waits for pending save, uses server token, then publishes restored state', async()=>{
+  let release, view;
+  const calls=[];
+  const journal=create({initial:initial(),publish:data=>{view=data;},send:async(path,options)=>{
+    calls.push(path);
+    if(path==='/api/tasks/a')return new Promise(resolve=>{release=()=>resolve({...initial().projects[0],tasks:[task('a',{progress:70}),task('b')],_undo_token:'undo-a'});});
+    if(path==='/api/undo'){assert.equal(JSON.parse(options.body).token,'undo-a');return {undone:true};}
+    return initial();
+  }});
+  const save=journal.mutate('/api/tasks/a',{method:'PATCH',body:'{"progress":70}'});
+  const undo=journal.undo();await tick();assert.deepEqual(calls,['/api/tasks/a']);
+  release();await save;assert.equal(await undo,true);
+  assert.equal(view.projects[0].tasks[0].progress,0);
+  assert.deepEqual(calls,['/api/tasks/a','/api/undo','/api/state']);
+  assert.equal(await journal.undo(),false);
+});
+
+test('cross-project successor cascade and authoritative peer project response',async()=>{
+  const data=initial();data.projects.push({id:'q',name:'Q',tasks:[task('c',{project_id:'q',dependencies:['a']})]});
+  const h=harness(data),save=h.write('/api/tasks/a',{planned_finish:'2026-10-12',cascade_dependents:true});
+  assert.equal(h.view.projects[1].tasks[0].planned_start,'2026-10-11');
+  await tick();h.calls[0].resolve({...h.view.projects[0],affected_projects:[{...h.view.projects[1],name:'Confirmed Q'}]});await save;
+  assert.equal(h.view.projects[1].name,'Confirmed Q');
+  const deleted=h.write('/api/projects/p',{},'DELETE');
+  assert.deepEqual(h.view.projects[0].tasks[0].dependencies,[]);
+  await tick();h.calls[1].resolve({deleted:true});await deleted;
 });

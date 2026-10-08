@@ -20,6 +20,7 @@ from typing import Any
 
 from .timezones import server_clock
 from .database import Database
+from .undo import UndoHistory, snapshot
 from .scheduler import ScheduleError, schedule_tasks
 
 
@@ -81,6 +82,32 @@ def unix_server(path: Path, handler):
 
 
 def make_handler(database: Database):
+  history = UndoHistory(database)
+  write_lock = threading.RLock()
+
+  def tracked(method):
+    def handle(self):
+      with write_lock:
+        self._deferred_json = None
+        try:
+          with history.transaction() as db:
+            before = snapshot(db)
+            self._defer_json = True
+            method(self)
+            payload, status = self._deferred_json
+            if status >= 400:
+              db.rollback()
+            else:
+              after = snapshot(db)
+          if status < 400:
+            token = history.remember(before, after)
+            if token:
+              self._undo_token = token
+        finally:
+          self._defer_json = False
+        self._json(payload, status)
+    return handle
+
   class Handler(BaseHTTPRequestHandler):
     server_version = "MyGantt/1.0"
 
@@ -88,6 +115,9 @@ def make_handler(database: Database):
       print(f"[{self.log_date_time_string()}] {format % args}")
 
     def _json(self, payload: Any, status: int = 200) -> None:
+      if getattr(self, "_defer_json", False):
+        self._deferred_json = (payload, status)
+        return
       if isinstance(payload, dict) and isinstance(payload.get("error"), str):
         payload = {**payload, **error_reference(payload["error"])}
       encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -95,6 +125,8 @@ def make_handler(database: Database):
       self.send_header("Content-Type", "application/json; charset=utf-8")
       self.send_header("Content-Length", str(len(encoded)))
       self.send_header("Cache-Control", "no-store")
+      if getattr(self, "_undo_token", None):
+        self.send_header("X-MyGantt-Undo", self._undo_token)
       self.end_headers()
       self.wfile.write(encoded)
 
@@ -154,6 +186,19 @@ def make_handler(database: Database):
         self._error(str(exc))
 
     def do_POST(self) -> None:
+      if urllib.parse.urlparse(self.path).path == '/api/undo':
+        try:
+          payload = self._body()
+          with write_lock:
+            history.undo(payload.get('token'))
+          self._json({'undone': True})
+        except (ScheduleError, ValueError) as exc:
+          self._error(str(exc), 409)
+        return
+      self._post()
+
+    @tracked
+    def _post(self) -> None:
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
@@ -193,6 +238,7 @@ def make_handler(database: Database):
       except (ScheduleError, ValueError, KeyError, json.JSONDecodeError) as exc:
         self._error(str(exc))
 
+    @tracked
     def do_PUT(self) -> None:
       path = urllib.parse.urlparse(self.path).path
       try:
@@ -206,6 +252,7 @@ def make_handler(database: Database):
       except (ScheduleError, ValueError, KeyError, json.JSONDecodeError) as exc:
         self._error(str(exc))
 
+    @tracked
     def do_DELETE(self) -> None:
       parts = urllib.parse.urlparse(self.path).path.strip("/").split("/")
       try:
@@ -221,6 +268,7 @@ def make_handler(database: Database):
       except (ScheduleError, ValueError) as exc:
         self._error(str(exc))
 
+    @tracked
     def do_PATCH(self) -> None:
       path = urllib.parse.urlparse(self.path).path
       try:

@@ -21,7 +21,7 @@ test('one user-space progress gradient for both tiers, including zero and comple
  const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
  for(const progress of [0,40,90,100]) {
   const paint=c.unifiedTaskPaint({id:'a',progress},bar(p),bar({left:30,right:150,top:29,bottom:49,width:120}),{left:0,top:0},0);
-  assert.equal((paint.match(/<path /g)||[]).length,2);
+  assert.equal((paint.match(/class="unified-task-(?:paint|progress)"/g)||[]).length,2);
   assert.match(paint,/maskUnits="userSpaceOnUse"/);
   const mask=paint;
   assert.match(mask,/width="150" height="42"/);
@@ -121,12 +121,14 @@ test('blocked unified bar outlines its exterior once without a tier seam',()=>{
  assert.doesNotMatch(c.unifiedTaskPaint({id:'a',progress:40,status:'doing'},...args),/blocked-task-outline/);
 });
 
-test('completed unified bars do not leave a light base-color halo beneath antialiased progress edges',()=>{
+test('unified progress uses solid color and avoids a base-color halo at completion',()=>{
  const bar=r=>({getBoundingClientRect:()=>r,classList:{contains:()=>false,add(){}}});
  for(const progress of [90,100]) {
   const markup=c.unifiedTaskPaint({id:'a',color:'#27897f',progress},bar(p),bar({left:0,right:80,top:29,bottom:49,width:80}),{left:0,top:0},0);
   const fill=markup.match(/class="unified-task-paint"[^>]*fill="([^"]+)"/)[1];
-  assert.equal(fill,progress===100?c.colorPalette('#27897f').progress:c.colorPalette('#27897f').base);
+  assert.equal(fill,c.colorPalette('#27897f')[progress===100?'progress':'base']);
+  assert.ok(markup.includes(`class="unified-task-progress" d="${markup.match(/class="unified-task-paint"[^>]*d="([^"]+)"/)[1]}" fill="${c.colorPalette('#27897f').progress}"`));
+  assert.doesNotMatch(markup, /<pattern/);
  }
 });
 

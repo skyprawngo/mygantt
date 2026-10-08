@@ -1,4 +1,12 @@
 [
+{"textID": "relations.title", "KR": "연결", "US": "Connections", "JP": "接続"},
+{"textID": "relations.add_external", "KR": "다른 프로젝트 작업 추가", "US": "Add task from another project", "JP": "他のプロジェクトの作業を追加"},
+{"textID": "relations.choose_direction", "KR": "추가한 행에서 선행 또는 후행을 선택하세요.", "US": "Choose predecessor or successor in the added row.", "JP": "追加した行で先行または後続を選択してください。"},
+{"textID": "relations.no_external", "KR": "추가할 다른 프로젝트 작업이 없습니다.", "US": "No other project tasks to add.", "JP": "追加できる他のプロジェクトの作業はありません。"},
+{"textID": "relations.add_row", "KR": "추가", "US": "Add", "JP": "追加"},
+
+{"textID":"undo.completed","KR":"변경사항을 취소했습니다.","US":"Change undone.","JP":"変更を取り消しました。"},
+{"textID":"undo.empty","KR":"취소할 변경사항이 없습니다.","US":"No changes to undo.","JP":"取り消す変更はありません。"},
 {"textID":"navigation.toggle_sidebar","KR":"사이드바 열기/닫기","US":"Toggle sidebar","JP":"サイドバーを開く／閉じる"},
 {"textID":"template.duration_days","KR":"기간(일)","US":"Duration (days)","JP":"期間（日）"},
 {"textID": "settings.timezone", "KR": "시간대", "US": "Time zone", "JP": "タイムゾーン"},
@@ -710,7 +718,7 @@
   },
   {
     "textID": "inspector.task_connections",
-    "KR": "작업 연결",
+    "KR": "연결",
     "US": "Task connections",
     "JP": "作業の接続"
   },
@@ -740,13 +748,13 @@
   },
   {
     "textID": "inspector.predecessors",
-    "KR": "선행 작업",
+    "KR": "선행",
     "US": "Predecessors",
     "JP": "先行作業"
   },
   {
     "textID": "inspector.successors",
-    "KR": "후행 작업",
+    "KR": "후행",
     "US": "Successors",
     "JP": "後続作業"
   },
@@ -794,9 +802,9 @@
   },
   {
     "textID": "inspector.moving_a_task_removes_its_existing",
-    "KR": "소속 변경 시 기존 선행·후행 연결은 해제됩니다.",
-    "US": "Moving a task removes its existing predecessor and successor connections.",
-    "JP": "所属を変更すると、既存の先行・後続関係は解除されます。"
+    "KR": "프로젝트를 옮겨도 기존 선행·후행 연결은 유지됩니다.",
+    "US": "Existing predecessor and successor connections are preserved when moving a task.",
+    "JP": "プロジェクトを移動しても先行・後続の接続は維持されます。"
   },
   {
     "textID": "inspector.task_moved_to",

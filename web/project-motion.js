@@ -1,5 +1,5 @@
 /* Presentation-only transitions. Task dates and records are never changed here. */
-function createProjectMotion({getState, render, persist, redraw = () => {}}) {
+function createProjectMotion({getState, render, persist}) {
   const completed = new Map(), running = new Set();
   let queue = Promise.resolve();
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -8,116 +8,99 @@ function createProjectMotion({getState, render, persist, redraw = () => {}}) {
   const emit = (phase, projectId, action) => document.dispatchEvent(new CustomEvent(`project-animation-${phase}`, {detail:{projectId, action}}));
   async function animate(el, frames, duration) {
     if (!el || reduced()) return;
-    const animation = el.animate(frames, {duration, easing:'cubic-bezier(.22,.7,.25,1)', fill:'forwards'});
+    const animation = el.animate(frames, {duration, easing:'cubic-bezier(.33,0,.67,1)', fill:'forwards'});
     try { await animation.finished; } catch {} finally { animation.cancel(); }
+  }
+  let snapshotId = 0;
+  function cloneLayer(layer) {
+    const clone = layer.cloneNode(true), ids = new Map();
+    for (const node of [clone,...clone.querySelectorAll('[id]')]) {
+      if (node.id) { const id = `${node.id}-motion-${++snapshotId}`; ids.set(node.id,id); node.id=id; }
+    }
+    for (const node of [clone,...clone.querySelectorAll('*')]) for (const attr of [...node.attributes]) {
+      let value = attr.value.replace(/url\(#([^)]*)\)/g,(match,id)=>ids.has(id)?`url(#${ids.get(id)})`:match);
+      if (value.startsWith('#') && ids.has(value.slice(1))) value=`#${ids.get(value.slice(1))}`;
+      if (value!==attr.value) node.setAttribute(attr.name,value);
+    }
+    clone.setAttribute('aria-hidden','true');
+    layer.after(clone);
+    return clone;
   }
   async function animateRows(id, collapse) {
     if (reduced()) return;
-    const rows = taskRows(id).map(row => {
-      const cells = [...row.children];
-      const left = cells.find(cell => cell.classList.contains('gantt-left'));
-      // Keep the sticky, opaque surface above every timeline layer. Only its
-      // contents may fade/scale; fading the cell exposes the morphing band.
-      const animated = cells.flatMap(cell => cell === left ? [...cell.children] : [cell]);
-      return {row, height:row.getBoundingClientRect().height, left, animated};
-    });
+    const rows = taskRows(id);
     if (!rows.length) return;
-    const band = [...document.querySelectorAll('#gantt .project-duration-band')].find(el => el.dataset.projectBand === id);
-    const projectRow = rowFor(id);
-    const summary = projectRow?.querySelector('.project-summary-bar');
+    const body = rows[0].parentElement, origin = body.getBoundingClientRect().top;
+    const geometry = rows.map(row=>({row,rect:row.getBoundingClientRect()}));
+    const top = geometry[0].rect.top-origin, bottom = geometry.at(-1).rect.bottom-origin;
+    const height = bottom-top;
+    if (height<=0) return;
+    const bands = [...body.querySelectorAll('.project-duration-band')];
+    const band = bands.find(el=>el.dataset.projectBand===id);
     const bandTop = band ? parseFloat(band.style.top) : 0;
     const bandHeight = band ? parseFloat(band.style.height) : 0;
-    const summaryTop = summary ? summary.offsetTop : 7;
-    const summaryHeight = summary ? summary.offsetHeight : 23;
-    const laterBands = band ? [...document.querySelectorAll('#gantt .project-duration-band')]
-      .filter(el => parseFloat(el.style.top) > bandTop)
-      .map(el => ({el,top:parseFloat(el.style.top)})) : [];
-    const totalHeight = rows.reduce((sum,item)=>sum+item.height,0);
-    // Keep the real surface below the calendar throughout the transition.
-    // A separate solid cover fades away, so removing it cannot reveal grid lines
-    // abruptly on the final frame.
-    const cover = band?.cloneNode(false);
-    if (cover) {
-      cover.removeAttribute('data-project-band');
-      cover.classList.add('project-morph-cover');
-      band.after(cover);
-    }
-    if (band) band.classList.add('project-band-morphing');
-    projectRow?.classList.add('project-row-morphing');
-    // Never transform/fade the row itself: that creates a stacking context above
-    // the sticky label column. Paint SVG bars from the same geometry each frame.
-    const apply = fraction => {
-      for (const {row,height,left,animated} of rows) {
-        row.style.height = `${height*fraction}px`;
-        row.style.minHeight = '0';
-        left?.classList.add('project-motion-label');
-        for (const cell of animated) {
-          cell.style.transformOrigin = 'top';
-          cell.style.transform = `scaleY(${fraction})`;
-          cell.style.opacity = String(fraction);
-          cell.style.borderBottomColor = `rgba(233,237,242,${fraction})`;
+    const summary = rowFor(id)?.querySelector('.project-summary-bar');
+    const summaryTop = summary?.offsetTop ?? 7, summaryHeight = summary?.offsetHeight ?? 23;
+    const layers = [...body.querySelectorAll('.dependency-layer, .dependency-hidden-layer')]
+      .map(layer=>({layer,height:layer.getBoundingClientRect().height}));
+    const saved = new Map(), animations = [], snapshots = [];
+    const remember = el => {if (!saved.has(el)) saved.set(el,el.style.cssText);};
+    const motion = (el,folded,expanded) => {
+      remember(el);
+      animations.push(el.animate(collapse?[expanded,folded]:[folded,expanded],
+        {duration:200,easing:'linear',fill:'both'}));
+    };
+    try {
+      // Keep layout fixed during the compositor animation. Translate individual
+      // paint elements rather than their parent, preserving SVG/text stacking.
+      body.classList.add('project-fold-animating');
+      for (const {row,rect} of geometry) {
+        const offset=rect.top-origin-top;
+        for (const cell of row.children) {
+          const elements=cell.classList.contains('gantt-left')?[cell]:[...cell.children];
+          for (const element of elements) {
+            remember(element);element.style.transformOrigin='0 0';
+            motion(element,{transform:`translateY(${-offset}px) scaleY(0)`},{transform:'translateY(0px) scaleY(1)'});
+          }
         }
+      }
+      for (const row of [...body.querySelectorAll(':scope > .gantt-row')].filter(row=>row.offsetTop>=bottom-.5 && !rows.includes(row))) {
+        for (const cell of row.children) for (const element of cell.classList.contains('gantt-left')?[cell]:[...cell.children])
+          motion(element,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
+      }
+      for (const later of bands.filter(el=>parseFloat(el.style.top)>=bottom-0.5 && el!==band)) {
+        motion(later,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
       }
       if (band) {
-        band.style.top = `${bandTop+summaryTop*(1-fraction)}px`;
-        band.style.height = `${summaryHeight+(bandHeight-summaryHeight)*fraction}px`;
-        band.style.background = `color-mix(in srgb, var(--bar-color) ${100*(1-fraction)}%, var(--bar-surface))`;
-        band.style.setProperty('--morph-progress-color', `color-mix(in srgb, var(--bar-dark) ${100*(1-fraction)}%, var(--bar-light))`);
-        if (cover) {
-          cover.style.top = band.style.top;
-          cover.style.height = band.style.height;
-          cover.style.opacity = String(1-fraction);
-          cover.style.visibility = fraction === 0 ? 'hidden' : '';
-        }
-        for (const {el,top} of laterBands) el.style.top = `${top-totalHeight*(1-fraction)}px`;
+        remember(band);band.style.transformOrigin='0 0';
+        const folded={transform:`translateY(${summaryTop}px) scaleY(${summaryHeight/bandHeight})`};
+        const expanded={transform:'translateY(0px) scaleY(1)'};
+        motion(band,folded,expanded);
+        const cover=band.cloneNode(false);cover.removeAttribute('data-project-band');
+        cover.classList.add('project-morph-cover');band.after(cover);snapshots.push(cover);
+        motion(cover,{...folded,opacity:1},{...expanded,opacity:0});
       }
-      if (summary) {
-        summary.style.color = `color-mix(in srgb, var(--bar-ink) ${100*(1-fraction)}%, var(--bar-dark))`;
-        summary.style.borderLeftColor = `color-mix(in srgb, transparent ${100*(1-fraction)}%, var(--bar-color))`;
+      // Three vector regions share the rows' native timing. Labels retain
+      // their sticky opaque surface; the SVG stays behind the HTML handles.
+      for (const {layer,height:layerHeight} of layers) {
+        remember(layer);
+        const middle=cloneLayer(layer),after=cloneLayer(layer);snapshots.push(middle,after);
+        layer.style.clipPath=`inset(0 0 ${Math.max(0,layerHeight-top)}px 0)`;
+        middle.style.clipPath=`inset(${top}px 0 ${Math.max(0,layerHeight-bottom)}px 0)`;
+        after.style.clipPath=`inset(${bottom}px 0 0 0)`;
+        middle.style.transformOrigin=after.style.transformOrigin='0 0';
+        const x=Number(layer.dataset.columnOffset || 0);
+        motion(middle,{transform:`translate(${x}px,${top}px) scaleY(0)`,opacity:0},{transform:`translate(${x}px,0px) scaleY(1)`,opacity:1});
+        motion(after,{transform:`translate(${x}px,${-height}px)`},{transform:`translate(${x}px,0px)`});
       }
-      // Use the real collapsed bar at the endpoint, including its progress fill,
-      // padding, border and text styling. Do not substitute a background-band copy.
-      if (summary) {
-        summary.classList.toggle('expanded-project-label', fraction > 0);
-        if (fraction === 0) {
-          summary.style.removeProperty('color');
-          summary.style.removeProperty('border-left-color');
-        }
-      }
-      if (band) band.style.visibility = fraction === 0 ? 'hidden' : '';
-      redraw();
-    };
-    apply(collapse ? 1 : 0);
-    try {
-      await new Promise(resolve => {
-        const start = performance.now();
-        function frame(now) {
-          const t = Math.min(1,(now-start)/320), eased = 1-Math.pow(1-t,3);
-          apply(collapse ? 1-eased : eased);
-          if (t < 1) requestAnimationFrame(frame); else resolve();
-        }
-        requestAnimationFrame(frame);
-      });
+      await Promise.all(animations.map(a=>a.finished));
+    } catch(error) {
+      if (error?.name!=='AbortError') throw error;
     } finally {
-      cover?.remove();
-      // Collapsing immediately replaces these nodes in fold(). Preserve the last
-      // frame until that replacement instead of restoring the expanded geometry.
-      if (!collapse) {
-        projectRow?.classList.remove('project-row-morphing');
-        if (band) {
-          band.style.removeProperty('visibility');
-          band.classList.remove('project-band-morphing');
-          band.style.top = `${bandTop}px`; band.style.height = `${bandHeight}px`;
-          band.style.removeProperty('background'); band.style.removeProperty('--morph-progress-color');
-          for (const {el,top} of laterBands) el.style.top = `${top}px`;
-        }
-        if (summary) {summary.style.removeProperty('color');summary.style.removeProperty('border-left-color');}
-        for (const {row,left,animated} of rows) {
-          row.style.removeProperty('height'); row.style.removeProperty('min-height');
-          left?.classList.remove('project-motion-label');
-          for (const cell of animated) for (const property of ['transform-origin','transform','opacity','border-bottom-color']) cell.style.removeProperty(property);
-        }
-      }
+      for(const animation of animations) animation.cancel();
+      for(const [el,cssText] of saved) el.style.cssText=cssText;
+      for(const snapshot of snapshots) snapshot.remove();
+      body.classList.remove('project-fold-animating');
     }
   }
   async function fold(id, collapse) {
@@ -132,7 +115,6 @@ function createProjectMotion({getState, render, persist, redraw = () => {}}) {
         state.collapsedProjects.delete(id);
         render();
         await animateRows(id,false);
-        redraw();
       }
       persist();
     } finally { emit('end', id, collapse ? 'collapse' : 'expand'); }

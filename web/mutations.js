@@ -1,6 +1,16 @@
 /* Shared optimistic state for every chart write. No DOM or transport dependencies. */
 (function(root) {
   'use strict';
+  // LAN HTTP pages do not expose randomUUID in Safari. getRandomValues
+  // remains available there and supplies the same random UUID v4 bytes.
+  function randomUUID() {
+    if (typeof root.crypto.randomUUID === 'function') return root.crypto.randomUUID();
+    const bytes = root.crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
   const copy = value => structuredClone(value);
   const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
   const shift = (value, days) => {
@@ -108,7 +118,7 @@
     if (kind === 'tasks' && task) {
       if (method === 'DELETE') {
         parent.tasks = parent.tasks.filter(t => t.id !== id);
-        for (const other of parent.tasks) other.dependencies = (other.dependencies || []).filter(dep=>dep!==id);
+        for (const other of data.projects.flatMap(p=>p.tasks)) other.dependencies = (other.dependencies || []).filter(dep=>dep!==id);
         normalize(ordered(parent.tasks));
       } else if (action === 'order') parent.tasks = reorder(parent.tasks,id,f);
       else if (action === 'project' || action === 'placement') {
@@ -116,16 +126,20 @@
         const target = destination(data,targetId,task.planned_start);
         if (target && target !== parent) {
           parent.tasks = parent.tasks.filter(t=>t.id!==id); normalize(ordered(parent.tasks));
-          for(const other of parent.tasks) other.dependencies = (other.dependencies || []).filter(dep=>dep!==id);
-          task.dependencies=[]; task.project_id=target.id; target.tasks.push(task);
+          task.project_id=target.id; target.tasks.push(task);
         }
         if (target && (target !== parent || f.anchor_id)) target.tasks = reorder(target.tasks,id,f);
-      } else patchTask(parent,task,f);
+      } else patchTask({tasks:data.projects.flatMap(p=>p.tasks)},task,f);
     } else if (kind === 'projects' && id && action === 'tasks' && method === 'POST') {
       const target = destination(data,id,f.planned_start);
       if (target) target.tasks.push(blankTask(tempId,target,f));
     } else if (kind === 'projects' && project) {
-      if(method === 'DELETE') { data.projects=data.projects.filter(p=>p.id!==id); normalize(ordered(data.projects.filter(p=>!p.is_unassigned))); }
+      if(method === 'DELETE') {
+        const removed=new Set(project.tasks.map(t=>t.id));
+        data.projects=data.projects.filter(p=>p.id!==id);
+        for(const other of data.projects.flatMap(p=>p.tasks)) other.dependencies=(other.dependencies||[]).filter(dep=>!removed.has(dep));
+        normalize(ordered(data.projects.filter(p=>!p.is_unassigned)));
+      }
       else if(action === 'complete') project.tasks.forEach(t=>{t.status='done';t.progress=100;});
       else if(action === 'order') {
         const rows = reorder(data.projects.filter(p=>!p.is_unassigned),id,f); data.projects=[...rows,...data.projects.filter(p=>p.is_unassigned)];
@@ -166,7 +180,7 @@
   }
   function create({initial,send,publish,context=()=>({})}) {
     let base=copy(initial), pending=[], tail=Promise.resolve(), revision=0;
-    const aliases=new Map(), failedIds=new Set();
+    const aliases=new Map(), failedIds=new Set(), undoTokens=[];
     const resolveId=id=>aliases.get(id)||id;
     const resolveValue=value=>Array.isArray(value)?value.map(resolveValue):value && typeof value==='object'?Object.fromEntries(Object.entries(value).map(([k,v])=>[k,resolveValue(v)])):typeof value==='string'?(value.startsWith('project:')?'project:'+resolveId(value.slice(8)):resolveId(value)):value;
     const resolved=op=>({...op,path:op.path.split('/').map(part=>encodeURIComponent(resolveId(decodeURIComponent(part)))).join('/'),fields:resolveValue(op.fields)});
@@ -195,11 +209,15 @@
           rows[index]=copy(entity);
         } else rows.push(copy(entity));
       }
+      for(const affected of result?.affected_projects || []) {
+        const index=predicted.projects.findIndex(p=>p.id===affected.id);
+        if(index>=0)predicted.projects[index]=copy(affected);
+      }
       if(result?.key && own(result,'color')) predicted.tag_colors={...predicted.tag_colors,[result.key]:result.color};
       base=predicted;
     }
     function mutate(path,options={}) {
-      const op={path,method:(options.method || 'POST').toUpperCase(),fields:JSON.parse(options.body || '{}'),tempId:`pending:${globalThis.crypto.randomUUID()}`,...context()};
+      const op={path,method:(options.method || 'POST').toUpperCase(),fields:JSON.parse(options.body || '{}'),tempId:`pending:${randomUUID()}`,...context()};
       pending.push(op);revision++;
       try { emit({phase:'optimistic',operation:op}); } catch(error) { pending=pending.filter(item=>item!==op);emit();return Promise.reject(error); }
       const request=tail.catch(()=>{}).then(async()=>{
@@ -207,6 +225,7 @@
           const current=resolved(op);
           if([...failedIds].some(id=>current.path.includes(encodeURIComponent(id)) || JSON.stringify(current.fields).includes(id))) throw Error('The item could not be created. Please retry.');
           const result=await send(current.path,{...options,body:options.body == null?undefined:JSON.stringify(current.fields)});
+          if(result?._undo_token) { undoTokens.push(result._undo_token); if(undoTokens.length>100)undoTokens.shift(); }
           commit(op,result);pending=pending.filter(item=>item!==op);revision++;emit({phase:'confirmed',operation:op,result});return result;
         } catch(error) {
           pending=pending.filter(item=>item!==op);failedIds.add(op.tempId);revision++;emit({phase:'rejected',operation:op});throw error;
@@ -223,9 +242,20 @@
         base=copy(fresh);revision++;return emit();
       }
     }
-    return {mutate,refresh,resolveId,whenIdle:()=>tail,get pendingCount(){return pending.length;}};
+    function undo() {
+      const request=tail.catch(()=>{}).then(async()=>{
+        const token=undoTokens.at(-1);
+        if(!token)return false;
+        await send('/api/undo',{method:'POST',body:JSON.stringify({token})});
+        undoTokens.pop();
+        base=copy(await send('/api/state'));revision++;emit({phase:'undone'});
+        return true;
+      });
+      tail=request.catch(()=>{});return request;
+    }
+    return {mutate,refresh,undo,resolveId,whenIdle:()=>tail,get pendingCount(){return pending.length;}};
   }
-  const api={create,apply};
+  const api={create,apply,randomUUID};
   if(typeof module!=='undefined' && module.exports)module.exports=api;
   else root.ChartMutations=api;
 })(globalThis);

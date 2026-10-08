@@ -37,15 +37,15 @@ test('date pickers and non-text controls retain native behavior',()=>{
  assert.deepEqual(send('dblclick',{button:2}),{calls:[],prevented:false});
 });
 
-test('projection updates clean fields without replacing focused or queued input drafts',()=>{
- const src=require('node:fs').readFileSync('web/app.js','utf8');
- const inputs=[{value:'old',type:'text'},{value:'typing',type:'text'},{value:'waiting',type:'text'}];
- const saved=new Map(inputs.map(i=>[i,i.value])),queued=new Map([[inputs[2],'waiting']]);
- const form={},context={document:{activeElement:inputs[1]}};
+test('projection updates clean fields without replacing focused or queued input drafts',async()=>{
+ const inputs=['old','typing','waiting'].map(value=>({value,type:'text',removeAttribute(){},setAttribute(){}}));
+ const form={},context={ChartEditing:require('../web/editing.js'),document:{activeElement:inputs[1]}};
  vm.createContext(context);
- vm.runInContext(src.slice(src.indexOf('function bindInspectorProjection('),src.indexOf('function bindProjectAutoSave(')),context);
- context.bindInspectorProjection(form,inputs,()=> 'server',saved,queued,input=>input);
+ vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),context);
+ const fields=context.bindInspectorProjection(form,inputs,()=> 'server',()=>{});
+ let resolve;const pending=fields.save([inputs[2]],()=>new Promise(done=>resolve=done));
  form.syncProjection();
- assert.equal(inputs[0].value,'server');assert.equal(saved.get(inputs[0]),'server');
+ assert.equal(inputs[0].value,'server');
  assert.equal(inputs[1].value,'typing');assert.equal(inputs[2].value,'waiting');
+ resolve();await pending;assert.equal(inputs[2].value,'server');
 });

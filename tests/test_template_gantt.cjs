@@ -91,7 +91,7 @@ test('template inspector shares schedule date grid and disables execution-only f
   assert.equal((html.match(/type="date"[^>]*disabled/g)||[]).length,0);
   assert.ok(!html.includes('template-auto-days'));
   assert.equal((html.match(/class="relative-day-input"/g)||[]).length,2);
-  assert.match(html,/role="slider"[^>]*disabled/);
+  assert.doesNotMatch(html,/role="slider"/);
   assert.match(html,/textarea[^>]*template-task-handoff[^>]*>Keep this note/);
   assert.ok(html.indexOf('template-task-name') < html.indexOf('task-date-grid'));
   assert.match(html,/inspector-actions/);
@@ -99,7 +99,7 @@ test('template inspector shares schedule date grid and disables execution-only f
 
 test('template scroll range starts at 45 days and grows by 15 only at the right edge',()=>{
  const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:'',style:{setProperty(){}},classList:{toggle(){}}};
- const c={mobileLayout:()=>false,fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''}};
+ const c={labelWidthMotion:null,mobileLayout:()=>false,fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''}};
  Object.defineProperty(chart,'scrollWidth',{get:()=>254+c.state.templateVisibleDays*46});
  withI18n(vm.createContext(c));vm.runInContext(block('function templateWeekendMarkup(', 'function renderTemplateConnections('),c);
  c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);

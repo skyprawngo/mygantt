@@ -21,3 +21,9 @@
 열린 곡선과 직선의 접점은 곡선 끝점의 접선 방향으로 반경을 계산한다. 곡선이라는 이유만으로 반경을 제거하지 않는다. 서로 떨어진 기간은 별도 외곽선을 유지하고, 열린 쪽의 추정 날짜는 저장하지 않는다.
 
 검증: `tests/test_unified_task.cjs`, `tests/test_gantt_dates.cjs`, `tests/test_dependency_rendering.cjs`.
+
+## 공통 계산과 캐시
+
+`unifiedTaskShape`는 좌표에서 외곽선을 만드는 순수 계산이다. `unifiedTaskBarShape`는 HTML 막대의 좌표와 CSS 반경을 읽고, `taskBarShape`는 단일/예정·실제 막대를 같은 형식으로 반환한다.
+
+`renderDependencyLinks`는 연결 종류에 따른 CSS 반경을 적용한 후 작업별 도형을 한 번 계산한다. 연결 클리핑, 통합 채움, 중지·선택 외곽선, 가림 표시가 같은 결과를 공유한다. 캐시는 한 번의 다시 그리기에만 유효하며 날짜 드래그·축척·선택 변경 후 재사용하지 않는다.

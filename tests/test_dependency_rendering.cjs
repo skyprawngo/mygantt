@@ -24,8 +24,8 @@ function harness({ actual = false, below = true, gap = true, openSide = '', barW
     filteredProjects: () => [{ name: 'test', tasks: [
       { id: 'a', name: 'A', dependencies: [], planned_finish: '2026-10-07', actual_finish: actual && !startOnly ? '2026-10-08' : null },
       { id: 'b', name: 'B', dependencies: ['a'] } ] }],
-    $: selector => selector === '.gantt-body' ? body : selector === '.dependency-layer' ? { remove() {} } : {},
-    $$: selector => selector === '.task-bar' ? [planned, target] : selector === '.actual-task-bar' ? actual ? [recorded] : [] : allBars.filter(b => b.classes.has('has-dependency')),
+    $: selector => selector === '.bar-text' ? null : selector === '.gantt-body' ? body : selector === '.dependency-layer' ? { remove() {} } : {},
+    $$: selector => selector === '.bar-label-overlay' ? [] : selector === '.has-label-overlay' ? allBars.filter(b=>b.classes.has('has-label-overlay')) : selector === '.task-bar' ? [planned, target] : selector === '.actual-task-bar' ? actual ? [recorded] : [] : allBars.filter(b => b.classes.has('has-dependency')),
     getComputedStyle: b => ({ getPropertyValue: () => b === recorded ? openSide : '', backgroundColor: b.classes.has('svg-backed') ? 'transparent' : '#5872d9',
       borderTopLeftRadius: b.classes.has('dependency-join-left') ? '0px' : '4px',
       borderBottomLeftRadius: b.classes.has('dependency-join-left') ? '0px' : '4px',
@@ -37,7 +37,7 @@ function harness({ actual = false, below = true, gap = true, openSide = '', barW
   context.renderDependencyLinks();
   return { context, body, allBars, sourceBar: actual ? recorded : planned, target, origin };
 }
-for(const gap of [true,false]) for(const below of [true,false]) test(`hidden ribbon clips unrelated bars only: gap=${gap}, below=${below}`,()=>{
+for(const gap of [true,false]) for(const below of [true,false]) test(`hidden bar contours are clipped by the foreground ribbon: gap=${gap}, below=${below}`,()=>{
  const h=harness({gap,below});
  assert.doesNotMatch(h.body.markup,/dependency-hidden-layer/,'endpoints alone never cause hidden-line markings');
  const classes=new Set();
@@ -47,11 +47,18 @@ for(const gap of [true,false]) for(const below of [true,false]) test(`hidden rib
  h.context.$$=selector=>selector==='.task-bar'?[...query(selector),blocker]:query(selector);
  h.context.renderDependencyLinks();
  assert.match(h.body.markup,/class="dependency-hidden-layer"[^>]*aria-hidden="true"/);
- const clip=h.body.markup.match(/id="dependency-fill-0-hidden"[^>]*>(.*?)<\/clipPath>/)[1];
- assert.equal((clip.match(/<path /g)||[]).length,1,'only the unrelated silhouette clips the hidden section');
- assert.match(clip,/M 284 75/);
- assert.match(h.body.markup,/class="dependency-hidden-hatch"/);
- assert.match(h.body.markup,/class="dependency-hidden-line"/);
+ const clip=h.body.markup.match(/id="dependency-fill-0-hidden"[^>]*>([\s\S]*?)<\/clipPath>/)[1];
+ assert.equal((clip.match(/<path /g)||[]).length,1,'the visible ribbon bounds the hidden contour');
+ assert.doesNotMatch(clip,/M 284 75/,'the bar must not be used as the hidden-line clipping shape');
+ const contour=h.body.markup.match(/class="dependency-hidden-line" data-occluded-task="blocker" d="([^"]+)"/)[1];
+ assert.match(contour,/M 284 75/,'hidden dashes follow the bar top/bottom and rounded ends');
+ assert.notEqual(clip.match(/d="([^"]+)"/)[1],contour);
+ const hatch=h.body.markup.match(/class="dependency-crossing-hatch" d="([^"]+)" fill="url\(#dependency-fill-0-hidden-hatch\)" clip-path="url\(#dependency-fill-0-hidden-bars\)"/);
+ assert(hatch,'hatching is clipped to the unrelated bar overlap');
+ assert.equal(hatch[1],clip.match(/d="([^"]+)"/)[1],'hatching follows the visible ribbon while hidden dashes follow the bar');
+ assert.match(h.body.markup,/pattern id="dependency-fill-0-hidden-hatch" patternUnits="userSpaceOnUse"/);
+ assert.match(h.body.markup,/class="dependency-crossing-paint"[^>]*fill="url\(#dependency-fill-0-progress\)"/);
+ assert.doesNotMatch(h.body.markup,/data-occluded-task="[ab]"/,'joined endpoints never get hidden contours');
  h.context.$$=query;h.context.renderDependencyLinks();
  assert.doesNotMatch(h.body.markup,/dependency-hidden-layer/,'redraw clears obsolete hidden markings');
 });
@@ -90,7 +97,7 @@ for (const actual of [false, true]) for (const below of [false, true]) {
     assert.equal((paint.match(/M /g) || []).length, 1, 'one exterior contour, no separate touching subpaths');
     assert.equal((paint.match(/Z/g) || []).length, 1, 'only the exterior contour is closed');
     assert(h.body.markup.includes('fill-rule="nonzero"'));
-    assert(!h.body.markup.split('<defs><mask id="unified-task-progress-')[0].includes('<rect'), 'connection contours have no seam patch rectangles (unified masks may use rectangles)');
+    assert(!h.body.markup.split('<defs><mask id="unified-task-progress-')[0].replace(/<defs>[\s\S]*?<\/defs>/g,'').includes('<rect'), 'connection contours have no seam patch rectangles (masks may use rectangles)');
     assert(h.sourceBar.classes.has('svg-backed'));
     h.context.renderDependencyLinks();
     assert(!h.body.markup.includes('stop-color="transparent"'), 'redraw restores colors before measuring');
@@ -144,4 +151,23 @@ test('start-only actual fillet is not painted over by the planned dependency end
  assert.ok(clip.includes(`d="${contour}"`),'endpoint clip uses the exact unified exterior');
  assert.match(markup,/class="dependency-paint"[^>]*clip-path="url\(#dependency-fill-0-stacked\)"/);
  assert.equal((clip.match(/<path /g)||[]).length,3,'both endpoints and the connecting ribbon remain visible');
+});
+
+test('stacked geometry is computed once per redraw and recomputed after geometry changes',()=>{
+ const h=harness({actual:true,startOnly:true,openSide:'right',gap:false});
+ const original=h.context.unifiedTaskBarShape;
+ let calculations=0;
+ h.context.unifiedTaskBarShape=(...args)=>{calculations++;return original(...args);};
+ h.context.renderDependencyLinks();
+ assert.equal(calculations,1);
+ h.context.renderDependencyLinks();
+ assert.equal(calculations,2,'cache must not outlive a redraw');
+});
+
+test('dependency ribbon connects task UUIDs across project boundaries',()=>{
+ const h=harness();
+ const [a,b]=h.context.filteredProjects()[0].tasks;
+ h.context.filteredProjects=()=>[{id:'p',tasks:[a]},{id:'q',tasks:[b]}];
+ h.context.renderDependencyLinks();
+ assert.match(h.body.markup,/data-task-select="b" data-predecessor="a"/);
 });
