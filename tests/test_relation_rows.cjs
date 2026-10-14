@@ -2,6 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const source=fs.readFileSync('web/app.js','utf8');
 function setup(){
  const c={t:key=>key};vm.createContext(c);
+ vm.runInContext(source.slice(source.indexOf('function rowTaskMembers('),source.indexOf('function groupedTaskRows(')),c);
  vm.runInContext(source.slice(source.indexOf('const externalRelationRows'),source.indexOf('function openExternalRelationPicker')),c);
  const selected={id:'a',sort_order:1,dependencies:['outside-in']};
  const p={id:'p',tasks:[{id:'b',sort_order:2,dependencies:[]},selected]};
@@ -43,4 +44,16 @@ test('clearing saved-task draft rows removes unconnected external rows but prese
  assert(c.relationRows(p,selected,[p,q]).some(row=>row.id==='unlinked'));
  vm.runInContext("externalRelationRows.delete('a')",c);
  assert.deepEqual(Array.from(c.relationRows(p,selected,[p,q]),row=>row.id),['b','outside-in','outside-out']);
+});
+
+test('same-name repeats expose numbered labels and dates without merging dependency IDs',()=>{
+ const {c,p,q,selected}=setup();c.t=(key,args)=>key==='task.numbered_label'?`작업${args.p0}`:key;
+ Object.assign(selected,{name:'검사',gantt_row_id:'repeat',planned_start:'2026-10-01',planned_finish:'2026-10-03'});
+ Object.assign(p.tasks[0],{name:'검사',gantt_row_id:'repeat',planned_start:'2026-10-07',planned_finish:'2026-10-09'});
+ let rows=c.relationRows(p,selected,[p,q]);
+ assert.equal(rows[0].id,'b');assert.equal(rows[0].relationTaskName,'검사 · 작업2');
+ assert.equal(rows[0].relationTaskDates,'2026-10-07 – 2026-10-09');
+ rows=c.relationRows(p,p.tasks[0],[p,q]);
+ assert.equal(rows[0].id,'a');assert.equal(rows[0].relationTaskName,'검사 · 작업1');
+ assert.equal(c.taskInstanceName(p,p.tasks[0]),'검사 · 작업2');
 });

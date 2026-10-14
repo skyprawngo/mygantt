@@ -40,19 +40,27 @@ test('completion paints the collapsed row before flight and hides only after arr
  assert.deepEqual(events.map(e=>e.join(':')),['project-animation-start:complete','project-animation-start:collapse','project-animation-end:collapse','project-animation-start:transfer','project-animation-end:transfer','project-animation-end:complete']);
  assert(state.hiddenProjects.has('p'));
 });
-for(const collapsed of [false,true])test(`native project ${collapsed?'expansion':'collapse'} has no JS frame work`,async()=>{
- const animations=[],removed=[];
- function el(name,top=0,height=0){return {name,style:{cssText:'original'},children:[],dataset:{},attributes:[],classList:{contains:k=>name==='left'&&k==='gantt-left',add(){},remove(){}},getBoundingClientRect:()=>({top,bottom:top+height,height}),querySelectorAll:()=>[],setAttribute(){},removeAttribute(){},after(){},remove(){removed.push(name)},cloneNode(){return el(name+'-clone',top,height)},animate(frames,options){let finish;const a={frames,options,finished:new Promise(r=>finish=r),finish:()=>finish(),cancel(){this.cancelled=true}};animations.push(a);return a;}};}
+for(const collapsed of [false,true])test(`native project ${collapsed?'expansion':'collapse'} starts all effects after preparation and an initial paint`,async()=>{
+ const animations=[],removed=[],frames=[];let preparationDone=false;
+ function el(name,top=0,height=0){return {name,style:{cssText:'original'},children:[],dataset:{},attributes:[],classList:{contains:k=>name==='left'&&k==='gantt-left',add(){},remove(){}},getBoundingClientRect:()=>({top,bottom:top+height,height}),querySelectorAll:()=>[],setAttribute(){},removeAttribute(){},after(){},remove(){removed.push(name)},cloneNode(){return el(name+'-clone',top,height)},animate(frames,options){let finish;const a={frames,options,finished:new Promise(r=>finish=r),finish:()=>finish(),pause(){this.paused=true},play(){assert(preparationDone);this.paused=false},cancel(){this.cancelled=true}};animations.push(a);return a;}};}
  const body=el('body'),row=el('row',38,54),left=el('left'),label=el('label'),right=el('right');left.children=[label];row.children=[left,right];row.parentElement=body;row.querySelector=()=>({dataset:{project:'p'}});
  const band=el('band');Object.assign(band.style,{top:'0px',height:'92px'});band.dataset.projectBand='p';
  const later=el('later');later.style.top='92px';const svg=el('svg',0,300);
- body.querySelectorAll=s=>s.includes('project-duration')?[band,later]:[svg];
+ body.querySelectorAll=s=>s==='.project-summary-bar'?[]:s.includes('project-duration')?[band,later]:[svg];
  const control={dataset:{collapse:'p'},closest:()=>({querySelector:()=>({offsetTop:7,offsetHeight:23})})};
  const state={collapsedProjects:new Set(collapsed?['p']:[])};let renders=0;
- const c={matchMedia:()=>({matches:false}),requestAnimationFrame(){throw Error('JS frame loop must not drive project folding')},CustomEvent:class{},document:{querySelectorAll:s=>s.includes('task-row')?[row]:[control],dispatchEvent(){}}};
+ const c={matchMedia:()=>({matches:false}),requestAnimationFrame(fn){frames.push(fn)},CustomEvent:class{},document:{timeline:{currentTime:1250},querySelectorAll:s=>s.includes('task-row')?[row]:[control],dispatchEvent(){}}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
  const motion=c.createProjectMotion({getState:()=>state,render(){renders++},persist(){},redraw(){throw Error('unexpected SVG rebuild')}});
  const pending=motion.toggle('p');await tick();assert.equal(animations.length,6);
+ assert(animations.every(a=>a.paused&&a.currentTime===0));
+ assert.equal(frames.length,1);
+ preparationDone=true;
+ frames.shift()(); // first paint retains the initial pose
+ assert(animations.every(a=>a.paused));
+ frames.shift()();await tick();
+ assert(animations.every(a=>!a.paused&&a.startTime===1250));
+ assert.equal(frames.length,0); // no per-frame JS loop
  assert(animations.every(a=>a.options.duration===200&&a.options.easing==='linear'));
  assert.equal(animations[0].frames[collapsed?0:1].transform,'translateY(0px) scaleY(0)');
  assert(animations.every(a=>a.frames.every(frame=>Object.keys(frame).every(k=>['transform','opacity'].includes(k)))));
@@ -60,4 +68,24 @@ for(const collapsed of [false,true])test(`native project ${collapsed?'expansion'
  animations.forEach(a=>a.finish());await pending;
  assert.equal(renders,1);assert.equal(state.collapsedProjects.has('p'),!collapsed);
  assert.equal(removed.length,3);assert.equal(row.style.cssText,'original');
+});
+
+test('header effects include folded endpoints and markers but preserve unrelated transit lines',()=>{
+ const c={};vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
+ assert(c.isProjectHeaderConnection({connectionSource:'p',connectionTarget:'q'},'p'));
+ assert(c.isProjectHeaderConnection({connectionSource:'q',connectionTarget:'p'},'p'));
+ assert(c.isProjectHeaderConnection({boundaryProject:'p'},'p'));
+ assert(!c.isProjectHeaderConnection({connectionSource:'q',connectionTarget:'r'},'p'));
+ assert(!c.isProjectHeaderConnection({boundaryProject:'q'},'p'));
+});
+
+test('project text stays opaque while its position and folded contrast animate',()=>{
+ const c={};vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
+ const own=c.projectTextFrames(true,false,108,'rgb(30,40,50)','rgb(255,255,255)');
+ assert.equal(own.folded.opacity,1);assert.equal(own.expanded.opacity,1);
+ assert.equal(own.folded.color,'rgb(255,255,255)');assert.equal(own.expanded.color,'rgb(30,40,50)');
+ const following=c.projectTextFrames(false,true,108,'rgb(20,30,40)','white');
+ assert.equal(following.folded.transform,'translateY(-108px)');
+ assert.equal(following.folded.color,following.expanded.color);
+ assert.equal(following.folded.opacity,1);
 });

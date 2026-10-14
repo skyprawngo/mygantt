@@ -85,10 +85,11 @@
             </div>
           </div>
 
+          <button type="button" class="desktop-inspector-toggle" data-toggle-inspector aria-controls="mobile-inspector" aria-expanded="true" aria-label="속성 열기/닫기" data-i18n-attrs="aria-label:inspector.toggle"><span aria-hidden="true">›</span><span data-i18n="template.properties">속성</span></button>
           <aside class="inspector" id="mobile-inspector" aria-label="선택 항목 속성" data-i18n-attrs="aria-label:timeline.selected_item_properties">
             <div class="inspector-title"><div><span class="eyebrow"><span data-i18n="template.inspector">INSPECTOR</span></span><h2><span data-i18n="template.properties">속성</span></h2></div><span class="inspector-state" id="inspector-save-state"><span data-i18n="timeline.selected_item">선택 항목</span></span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="속성 닫기" data-i18n-attrs="aria-label:timeline.close_properties">×</button></div>
             <section class="inspector-section" id="project-inspector-section">
-              <div class="inspector-project-heading"><button class="inspector-accordion" id="project-accordion" type="button" aria-expanded="true"><span class="accordion-chevron">⌄</span><span><span data-i18n="template.project_properties">프로젝트 속성</span></span></button><button id="project-context-label" type="button" aria-haspopup="menu" aria-expanded="false" disabled><span data-i18n="inspector.select_an_item">선택 필요</span></button></div>
+              <div class="inspector-project-heading"><button class="inspector-accordion" id="project-accordion" type="button" aria-expanded="true"><span class="accordion-chevron">⌄</span><span><span data-i18n="template.project_properties">프로젝트 속성</span></span></button><button id="project-context-label" type="button" aria-haspopup="menu" aria-expanded="false" disabled><span data-i18n="inspector.select_an_item">선택되지 않음</span></button></div>
               <div class="inspector-content" id="project-inspector"></div>
             </section>
             <section class="inspector-section" id="task-inspector-section">

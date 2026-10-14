@@ -233,6 +233,8 @@ class Database:
         task.get("planned_start", ""), task.get("planned_finish", ""), task.get("actual_start", ""), task.get("actual_finish", ""), task.get("notes", ""),
         task.get("color", TASK_COLORS[index % len(TASK_COLORS)]), str(task.get("group_name", "")), json.dumps(self._normalize_tags(task.get("tags", [])), ensure_ascii=False), int(task.get("sort_order", index)),
       ]
+      names.append("gantt_row_id")
+      values.append(task.get("gantt_row_id", ""))
       # Keep old local schemas writable, but never read or use these fields for scheduling.
       if {"duration_value", "duration_unit"} <= columns:
         names[4:4] = ["duration_value", "duration_unit"]
@@ -322,7 +324,7 @@ class Database:
       if anchor is not None and anchor not in ids:
         raise ScheduleError("삽입 위치가 올바르지 않습니다.")
       task = dict(source)
-      task.update(id=new_id(), project_id=project_id, sort_order=len(ids)+1)
+      task.update(id=new_id(), project_id=project_id, sort_order=len(ids)+1, gantt_row_id="")
       if project_id != source["project_id"]:
         task["dependencies"] = "[]"
       insert("project_tasks", task)
@@ -398,6 +400,7 @@ class Database:
         "tags": "TEXT NOT NULL DEFAULT '[]'",
       },
       "project_tasks": {
+        "gantt_row_id": "TEXT NOT NULL DEFAULT ''",
         "progress": "INTEGER",
         "color": "TEXT NOT NULL DEFAULT ''",
         "group_name": "TEXT NOT NULL DEFAULT ''",
@@ -734,7 +737,7 @@ class Database:
       return self._project(db, project_id)
 
   def create_task(self, project_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
-    if set(fields) - {"name", "planned_start", "planned_finish"}:
+    if set(fields) - {"name", "planned_start", "planned_finish", "same_row_as"}:
       raise ScheduleError("추가할 수 없는 작업 필드입니다.")
     name = str(fields.get("name", "")).strip()
     if not name:
@@ -750,11 +753,20 @@ class Database:
       project = self._project(db, project_id)
       if not project:
         return None
+      row_id = ""
+      anchor = None
+      anchor_id = fields.get("same_row_as")
+      if anchor_id is not None:
+        anchor = next((task for task in project["tasks"] if task["id"] == anchor_id), None)
+        if not anchor:
+          raise ScheduleError("같은 행에 추가할 작업을 찾을 수 없습니다.")
+        row_id = anchor["gantt_row_id"] or anchor["id"]
+        db.execute("UPDATE project_tasks SET gantt_row_id=? WHERE id=?", (row_id, anchor["id"]))
       order = max((task["sort_order"] for task in project["tasks"]), default=-1) + 1
       self._insert_project_tasks(db, project_id, [{
         "name": name, "planned_start": fields["planned_start"],
-        "planned_finish": fields["planned_finish"], "sort_order": order,
-        "color": TASK_COLORS[order % len(TASK_COLORS)],
+        "planned_finish": fields["planned_finish"], "sort_order": order, "gantt_row_id": row_id,
+        "color": anchor["color"] if anchor else TASK_COLORS[order % len(TASK_COLORS)],
       }])
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)
@@ -805,7 +817,7 @@ class Database:
       elif not db.execute("SELECT 1 FROM projects WHERE id=?", (destination,)).fetchone():
         raise ScheduleError("프로젝트를 찾을 수 없습니다.")
       order = db.execute("SELECT COALESCE(MAX(sort_order),-1)+1 FROM project_tasks WHERE project_id=?", (destination,)).fetchone()[0]
-      db.execute("UPDATE project_tasks SET project_id=?,sort_order=? WHERE id=?", (destination, order, task_id))
+      db.execute("UPDATE project_tasks SET project_id=?,sort_order=?,gantt_row_id='' WHERE id=?", (destination, order, task_id))
       db.execute("UPDATE projects SET updated_at=? WHERE id IN (?,?)", (stamp, task["project_id"], destination))
       self._normalize_task_order(db, task["project_id"])
       self._normalize_task_order(db, destination)

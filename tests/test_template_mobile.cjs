@@ -15,4 +15,7 @@ test('mobile inspector follows active page, isolates hidden panels, and closes o
  c.setMobileDrawer(null);assert.equal(template.inert,true);assert.equal(backdrop.hidden,true);
  c.state.view='timeline';c.setMobileDrawer('inspector');assert.equal(schedule.inert,false);assert.equal(template.inert,true);
  narrow=false;c.setMobileDrawer('inspector');assert.equal(schedule.inert,false);assert.equal(template.inert,false);assert.equal(classes.has('inspector-open'),false);
+ classes.add('desktop-inspector-collapsed');c.setMobileDrawer(null);assert.equal(schedule.inert,true);assert.equal(template.inert,true);
+ narrow=true;c.setMobileDrawer('inspector');assert.equal(schedule.inert,false);assert.equal(template.inert,true);
+ narrow=false;classes.delete('desktop-inspector-collapsed');c.setMobileDrawer(null);assert.equal(schedule.inert,false);assert.equal(template.inert,false);
 });

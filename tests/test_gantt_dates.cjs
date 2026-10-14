@@ -22,7 +22,7 @@ function harness(task) {
   function begin(period,edge){
     const bar={isConnected:true,dataset:{datePeriod:period,taskSelect:task.id,project:'p'},style:{left:'100px',width:'322px'},classList:classes,setPointerCapture(){}};
     const handle={dataset:{resizeEdge:edge},closest:()=>bar,classList:classes,setPointerCapture(){}};
-    const event={target:{closest:selector=>edge==='move'?(selector==='.resize-handle'?null:bar):handle},isPrimary:true,button:0,clientX:100,clientY:20,pointerId:1,preventDefault(){}};
+    const event={target:{closest:selector=>edge==='move'?(selector==='.resize-handle'?null:bar):handle},isPrimary:true,button:0,clientX:100,clientY:20,pointerId:1,pointerType:'touch',preventDefault(){}};
     handlers.pointerdown(event);return {bar,event};
   }
   return {context,state,calls,handlers,begin,hold(){for(const fn of timers.values())fn();timers.clear();}};

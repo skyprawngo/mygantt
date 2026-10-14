@@ -1,3 +1,13 @@
+// Only endpoint artwork owned by the folding project fades in its header.
+function isProjectHeaderConnection(dataset, projectId) {
+  return dataset.boundaryProject===projectId || dataset.connectionSource===projectId || dataset.connectionTarget===projectId;
+}
+function projectTextFrames(isFoldingProject, followsProject, height, expandedColor, foldedColor) {
+  return {
+    folded:{transform:`translateY(${followsProject?-height:0}px)`,color:isFoldingProject?foldedColor:expandedColor,opacity:1},
+    expanded:{transform:'translateY(0px)',color:expandedColor,opacity:1},
+  };
+}
 /* Presentation-only transitions. Task dates and records are never changed here. */
 function createProjectMotion({getState, render, persist}) {
   const completed = new Map(), running = new Set();
@@ -37,23 +47,53 @@ function createProjectMotion({getState, render, persist}) {
     if (height<=0) return;
     const bands = [...body.querySelectorAll('.project-duration-band')];
     const band = bands.find(el=>el.dataset.projectBand===id);
-    const bandTop = band ? parseFloat(band.style.top) : 0;
     const bandHeight = band ? parseFloat(band.style.height) : 0;
-    const summary = rowFor(id)?.querySelector('.project-summary-bar');
+    const projectRow = rowFor(id);
+    const summary = projectRow?.querySelector('.project-summary-bar');
+    const headerTop = top-(projectRow?.getBoundingClientRect?.().height || 38);
     const summaryTop = summary?.offsetTop ?? 7, summaryHeight = summary?.offsetHeight ?? 23;
-    const layers = [...body.querySelectorAll('.dependency-layer, .dependency-hidden-layer')]
+    const layers = [...body.querySelectorAll('.dependency-layer, .dependency-hidden-layer, .task-selection-layer')]
       .map(layer=>({layer,height:layer.getBoundingClientRect().height}));
-    const saved = new Map(), animations = [], snapshots = [];
+    // Read geometry and copy computed styles before any animation/DOM writes.
+    const followingRows = [...body.querySelectorAll(':scope > .gantt-row')]
+      .filter(row=>row.offsetTop>=bottom-.5 && !rows.includes(row));
+    const bodyRect=body.getBoundingClientRect();
+    const labels=[...body.querySelectorAll('.project-summary-bar')].flatMap(bar=>{
+      const text=bar.querySelector('span');
+      if (!text) return [];
+      const rect=text.getBoundingClientRect(), barRect=bar.getBoundingClientRect();
+      const own=bar===summary, follows=barRect.top-origin>=bottom-.5;
+      if (!own && !follows) return [];
+      const style=getComputedStyle(text), barStyle=getComputedStyle(bar);
+      return [{text,rect,barRect,own,follows,font:style.font,lineHeight:style.lineHeight,
+        letterSpacing:style.letterSpacing,color:style.color,
+        foldedColor:barStyle.getPropertyValue('--bar-ink').trim() || style.color}];
+    });
+    const saved = new Map(), animations = [], snapshots = [], effects = [];
     const remember = el => {if (!saved.has(el)) saved.set(el,el.style.cssText);};
     const motion = (el,folded,expanded) => {
       remember(el);
-      animations.push(el.animate(collapse?[expanded,folded]:[folded,expanded],
-        {duration:200,easing:'linear',fill:'both'}));
+      effects.push({el,frames:collapse?[expanded,folded]:[folded,expanded]});
     };
     try {
       // Keep layout fixed during the compositor animation. Translate individual
       // paint elements rather than their parent, preserving SVG/text stacking.
       body.classList.add('project-fold-animating');
+      // Sticky summary labels get their own paint layer, above the changing
+      // project fill and SVG. Preserve the text until the final DOM replaces it.
+      for (const {text,rect,barRect,own,follows,font,lineHeight,letterSpacing,color,foldedColor} of labels) {
+        const copy=document.createElement('span');
+        copy.className='project-motion-text';copy.textContent=text.textContent;
+        copy.setAttribute('aria-hidden','true');
+        Object.assign(copy.style,{left:`${rect.left-bodyRect.left}px`,top:`${rect.top-origin}px`,
+          width:`${Math.max(0,Math.min(rect.right,barRect.right)-rect.left)}px`,height:`${rect.height}px`,
+          font,lineHeight,letterSpacing,color});
+        body.append(copy);snapshots.push(copy);
+        const frames=projectTextFrames(own,follows,height,color,foldedColor);
+        motion(copy,frames.folded,frames.expanded);
+        remember(text);text.style.visibility='hidden';
+      }
+
       for (const {row,rect} of geometry) {
         const offset=rect.top-origin-top;
         for (const cell of row.children) {
@@ -64,7 +104,7 @@ function createProjectMotion({getState, render, persist}) {
           }
         }
       }
-      for (const row of [...body.querySelectorAll(':scope > .gantt-row')].filter(row=>row.offsetTop>=bottom-.5 && !rows.includes(row))) {
+      for (const row of followingRows) {
         for (const cell of row.children) for (const element of cell.classList.contains('gantt-left')?[cell]:[...cell.children])
           motion(element,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
       }
@@ -85,13 +125,41 @@ function createProjectMotion({getState, render, persist}) {
       for (const {layer,height:layerHeight} of layers) {
         remember(layer);
         const middle=cloneLayer(layer),after=cloneLayer(layer);snapshots.push(middle,after);
-        layer.style.clipPath=`inset(0 0 ${Math.max(0,layerHeight-top)}px 0)`;
+        const owned=[...layer.querySelectorAll('[data-connection-source], .dependency-boundary-marker')]
+          .some(node=>isProjectHeaderConnection(node.dataset,id));
+        if (owned) {
+          // The project header is outside the collapsing task rows. Give that
+          // strip its own effect so endpoint tails do not linger until render().
+          const header=cloneLayer(layer);snapshots.push(header);
+          header.style.clipPath=`inset(${Math.max(0,headerTop)}px 0 ${Math.max(0,layerHeight-top)}px 0)`;
+          layer.style.clipPath=`inset(0 0 ${Math.max(0,layerHeight-headerTop)}px 0)`;
+          for (const node of header.querySelectorAll('[data-connection-source], .dependency-boundary-marker')) {
+            if (!isProjectHeaderConnection(node.dataset,id)) continue;
+            if (node.classList.contains('dependency-boundary-marker')) {
+              remember(node);node.style.transformOrigin=`0 ${node.dataset.boundaryY}px`;
+              motion(node,{transform:'scaleY(0)',opacity:0},{transform:'scaleY(1)',opacity:1});
+            } else motion(node,{opacity:0},{opacity:1});
+          }
+        } else layer.style.clipPath=`inset(0 0 ${Math.max(0,layerHeight-top)}px 0)`;
         middle.style.clipPath=`inset(${top}px 0 ${Math.max(0,layerHeight-bottom)}px 0)`;
         after.style.clipPath=`inset(${bottom}px 0 0 0)`;
         middle.style.transformOrigin=after.style.transformOrigin='0 0';
         const x=Number(layer.dataset.columnOffset || 0);
         motion(middle,{transform:`translate(${x}px,${top}px) scaleY(0)`,opacity:0},{transform:`translate(${x}px,0px) scaleY(1)`,opacity:1});
         motion(after,{transform:`translate(${x}px,${-height}px)`},{transform:`translate(${x}px,0px)`});
+      }
+      // Install the initial pose without advancing its clock. Allow it to paint
+      // once, then start every effect on the same document timeline timestamp.
+      // SVG preparation must never consume the first part of the 200ms effect.
+      for (const {el,frames} of effects) {
+        const animation=el.animate(frames,{duration:200,easing:'linear',fill:'both'});
+        animation.pause();animation.currentTime=0;
+        animations.push(animation);
+      }
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const startTime=document.timeline.currentTime;
+      for (const animation of animations) {
+        animation.play();animation.startTime=startTime;
       }
       await Promise.all(animations.map(a=>a.finished));
     } catch(error) {

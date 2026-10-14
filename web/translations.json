@@ -1,10 +1,15 @@
 [
+{"textID":"inspector.toggle","KR":"속성 열기/닫기","US":"Toggle properties","JP":"プロパティを開く／閉じる"},
+{"textID":"task.numbered_label","KR":"작업{p0}","US":"Task {p0}","JP":"作業{p0}"},
+{"textID":"task.add_same_row","KR":"같은 행에 작업 추가","US":"Add task to this row","JP":"同じ行に作業を追加"},
+{"textID":"task.numbered_properties","KR":"작업{p0} 속성","US":"Task {p0} properties","JP":"作業{p0}のプロパティ"},
 {"textID": "relations.title", "KR": "연결", "US": "Connections", "JP": "接続"},
 {"textID": "relations.add_external", "KR": "다른 프로젝트 작업 추가", "US": "Add task from another project", "JP": "他のプロジェクトの作業を追加"},
 {"textID": "relations.choose_direction", "KR": "추가한 행에서 선행 또는 후행을 선택하세요.", "US": "Choose predecessor or successor in the added row.", "JP": "追加した行で先行または後続を選択してください。"},
 {"textID": "relations.no_external", "KR": "추가할 다른 프로젝트 작업이 없습니다.", "US": "No other project tasks to add.", "JP": "追加できる他のプロジェクトの作業はありません。"},
 {"textID": "relations.add_row", "KR": "추가", "US": "Add", "JP": "追加"},
 
+{"textID":"undo.in_progress","KR":"실행취소 중","US":"Undoing","JP":"取り消し中"},
 {"textID":"undo.completed","KR":"변경사항을 취소했습니다.","US":"Change undone.","JP":"変更を取り消しました。"},
 {"textID":"undo.empty","KR":"취소할 변경사항이 없습니다.","US":"No changes to undo.","JP":"取り消す変更はありません。"},
 {"textID":"navigation.toggle_sidebar","KR":"사이드바 열기/닫기","US":"Toggle sidebar","JP":"サイドバーを開く／閉じる"},
@@ -58,9 +63,9 @@
   },
   {
     "textID": "common.updated_at_left_00_00_right",
-    "KR": "{p0} · 갱신 시각 {p1}:{p2} (왼쪽 00시 · 오른쪽 24시)",
-    "US": "{p0} · Updated at {p1}:{p2} (left 00:00 · right 24:00)",
-    "JP": "{p0} · 更新時刻 {p1}:{p2}（左端 0時 · 右端 24時）"
+    "KR": "{p0} · 브라우저 현재 시각 {p1}:{p2} (왼쪽 00시 · 오른쪽 24시)",
+    "US": "{p0} · Browser local time {p1}:{p2} (left 00:00 · right 24:00)",
+    "JP": "{p0} · ブラウザーの現在時刻 {p1}:{p2}（左端 0時 · 右端 24時）"
   },
   {
     "textID": "common.no_schedule",
@@ -496,9 +501,9 @@
   },
   {
     "textID": "inspector.select_an_item",
-    "KR": "선택 필요",
-    "US": "Select an item",
-    "JP": "選択してください"
+    "KR": "선택되지 않음",
+    "US": "Not selected",
+    "JP": "未選択"
   },
   {
     "textID": "inspector.change_task_project",
@@ -1299,8 +1304,14 @@
     "JP": "作業完了日の次の作業日に後続工程を開始します。週5日では週末・祝日を除き、週7日では暦日をそのまま加算します。"
   },
   {
+    "textID": "calendar.week_number",
+    "KR": "{p0}주",
+    "US": "W{p0}",
+    "JP": "{p0}週"
+  },
+  {
     "textID": "project.create_project_with_all_tasks",
-    "KR": "모든 작업으로 프로젝트 생성",
+    "KR": "프로젝트 생성",
     "US": "Create project with all tasks",
     "JP": "すべての作業でプロジェクトを作成"
   },

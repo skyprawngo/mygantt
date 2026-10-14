@@ -126,13 +126,18 @@
         const target = destination(data,targetId,task.planned_start);
         if (target && target !== parent) {
           parent.tasks = parent.tasks.filter(t=>t.id!==id); normalize(ordered(parent.tasks));
-          task.project_id=target.id; target.tasks.push(task);
+          task.project_id=target.id; task.gantt_row_id=''; target.tasks.push(task);
         }
         if (target && (target !== parent || f.anchor_id)) target.tasks = reorder(target.tasks,id,f);
       } else patchTask({tasks:data.projects.flatMap(p=>p.tasks)},task,f);
     } else if (kind === 'projects' && id && action === 'tasks' && method === 'POST') {
       const target = destination(data,id,f.planned_start);
-      if (target) target.tasks.push(blankTask(tempId,target,f));
+      if (target) {
+        const anchor = target.tasks.find(task=>task.id===f.same_row_as);
+        const gantt_row_id = anchor ? anchor.gantt_row_id || anchor.id : '';
+        if (anchor) anchor.gantt_row_id = gantt_row_id;
+        target.tasks.push(blankTask(tempId,target,{...f,gantt_row_id,...(anchor ? {color:anchor.color} : {})}));
+      }
     } else if (kind === 'projects' && project) {
       if(method === 'DELETE') {
         const removed=new Set(project.tasks.map(t=>t.id));
@@ -170,7 +175,7 @@
         const source=data.projects.flatMap(p=>p.tasks).find(t=>t.id===f.source_id);
         const target=data.projects.find(p=>p.id===(f.project_id || source?.project_id));
         if(source && target) {
-          const row={...copy(source),id:tempId,project_id:target.id,dependencies:source.project_id===target.id?copy(source.dependencies):[]};
+          const row={...copy(source),id:tempId,project_id:target.id,gantt_row_id:'',dependencies:source.project_id===target.id?copy(source.dependencies):[]};
           target.tasks.push(row); target.tasks=reorder(target.tasks,tempId,{anchor_id:f.anchor_id,after:true});
         }
       }

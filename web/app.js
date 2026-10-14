@@ -13,7 +13,6 @@ const durationNames = { get days() { return t("common.days"); }, get weeks() { r
 const projectColors = ['#5872d9', '#b96749', '#27897f', '#a45ca8', '#b48527', '#3978a8', '#c45670', '#5a8d45', '#765bb2', '#368a9b', '#c06f2d', '#657386'];
 const taskColors = [...projectColors];
 let previewTimer;
-let timelineReferenceTime = new Date();
 
 // Shared palette for every user-selected project/task color (HTML and SVG).
 const paletteCache = new Map();
@@ -63,21 +62,41 @@ let selectedTimeZone = '';
 try { selectedTimeZone = localStorage.getItem('mygantt-timezone') || ''; } catch {}
 function clockParts(now = new Date()) { return MyGanttTime.parts(now,selectedTimeZone,state.data.server_clock); }
 function todayInput() { return clockParts().date; }
-function timeOfDayFraction(now = new Date()) {
-  const parts=clockParts(now);
-  return (Number(parts.hour)*3600+Number(parts.minute)*60+Number(parts.second))/86400;
+// The live indicator follows the browser clock, independently of schedule settings.
+function browserClockParts(now = new Date()) {
+  return {date:dateKey(now),hour:String(now.getHours()).padStart(2,'0'),
+    minute:String(now.getMinutes()).padStart(2,'0'),second:String(now.getSeconds()).padStart(2,'0')};
 }
-function updateCurrentTimeMarker() {
+function timeOfDayFraction(now = new Date()) {
+  return (now.getHours()*3600+now.getMinutes()*60+now.getSeconds())/86400;
+}
+function updateCurrentTimeMarker(now = new Date()) {
   const chart = $('#gantt');
-  if (state.view !== 'timeline' || !chart.dataset.todayDate || state.drag) return;
-  const now = timelineReferenceTime, fraction = timeOfDayFraction(now);
-  const x = (Number(chart.dataset.todayOffset) + fraction) * state.zoom;
-  $$('.today-line', chart).forEach(line => { line.style.left = `${x}px`; });
-  const cell = $('.date-header.today', chart);
-  if (cell) {
-    cell.style.setProperty('--time-progress', `${fraction * 100}%`);
-    cell.title = t("common.updated_at_left_00_00_right", {p0:clockParts(now).date,p1:clockParts(now).hour,p2:clockParts(now).minute});
-  }
+  if (state.view !== 'timeline' || !chart?.dataset.todayDate || state.drag) return;
+  const parts=browserClockParts(now), fraction=timeOfDayFraction(now);
+  const offset=dayDiff(timelineCalendarRange().start,parts.date);
+  chart.dataset.todayDate=parts.date;
+  chart.dataset.todayOffset=offset;
+  const x=(offset+fraction)*state.zoom;
+  $$('.today-line',chart).forEach(line=>{line.style.left=`${x}px`;});
+  $$('.date-header',chart).forEach(cell=>{
+    const today=cell.dataset.date===parts.date;
+    cell.classList.toggle('today',today);
+    if (today) {
+      cell.style.setProperty('--time-progress',`${fraction*100}%`);
+      cell.title=t("common.updated_at_left_00_00_right",{p0:parts.date,p1:parts.hour,p2:parts.minute});
+    } else {
+      cell.style.removeProperty('--time-progress');
+      cell.title=cell.dataset.dateTitle;
+    }
+  });
+}
+function bindCurrentTimeClock() {
+  const refresh=()=>{if (!document.hidden) updateCurrentTimeMarker();};
+  setInterval(refresh,30 * 60 * 1000);
+  document.addEventListener('visibilitychange',refresh);
+  window.addEventListener('focus',refresh);
+  window.addEventListener('pageshow',refresh);
 }
 function dateFrom(value) { return new Date(`${value}T00:00:00`); }
 function dateKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
@@ -92,12 +111,18 @@ function dateRangeLabel(start, end) {
   if (!start || !end) return t("common.no_schedule");
   return `${fmtDate(start, true)} — ${fmtDate(end, true)}`;
 }
-function toast(message) {
+function toast(message, { progress = false } = {}) {
   const node = $('#toast');
+  const token = toast._token = (toast._token || 0) + 1;
   node.textContent = message;
+  node.classList.toggle('toast-progress', progress);
   node.classList.add('show');
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => node.classList.remove('show'), 2600);
+  const dismiss = () => {
+    if (toast._token === token) node.classList.remove('show');
+  };
+  if (!progress) toast._timer = setTimeout(dismiss, 2600);
+  return dismiss;
 }
 async function requestJson(path, options = {}) {
   const response = await fetch(path, { headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }, ...options });
@@ -153,6 +178,8 @@ document.addEventListener('keydown', async event => {
   event.preventDefault();
   if (undoBusy || event.repeat) return;
   undoBusy = true;
+  const dismissProgress = toast(t('undo.in_progress'), { progress: true });
+  const visibleBriefly = new Promise(resolve => setTimeout(resolve, 600));
   try {
     await templateSaveQueue;
     const undone = await chartMutations.undo();
@@ -163,9 +190,13 @@ document.addEventListener('keydown', async event => {
         renderTemplateEditor();
       }
     }
-    toast(t(undone ? 'undo.completed' : 'undo.empty'));
+    if (!undone) toast(t('undo.empty'));
   } catch (error) { toast(error.message); }
-  finally { undoBusy = false; }
+  finally {
+    await visibleBriefly;
+    dismissProgress();
+    undoBusy = false;
+  }
 });
 function api(path, options = {}) {
   if (['POST','PUT','PATCH','DELETE'].includes((options.method || 'GET').toUpperCase())) return chartMutations.mutate(path,options);
@@ -175,7 +206,6 @@ function api(path, options = {}) {
 async function loadState() {
   await api('/api/state');
   if (!state.holidayCalendars) state.holidayCalendars = (await api('/api/holiday-calendars')).calendars;
-  timelineReferenceTime = new Date();
   const {start,end} = timelineCalendarRange();
   try {
     state.holidayData = await api(`/api/holidays?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&country=${encodeURIComponent(state.data.holiday_country || 'KR')}`);
@@ -349,9 +379,12 @@ function dateColumns(start, days, perDay) {
     const key = dateKey(current);
     const holiday = (state.holidayData?.region || 'KR') === 'KR' ? I18n.systemText(state.holidays[key], 'holiday.') : state.holidays[key];
     const isWeekend = current.getDay() === 0 || current.getDay() === 6;
-    const today = key === clockParts(timelineReferenceTime).date;
-    const dateText = current.getDate() === 1 || index === 0 ? `${current.getMonth() + 1}.${current.getDate()}` : String(current.getDate());
-    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, weekday: t(weekdayIDs[current.getDay()]), x: index * perDay };
+    const today = key === browserClockParts().date;
+    const dateText = String(current.getDate());
+    const weekText = current.getDay() === 0 && current.getDate() !== 1
+      ? t("calendar.week_number", {p0: Math.ceil((current.getDate() - 1) / 7)}) : '';
+    const periodText = weekText || (current.getDate() === 1 || index === 0 ? String(current.getMonth() + 1) : '');
+    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, periodText, weekday: t(weekdayIDs[current.getDay()]), x: index * perDay };
   });
 }
 function renderHolidayStatus() {
@@ -415,12 +448,12 @@ function calendarMonthOffset(value, months) {
   return dateKey(date);
 }
 function timelineCalendarRange() {
-  const today = clockParts(timelineReferenceTime).date;
+  const today = browserClockParts().date;
   if (!state.calendarRange) state.calendarRange = {start:calendarMonthOffset(today,-2),end:calendarMonthOffset(today,3)};
   return state.calendarRange;
 }
 function calendarHeaderMarkup(dates, pxPerDay) {
-  return dates.map((item) => `<div class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
 }
 function calendarShadingMarkup(dates, pxPerDay) {
   return dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
@@ -441,7 +474,7 @@ function extendTimelineCalendar(oldStart, oldEnd) {
   $('.gantt-body',chart).style.width=`${width+label}px`;
   $('.date-axis',chart).insertAdjacentHTML(prepend?'afterbegin':'beforeend',calendarHeaderMarkup(added,px));
   $$('.row-date-shading',chart).forEach(node => node.insertAdjacentHTML('beforeend',calendarShadingMarkup(added,px)));
-  chart.dataset.todayOffset=dayDiff(range.start,clockParts(timelineReferenceTime).date);
+  chart.dataset.todayOffset=dayDiff(range.start,browserClockParts().date);
   $('#range-label').textContent=dateRangeLabel(range.start,range.end);
   updateCurrentTimeMarker();
   renderDependencyLinks();
@@ -508,6 +541,16 @@ function taskRowHeight(task) { return actualTaskRange(task) ? 54 : 36; }
 // A filled neck grows from the predecessor's facing edge into the successor.
 // End faces meet square edges; surface joins tuck under the bar's solid fill.
 function dependencyRibbon(from, to, outline = {}) {
+  if (from.projectRoute) {
+    const {x,exitY,entryY,width} = from.projectRoute;
+    const start = {...from};delete start.projectRoute;
+    if (from.projectRoute.adjacent) return dependencyRibbon(start,to,outline);
+    const exit = {kind:'surface',surfaceX:x,y:exitY,width};
+    const entry = {kind:'surface',surfaceX:x,y:entryY,width};
+    return dependencyRibbon(start,exit,{source:outline.source}) +
+      ` M ${x-width/2} ${exitY} H ${x+width/2} V ${entryY} H ${x-width/2} Z ` +
+      dependencyRibbon(entry,to,{target:outline.target});
+  }
   const gap = from.kind === 'gap';
   const sx = gap ? from.x : from.surfaceX, tx = gap ? to.x : to.surfaceX;
   const sy = gap ? from.centerY : from.y, ty = gap ? to.centerY : to.y;
@@ -550,6 +593,22 @@ function dependencyRibbon(from, to, outline = {}) {
   return `M ${sx-(gap?0:sh)} ${sy-(gap?sh:0)} ${edge(-1)}
     ${outline.target || `L ${tx+(gap?0:th)} ${ty+(gap?th:0)}`}
     ${edge(1,true)} ${outline.source || ''} Z`;
+}
+// Remove the intervening-project height before intersecting the endpoint chord.
+// This keeps the two diagonal sections collinear when their projects are joined.
+function crossProjectRoute(from, to, sourceBounds, targetBounds) {
+  const below = to.y > from.y;
+  const sourceEdge = below?sourceBounds.bottom:sourceBounds.top;
+  const targetEdge = below?targetBounds.top:targetBounds.bottom;
+  // Half the 4px marker thickness keeps its outer edge flush with the project boundary.
+  const exitY = sourceEdge+(below?-2:2), entryY = targetEdge+(below?2:-2);
+  const sourceDistance = Math.abs(sourceEdge-from.y), targetDistance = Math.abs(to.y-targetEdge);
+  const fraction = sourceDistance+targetDistance ? sourceDistance/(sourceDistance+targetDistance) : .5;
+  const x = from.surfaceX+(to.surfaceX-from.surfaceX)*fraction;
+  const adjacent = Math.abs(sourceEdge-targetEdge)<1;
+  const atY = y => from.surfaceX+(to.surfaceX-from.surfaceX)*(y-from.y)/(to.y-from.y);
+  return {x,exitY,entryY,width:6,adjacent,
+    exitX:adjacent?atY(exitY):x,entryX:adjacent?atY(entryY):x};
 }
 function dependencySourceKind(task, drag = state.drag, targetBelow = true) {
   const current = drag?.taskId === task.id && drag.valid ? { ...task, ...drag.previewFields } : task;
@@ -763,11 +822,97 @@ function unifiedTaskPaint(task, plannedBar, actualBar, origin, index, attachment
   return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}" style="mask-type:alpha">${maskMarkup}</mask></defs><path class="unified-task-paint" data-unified-task="${esc(task.id)}" d="${shape.path}" fill="${progress === 100 ? palette.progress : palette.base}" pointer-events="none"/><path class="unified-task-progress" d="${shape.path}" fill="${palette.progress}" mask="url(#${id})" pointer-events="none"/>${grips}${task.status === 'blocked' ? `<path class="blocked-task-outline" d="${shape.path}"/>` : ''}`;
 }
 
+// Reconstruct a folded task in its expanded coordinate space without rendering it.
+function foldedTaskGeometry(project, task, actual, bounds, above, reference, px, origin) {
+  const rows = groupedTaskRows(project.tasks);
+  const total = 38 + rows.reduce((sum,row)=>sum + row.height,0);
+  const top = above ? bounds.bottom-total : bounds.top;
+  const index = rows.findIndex(row=>row.offsets.has(task.id));
+  const rowTop = top + 38 + rows.slice(0,index).reduce((sum,row)=>sum + row.height,0) + rows[index].offsets.get(task.id);
+  const recorded = actual ? actualTaskRange(task) : null;
+  const start = recorded ? recorded.start : task.planned_start;
+  const finish = recorded ? recorded.finish : task.planned_finish;
+  const left = reference.left+dayDiff(reference.date,start)*px;
+  const width = Math.max(px,(dayDiff(start,finish)+1)*px), height = actual?20:22;
+  const y = origin.top+rowTop+(actual?29:7);
+  return {rect:{left,right:left+width,top:y,bottom:y+height,width,height},bounds:{top,bottom:top+total}};
+}
+function projectBoundaryMarker(project,x,y,geometry,ownerId='') {
+  const palette=colorPalette(project.color), left=x-14, right=x+14;
+  const progress=Math.max(0,Math.min(100,Number(project.progress)||0));
+  const boundary=progress===100?Infinity:progress===0?-Infinity:geometry?geometry.left+geometry.width*progress/100:-Infinity;
+  const end=Math.max(left,Math.min(right,boundary));
+  return `<g class="dependency-boundary-marker" data-boundary-project="${esc(ownerId)}" data-boundary-y="${y}"><path class="dependency-project-boundary" d="M ${left} ${y} H ${right}" stroke="${palette.base}"/>`+
+    (end>left?`<path class="dependency-project-boundary dependency-project-progress" d="M ${left} ${y} H ${end}" stroke="${palette.progress}"/>`:'')+'</g>';
+}
+function foldedDependencyMarkup(projects,bars,actualBars,extents,origin,bodyWidth,projectGeometry=new Map()) {
+  if (!state.collapsedProjects?.size) return '';
+  const owners = new Map(projects.flatMap(project=>project.tasks.map(task=>[task.id,project])));
+  let markup = '', index=0;
+  for (const targetProject of projects) for (const task of targetProject.tasks) for (const predecessorId of task.dependencies || []) {
+    const sourceProject=owners.get(predecessorId);
+    if (!sourceProject || sourceProject.id===targetProject.id) continue;
+    const predecessor=sourceProject.tasks.find(item=>item.id===predecessorId);
+    const sourceVisible=bars.has(predecessorId), targetVisible=bars.has(task.id);
+    if (sourceVisible===targetVisible) continue;
+    const hiddenProject=sourceVisible?targetProject:sourceProject;
+    if (!state.collapsedProjects.has(hiddenProject.id)) continue;
+    let sourceBounds=extents.get(sourceProject.id), targetBounds=extents.get(targetProject.id);
+    if (!sourceBounds || !targetBounds) continue;
+    const below=targetBounds.top>sourceBounds.top;
+    const actual=dependencySourceKind(predecessor,state.drag,below)==='actual';
+    const sourceBar=actual?actualBars.get(predecessorId):bars.get(predecessorId);
+    const targetBar=bars.get(task.id);
+    if (sourceVisible && !sourceBar) continue;
+    const visibleBar=sourceVisible?sourceBar:targetBar, visibleRect=visibleBar.getBoundingClientRect();
+    const referenceBar=sourceVisible?bars.get(predecessorId):targetBar;
+    const referenceTask=sourceVisible?predecessor:task;
+    const reference={left:referenceBar.getBoundingClientRect().left,date:referenceTask.planned_start};
+    const folded=foldedTaskGeometry(hiddenProject,sourceVisible?task:predecessor,!sourceVisible&&actual,
+      sourceVisible?targetBounds:sourceBounds,sourceVisible?!below:below,reference,state.zoom,origin);
+    const source=sourceVisible?visibleRect:folded.rect, target=targetVisible?visibleRect:folded.rect;
+    if (sourceVisible) targetBounds=folded.bounds; else sourceBounds=folded.bounds;
+    const flare=Math.min(source.height,target.height)*1.5;
+    const port=(rect,outgoing)=>{
+      const inset=Math.min(rect.width/4,7), width=Math.min(flare,rect.width-inset*2);
+      return {kind:'surface',surfaceX:outgoing?rect.right-origin.left-inset-width/2:rect.left-origin.left+inset+width/2,
+        y:(outgoing?(below?rect.bottom:rect.top):(below?rect.top:rect.bottom))-origin.top,width};
+    };
+    const from=port(source,true), to=port(target,false);
+    from.projectRoute=crossProjectRoute(from,to,sourceBounds,targetBounds);
+    const route=from.projectRoute, bounds=sourceVisible?sourceBounds:targetBounds;
+    const id=`folded-dependency-${index++}`, ribbon=dependencyRibbon(from,to);
+    const x=sourceVisible?route.exitX:route.entryX,y=sourceVisible?route.exitY:route.entryY;
+    const boundaryMarker=projectBoundaryMarker(hiddenProject,x,y,projectGeometry.get(hiddenProject.id),sourceVisible?sourceProject.id:targetProject.id);
+    markup+=`<defs><clipPath id="${id}-clip"><rect x="0" y="${bounds.top}" width="${bodyWidth}" height="${bounds.bottom-bounds.top}"/></clipPath><linearGradient id="${id}-fill" gradientUnits="userSpaceOnUse" x1="0" y1="${from.y}" x2="0" y2="${to.y}"><stop offset="0" stop-color="${outgoingConnectionColor(predecessor)}"/><stop offset="1" stop-color="${connectionColor(task)}"/></linearGradient></defs><g class="folded-project-connection" data-connection-source="${esc(sourceProject.id)}" data-connection-target="${esc(targetProject.id)}" clip-path="url(#${id}-clip)"><path d="${ribbon}" fill="url(#${id}-fill)" pointer-events="none"/>${boundaryMarker}</g>`;
+  }
+  return markup;
+}
+
+function dependencyBounds(from,to) {
+  const gap=from.kind==='gap', sx=gap?from.x:from.surfaceX, tx=gap?to.x:to.surfaceX;
+  const sy=gap?from.centerY:from.y, ty=gap?to.centerY:to.y;
+  const radius=Math.max(gap?from.height:from.width,gap?to.height:to.width)/2+2;
+  return {left:Math.min(sx,tx)-(gap?2:radius),right:Math.max(sx,tx)+(gap?2:radius),
+    top:Math.min(sy,ty)-(gap?radius:2),bottom:Math.max(sy,ty)+(gap?radius:2)};
+}
+function dependencyBoundsOverlap(a,b) {
+  return a.left<b.right && b.left<a.right && a.top<b.bottom && b.top<a.bottom;
+}
+function dependencyBoundsUnion(rects) {
+  return {left:Math.min(...rects.map(r=>r.left)),right:Math.max(...rects.map(r=>r.right)),
+    top:Math.min(...rects.map(r=>r.top)),bottom:Math.max(...rects.map(r=>r.bottom))};
+}
+function dependencyRegion(rect) {
+  return `x="${rect.left-1}" y="${rect.top-1}" width="${rect.right-rect.left+2}" height="${rect.bottom-rect.top+2}"`;
+}
+
 function renderDependencyLinks(options = null) {
   const body = $('.gantt-body', options?.chart || $('#gantt'));
   if (!body) return;
   $('.dependency-layer', body)?.remove();
   $('.dependency-hidden-layer', body)?.remove?.();
+  $('.task-selection-layer', body)?.remove?.();
   $$('.bar-label-overlay',body).forEach(label=>label.remove());
   $$('.has-label-overlay',body).forEach(bar=>bar.classList.remove('has-label-overlay'));
   $$('.has-dependency', body).forEach((bar) => bar.classList.remove('has-dependency', 'dependency-join-left', 'dependency-join-right', 'svg-backed'));
@@ -776,6 +921,7 @@ function renderDependencyLinks(options = null) {
   const bars = new Map($$('.task-bar', body).filter(bar => bar.getBoundingClientRect().height > 0.1).map((bar) => [bar.dataset.taskSelect, bar]));
   const actualBars = new Map($$('.actual-task-bar', body).filter(bar => bar.getBoundingClientRect().height > 0.1).map((bar) => [bar.dataset.taskSelect, bar]));
   const projects = options?.projects || filteredProjects();
+  const selectedTaskId = options ? state.templateTaskKey : state.selection?.type === 'task' ? state.selection.id : null;
   const edges = [];
   const attachmentPorts = new Map();
   for (const bar of [...bars.values(), ...actualBars.values()]) {
@@ -785,8 +931,21 @@ function renderDependencyLinks(options = null) {
     if (fill.dataset.linearWidth) fill.style.width = fill.dataset.linearWidth;
     fill.style.removeProperty('mask-image'); fill.style.removeProperty('-webkit-mask-image');
   }
+  const projectGeometry = new Map($$('.project-summary-bar[data-project-select]',body).map(bar=>{
+    const rect=bar.getBoundingClientRect();
+    return [bar.dataset.projectSelect,{left:rect.left-origin.left,width:rect.width}];
+  }));
   const gradients = [];
   const connectedBars = new Set();
+  const taskProjects = new Map(projects.flatMap(project=>project.tasks.map(task=>[task.id,project])));
+  const projectExtents = new Map();
+  for (const row of $$('.gantt-row[data-project-boundary]',body)) {
+    const rect = row.getBoundingClientRect(), id = row.dataset.projectBoundary;
+    const bounds = projectExtents.get(id) || {top:Infinity,bottom:-Infinity};
+    bounds.top = Math.min(bounds.top,rect.top-origin.top);
+    bounds.bottom = Math.max(bounds.bottom,rect.bottom-origin.top);
+    projectExtents.set(id,bounds);
+  }
   const visibleTasks = new Map(projects.flatMap(project=>project.tasks).map(task=>[task.id,task]));
   for (const project of projects) {
     for (const task of project.tasks) {
@@ -806,7 +965,9 @@ function renderDependencyLinks(options = null) {
         const source = sourceBar.getBoundingClientRect();
         const below = target.top > source.top;
         // Only end-face joins square the attached side; surface joins keep their radii.
-        const kind = target.left - source.right >= 12 ? 'gap' : 'surface';
+        const sourceProject = taskProjects.get(predecessorId);
+        const crossProject = sourceProject?.id !== project.id;
+        const kind = !crossProject && target.left - source.right >= 12 ? 'gap' : 'surface';
         if (kind === 'gap') {
           sourceBar.classList.add('dependency-join-right');
           targetBar.classList.add('dependency-join-left');
@@ -837,6 +998,11 @@ function renderDependencyLinks(options = null) {
           from.surfaceX = from.x - from.width / 2;
           to.surfaceX = to.x + to.width / 2;
         }
+        if (crossProject) {
+          const sourceBounds = projectExtents.get(sourceProject.id) || {top:source.top-origin.top-7,bottom:source.bottom-origin.top+7};
+          const targetBounds = projectExtents.get(project.id) || {top:target.top-origin.top-7,bottom:target.bottom-origin.top+7};
+          from.projectRoute = crossProjectRoute(from,to,sourceBounds,targetBounds);
+        }
         const gradientId = `${options ? 'template-' : ''}dependency-fill-${edges.length}`;
         // A constant color along each joining edge avoids a visible seam:
         // horizontal gradient for end faces, vertical gradient for top/bottom.
@@ -853,11 +1019,14 @@ function renderDependencyLinks(options = null) {
         attachmentPorts.get(targetBar).ports.push(kind === 'gap'
           ? {side:'left',direction:'incoming'}
           : {side:below?'top':'bottom',x:to.surfaceX-(target.left-origin.left),width:to.width,direction:'incoming'});
-        const related = state.selection?.type === 'task' && [task.id, predecessorId].includes(state.selection.id);
-        const label = t("timeline.finish_to_start", {p0:project.name,p1:predecessor.name,p2:task.name});
+        const related = [task.id, predecessorId].includes(selectedTaskId);
+        const labelProjects = options?.projects || state.data?.projects || projects;
+        const sourceOwner = labelProjects.find(owner=>owner.id === sourceProject?.id) || sourceProject;
+        const targetOwner = labelProjects.find(owner=>owner.id === project.id) || project;
+        const label = t("timeline.finish_to_start", {p0:project.name,p1:taskInstanceName(sourceOwner,predecessor),p2:taskInstanceName(targetOwner,task)});
         connectedBars.add(sourceBar);
         connectedBars.add(targetBar);
-        edges.push({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label });
+        edges.push({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label, sourceProject, targetProject:project });
       }
     }
   }
@@ -870,8 +1039,9 @@ function renderDependencyLinks(options = null) {
     const mask = `url("data:image/svg+xml,${encodeURIComponent(attachmentProgressMask(rect.width, rect.height, taskProgress(task), ports))}")`;
     fill.style.setProperty('mask-image', mask); fill.style.setProperty('-webkit-mask-image', mask);
   }
-  const selectedBars = [...bars.values()].filter(bar => bar.closest?.('.selected-row'));
-  if (!edges.length && !actualBars.size && !selectedBars.length) return;
+  const foldedMarkup = options ? '' : foldedDependencyMarkup(projects,bars,actualBars,projectExtents,origin,body.scrollWidth,projectGeometry);
+  const selectedBars = [...bars.values()].filter(bar => bar.dataset.taskSelect === selectedTaskId);
+  if (!edges.length && !actualBars.size && !selectedBars.length && !foldedMarkup) return;
   // Resolve corners after every edge marks its square joining sides.
   // A single exterior contour has no internal edges to antialias separately.
   const geometry = new Map([...connectedBars].map((bar) => [bar,
@@ -884,8 +1054,25 @@ function renderDependencyLinks(options = null) {
   };
   const outlineFor = id => shapeFor(id).path;
   const tasks = projects.flatMap(project=>project.tasks);
-  const markup = edges.map(({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label }) => {
+  const barBounds=new Map([...bars].map(([id,bar])=>{
+    const rects=[bar,actualBars.get(id)].filter(Boolean).map(element=>{
+      const r=element.getBoundingClientRect();
+      return {left:r.left-origin.left,right:r.right-origin.left,top:r.top-origin.top,bottom:r.bottom-origin.top};
+    });
+    return [id,dependencyBoundsUnion(rects)];
+  }));
+  const crossingTaskIds=new Set();
+  const crossingRegions=new Map(edges.map(edge=>{
+    const bounds=dependencyBounds(edge.from,edge.to);
+    const ids=[...barBounds].filter(([id,rect])=>id!==edge.task.id && id!==edge.predecessorId && dependencyBoundsOverlap(bounds,rect)).map(([id])=>id);
+    ids.forEach(id=>crossingTaskIds.add(id));
+    return [edge.gradientId,{bounds,ids,paintBounds:dependencyBoundsUnion([bounds,barBounds.get(edge.task.id),barBounds.get(edge.predecessorId)])}];
+  }));
+  const markup = edges.map(({ from, to, sourceBar, targetBar, gradientId, related, kind, task, predecessorId, sourceKind, label, sourceProject, targetProject }) => {
     const ribbon = dependencyRibbon(from, to);
+    const {ids:crossingBars,paintBounds}=crossingRegions.get(gradientId);
+    const crossingMask = crossingBars.length ? `<mask id="${gradientId}-under-bars" maskUnits="userSpaceOnUse" ${dependencyRegion(paintBounds)}><rect ${dependencyRegion(paintBounds)} fill="white"/>${crossingBars.map(id=>`<path d="${outlineFor(id)}" fill="black"/>`).join('')}</mask>` : '';
+    const crossingMaskAttribute = crossingBars.length ? ` mask="url(#${gradientId}-under-bars)"` : '';
     const paint = dependencyConnectedPath(from, to, geometry.get(sourceBar), geometry.get(targetBar), origin);
     // A connection redraws both endpoint bars. Clip that paint to the same
     // stacked exterior so a separate rectangular tier cannot fill its fillets.
@@ -896,8 +1083,8 @@ function renderDependencyLinks(options = null) {
 
     // Overlap the progress paint at shared faces, clipped to the existing
     // exterior: separate antialiased edges otherwise expose a hairline of base color.
-    return `<defs>${exteriorClip}<clipPath id="${gradientId}-outline" clipPathUnits="userSpaceOnUse"><path d="${paint}"/></clipPath></defs><path class="dependency-paint" d="${paint}"${clipAttribute} fill="url(#${gradientId})" fill-rule="nonzero" aria-hidden="true"/>
-      <path class="dependency-progress" d="${ribbon}" fill="url(#${gradientId}-progress)" stroke="url(#${gradientId}-progress)" stroke-width="1" stroke-linejoin="round" clip-path="url(#${gradientId}-outline)" pointer-events="none" aria-hidden="true"/>
+    return `<defs>${crossingMask}${exteriorClip}<clipPath id="${gradientId}-outline" clipPathUnits="userSpaceOnUse"><path d="${paint}"/></clipPath></defs><path class="dependency-paint" data-connection-source="${esc(sourceProject?.id || '')}" data-connection-target="${esc(targetProject?.id || '')}" d="${paint}"${clipAttribute}${crossingMaskAttribute} fill="url(#${gradientId})" fill-rule="nonzero" aria-hidden="true"/>
+      <path class="dependency-progress" data-connection-source="${esc(sourceProject?.id || '')}" data-connection-target="${esc(targetProject?.id || '')}" d="${ribbon}"${crossingMaskAttribute} fill="url(#${gradientId}-progress)" stroke="url(#${gradientId}-progress)" stroke-width="1" stroke-linejoin="round" clip-path="url(#${gradientId}-outline)" pointer-events="none" aria-hidden="true"/>
       <path class="dependency-link${related ? ' is-related' : ''}" d="${ribbon}" fill="transparent" data-connection-kind="${kind}" data-task-select="${esc(task.id)}" data-predecessor="${esc(predecessorId)}" data-source-period="${sourceKind}" role="button" tabindex="0" aria-label="${esc(label)}"><title>${esc(label)}</title></path>`;
   }).join('');
   const unifiedMarkup = tasks.filter(task => bars.has(task.id) && actualBars.has(task.id))
@@ -910,37 +1097,37 @@ function renderDependencyLinks(options = null) {
     }).join('');
   const selectionMarkup = selectedBars.map(bar => {
     const path = outlineFor(bar.dataset.taskSelect);
-    return `<path class="selected-task-halo" d="${path}"/><path class="selected-task-outline" d="${path}"/>${bar.classList.contains('blocked') ? `<path class="selected-task-blocked" d="${path}"/>` : ''}`;
+    return `<path class="selected-task-halo" d="${path}"/><path class="selected-task-outline" d="${path}" data-selected-task="${esc(bar.dataset.taskSelect)}"/>${bar.classList.contains('blocked') ? `<path class="selected-task-blocked" d="${path}"/>` : ''}`;
   }).join('');
-  // Connections remain in front at unrelated crossings. Mark the occluded
-  // bar contour (not the visible ribbon contour) within the overlap only.
-  const silhouettes = [...bars.keys()].map(id=>({id,path:outlineFor(id)}));
-  const hiddenMarkup = edges.map(({from,to,gradientId,task,predecessorId}) => {
-    const occluded = silhouettes.filter(item=>item.id!==task.id && item.id!==predecessorId);
+  // Keep bar paint intact; only the connection-colored hatch shows through it.
+  const hiddenMarkup = edges.map(({from,to,gradientId,task,predecessorId,sourceProject,targetProject}) => {
+    const {ids,bounds}=crossingRegions.get(gradientId);
+    const occluded = ids.map(id=>({id,path:outlineFor(id)}));
     if (!occluded.length) return '';
     const id = `${gradientId}-hidden`, ribbon = dependencyRibbon(from,to);
-    // Reuse the ribbon's progress gradient for the overlap so ordinary HTML
-    // bars and SVG-backed/actual bars all have the same front/back ordering.
-    return `<defs><clipPath id="${id}" clipPathUnits="userSpaceOnUse"><path d="${ribbon}"/></clipPath><clipPath id="${id}-bars" clipPathUnits="userSpaceOnUse">${occluded.map(item=>`<path d="${item.path}"/>`).join('')}</clipPath><pattern id="${id}-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path d="M -1 1 L 1 -1 M 0 6 L 6 0 M 5 7 L 7 5" stroke="#fff" stroke-width="2"/><path d="M -1 1 L 1 -1 M 0 6 L 6 0 M 5 7 L 7 5" stroke="#344054" stroke-width=".8"/></pattern></defs><path class="dependency-crossing-paint" d="${ribbon}" fill="url(#${gradientId}-progress)" clip-path="url(#${id}-bars)"/><path class="dependency-crossing-hatch" d="${ribbon}" fill="url(#${id}-hatch)" clip-path="url(#${id}-bars)"/><g clip-path="url(#${id})">${occluded.map(item=>`<path class="dependency-hidden-halo" data-occluded-task="${esc(item.id)}" d="${item.path}"/><path class="dependency-hidden-line" data-occluded-task="${esc(item.id)}" d="${item.path}"/>`).join('')}</g>`;
+    return `<defs><clipPath id="${id}-bars" clipPathUnits="userSpaceOnUse">${occluded.map(item=>`<path d="${item.path}"/>`).join('')}</clipPath><pattern id="${id}-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path d="M -1 1 L 1 -1 M 0 6 L 6 0 M 5 7 L 7 5" stroke="white" stroke-width="1.5"/></pattern><mask id="${id}-hatch-mask" maskUnits="userSpaceOnUse" ${dependencyRegion(bounds)}><rect ${dependencyRegion(bounds)} fill="url(#${id}-hatch)"/></mask></defs><path class="dependency-crossing-hatch" data-connection-source="${esc(sourceProject?.id || '')}" data-connection-target="${esc(targetProject?.id || '')}" d="${ribbon}" fill="url(#${gradientId}-progress)" mask="url(#${id}-hatch-mask)" clip-path="url(#${id}-bars)"/>`;
   }).join('');
-  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="${t("timeline.predecessor_and_successor_connections")}"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}${selectionMarkup}</svg>${hiddenMarkup ? `<svg class="dependency-hidden-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${hiddenMarkup}</svg>` : ''}`);
+  const boundaryMarkup = edges.filter(edge=>edge.from.projectRoute).map(edge=>{
+    const route=edge.from.projectRoute;
+    return [[route.exitX,route.exitY,edge.targetProject,edge.sourceProject.id],[route.entryX,route.entryY,edge.sourceProject,edge.targetProject.id]].map(([x,y,project,ownerId])=>
+      projectBoundaryMarker(project,x,y,projectGeometry.get(project.id),ownerId)).join('');
+  }).join('');
+  body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="${t("timeline.predecessor_and_successor_connections")}"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}${foldedMarkup}</svg>${hiddenMarkup || boundaryMarkup ? `<svg class="dependency-hidden-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${hiddenMarkup}${boundaryMarkup}</svg>` : ''}${selectionMarkup ? `<svg class="task-selection-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${selectionMarkup}</svg>` : ''}`);
   connectedBars.forEach((bar) => bar.classList.add('svg-backed'));
   if (hiddenMarkup) {
-    for (const bar of [...bars.values(),...actualBars.values()]) {
-      const text = $('.bar-text',bar);
-      if (!text) continue;
-      const label = document.createElement('div');
-      label.className = 'bar-label-overlay';
-      label.setAttribute('aria-hidden','true');
-      const style = getComputedStyle(bar);
-      for (const key of ['left','top','width','height','paddingLeft','paddingRight','color','fontSize','borderRadius']) label.style[key] = style[key];
-      const copy = text.cloneNode(true);
-      const textStyle = getComputedStyle(text);
-      copy.style.marginLeft = textStyle.marginLeft;
-      copy.style.marginRight = textStyle.marginRight;
-      label.append(copy);
-      bar.insertAdjacentElement('afterend',label);
-      bar.classList.add('has-label-overlay');
+    // Read all styles before inserting overlays: no per-label layout flushes.
+    const labels=[...bars.values(),...actualBars.values()].filter(bar=>crossingTaskIds.has(bar.dataset.taskSelect)).flatMap(bar=>{
+      const text=$('.bar-text',bar);if (!text) return [];
+      const style=getComputedStyle(bar),textStyle=getComputedStyle(text);
+      const properties={};
+      for (const key of ['left','top','width','height','paddingLeft','paddingRight','color','fontSize','borderRadius']) properties[key]=style[key];
+      return [{bar,text,properties,marginLeft:textStyle.marginLeft,marginRight:textStyle.marginRight}];
+    });
+    for (const {bar,text,properties,marginLeft,marginRight} of labels) {
+      const label=document.createElement('div');label.className='bar-label-overlay';label.setAttribute('aria-hidden','true');
+      Object.assign(label.style,properties);
+      const copy=text.cloneNode(true);Object.assign(copy.style,{marginLeft,marginRight});
+      label.append(copy);bar.insertAdjacentElement('afterend',label);bar.classList.add('has-label-overlay');
     }
   }
 
@@ -1018,7 +1205,7 @@ function animateGanttLabelWidth(chart, from, initial = new Map()) {
     label.style.marginRight=`${to-width}px`;
     animate(label,{clipPath:`inset(0 ${width-from}px 0 0)`},{clipPath:`inset(0 ${width-to}px 0 0)`});
   }
-  for (const element of $$('.gantt-head-right, .gantt-row > .gantt-right > *, .project-duration-band, .dependency-layer, .dependency-hidden-layer',chart)) {
+  for (const element of $$('.gantt-head-right, .gantt-row > .gantt-right > *, .project-duration-band, .dependency-layer, .dependency-hidden-layer, .task-selection-layer',chart)) {
     const offset=Number(element.dataset.columnOffset || 0);
     animate(element,{transform:`translateX(${offset+from-to}px)`},{transform:`translateX(${offset}px)`});
   }
@@ -1070,7 +1257,7 @@ function toggleGanttLabels(chart) {
   body.style.width=`${parseFloat(body.style.width)+delta}px`;
   if(content) content.style.width=body.style.width;
   for(const band of $$('.project-duration-band',chart)) band.style.left=`${parseFloat(band.style.left)+delta}px`;
-  for(const layer of $$('.dependency-layer, .dependency-hidden-layer',chart)) {
+  for(const layer of $$('.dependency-layer, .dependency-hidden-layer, .task-selection-layer',chart)) {
     const offset=Number(layer.dataset.columnOffset || 0)+delta;
     layer.dataset.columnOffset=String(offset);layer.style.transform=`translateX(${offset}px)`;
     layer.setAttribute('width',body.style.width);
@@ -1080,6 +1267,58 @@ function toggleGanttLabels(chart) {
   button.setAttribute('aria-label',`${t("timeline.project_task_column")} ${t(expanded?'timeline.collapse_2':'timeline.expand_2')}`);
   $('span[aria-hidden]',button).textContent=expanded?'‹':'›';
   animateGanttLabelWidth(chart,from,initial);
+}
+
+function rowTaskMembers(project, task) {
+  if (!project || !task) return [];
+  const key = task.gantt_row_id || task.id;
+  return project.tasks.filter(item=>(item.gantt_row_id || item.id) === key)
+    .sort((a,b)=>(a.sort_order || 0) - (b.sort_order || 0));
+}
+function taskInstanceName(project, task) {
+  const members = rowTaskMembers(project, task);
+  if (members.length < 2) return task.name;
+  return `${task.name} · ${t('task.numbered_label', {p0:members.findIndex(item=>item.id === task.id) + 1})}`;
+}
+function taskRelationDetails(project, task) {
+  const name = taskInstanceName(project, task);
+  const dates = task.gantt_row_id ? [task.planned_start, task.planned_finish].filter(Boolean).join(' – ') : '';
+  return {relationTaskName:name, relationTaskDates:dates, relationTaskLabel:dates ? `${name} · ${dates}` : name};
+}
+function groupedTaskRows(tasks) {
+  const groups = new Map();
+  for (const task of tasks) {
+    const key = task.gantt_row_id || task.id;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(task);
+  }
+  return [...groups.values()].map(members => {
+    const tierHeight = Math.max(...members.map(taskRowHeight));
+    const ends = [], offsets = new Map();
+    for (const task of [...members].sort((a,b)=>(a.planned_start || '').localeCompare(b.planned_start || ''))) {
+      const actual = actualTaskRange(task);
+      const start = [task.planned_start, actual?.start].filter(Boolean).sort()[0] || '';
+      const finish = [task.planned_finish, actual?.finish].filter(Boolean).sort().at(-1) || start;
+      let lane = ends.findIndex(end=>end < start);
+      if (lane < 0) lane = ends.length;
+      ends[lane] = finish;
+      offsets.set(task.id, lane * tierHeight);
+    }
+    return {tasks: members, height: Math.max(1, ends.length) * tierHeight, offsets};
+  });
+}
+function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
+  const owner = state.data.projects.find(item=>item.id === project.id) || project;
+  const displayName = taskInstanceName(owner,task);
+  const startX = dayDiff(start, task.planned_start) * pxPerDay;
+  const width = Math.max(pxPerDay, (dayDiff(task.planned_start, task.planned_finish) + 1) * pxPerDay);
+  const actual = actualTaskRange(task);
+  const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
+  const actualWidth = actual ? Math.max(pxPerDay, (dayDiff(actual.start, actual.finish) + 1) * pxPerDay) : 0;
+  const actualTitle = actual ? `${displayName} · ${actual.label} · ${fmtDate(task.actual_start || task.actual_finish, true)}${actual.partial ? '' : `–${fmtDate(actual.finish, true)}`}` : '';
+  const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${29 + offset}px;left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth)}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(displayName)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
+  const status = task.status;
+  return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
 }
 
 function renderTimeline({ preserveInspector = false } = {}) {
@@ -1096,7 +1335,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   const tasks = flatten(projects);
   const bounds = timelineCalendarRange();
   const {start,end} = bounds;
-  const today = clockParts(timelineReferenceTime).date;
+  const today = browserClockParts().date;
   const days = dayDiff(start,end) + 1;
   $('#range-label').textContent = dateRangeLabel(start,end);
   const pxPerDay = state.zoom;
@@ -1112,7 +1351,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   $('#empty-state').classList.toggle('hidden', state.layout === 'gantt' || tasks.length > 0);
 
   const todayOffset = dayDiff(start, today);
-  const nowOffset = todayOffset + timeOfDayFraction(timelineReferenceTime);
+  const nowOffset = todayOffset + timeOfDayFraction();
   $('#gantt').dataset.todayDate = today;
   $('#gantt').dataset.todayOffset = todayOffset;
   let rows = '';
@@ -1135,6 +1374,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
       bodyHeight += 30;
     }
     for (const project of projectGroup.projects) {
+    const taskRows = groupedTaskRows(project.tasks);
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
@@ -1143,10 +1383,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
     const projectBarWidth = Math.max(pxPerDay, (dayDiff(projectStart || start, projectFinish || projectStart || start) + 1) * pxPerDay);
     const isProjectSelected = state.selection?.type === 'project' && state.selection.id === project.id;
     const projectTop = bodyHeight;
-    const projectHeight = 38 + (collapsed ? 0 : project.tasks.reduce((height, task) => height + taskRowHeight(task), 0));
+    const projectHeight = 38 + (collapsed ? 0 : taskRows.reduce((height, row) => height + row.height, 0));
     if (!collapsed) projectBands.push({ project, top: projectTop, height: projectHeight, left: labelWidth + projectX, width: projectBarWidth });
     const summaryClass = collapsed ? '' : ' expanded-project-label';
-      rows += `<div class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
+      rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
       <div class="gantt-left project-left" data-drop-project="${esc(project.id)}" data-directory-id="project:${esc(project.id)}">
         <button class="project-select" type="button" draggable="${!project.is_unassigned && $('#sort-select').value === 'manual'}" title="${t("directory.drag_project")}" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot project-order" style="background:${colorPalette(project.color).base}" aria-label="${t("timeline.default_order")} ${project.sort_order ?? ''}">${project.sort_order ?? ''}</i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
       </div>
@@ -1155,21 +1395,16 @@ function renderTimeline({ preserveInspector = false } = {}) {
     bodyHeight += 38;
     }
     if (collapsed) continue;
-    for (const task of project.tasks) {
-      const startX = dayDiff(start, task.planned_start) * pxPerDay;
-      const width = Math.max(pxPerDay, (dayDiff(task.planned_start, task.planned_finish) + 1) * pxPerDay);
-      const actual = actualTaskRange(task);
-      const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
-      const actualWidth = actual ? Math.max(pxPerDay, (dayDiff(actual.start, actual.finish) + 1) * pxPerDay) : 0;
-      const actualTitle = actual ? `${task.name} · ${actual.label} · ${fmtDate(task.actual_start || task.actual_finish, true)}${actual.partial ? '' : `–${fmtDate(actual.finish, true)}`}` : '';
-      const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth)}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(task.name)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
+    for (const row of taskRows) {
+      const task = row.tasks.find(item=>state.selection?.type === 'task' && state.selection.id === item.id) || row.tasks[0];
+      const actual = row.tasks.some(item=>actualTaskRange(item));
       const status = task.status;
-      const isSelected = state.selection?.type === 'task' && state.selection.id === task.id;
-      rows += `<div class="gantt-row task-row${project.is_unassigned ? ' unassigned-task-row' : ''}${actual ? ' has-actual' : ''} ${isSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
-        <div class="gantt-left task-left"><button class="task-label" type="button" draggable="true" title="${t("directory.drag_task")}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-state task-order ${status}" style="${paletteStyle(task.color, 'task')}" title="${esc(statusNames[status] || status)}" aria-label="${t("timeline.default_order")} ${task.sort_order}">${task.sort_order}</span><span class="task-name" title="${esc(task.name)}">${esc(task.name)}</span><span class="task-owner">${esc(task.owner || t("timeline.unassigned"))}</span></button></div>
-        <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(task.name)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(task.name)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(task.name)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(task.name)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}</div>
+      const isSelected = state.selection?.type === 'task' && row.tasks.some(item=>item.id === state.selection.id);
+      rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row task-row${project.is_unassigned ? ' unassigned-task-row' : ''}${actual ? ' has-actual' : ''} ${isSelected ? 'selected-row' : ''}" style="height:${row.height}px;${paletteStyle(project.color, 'project')}">
+        <div class="gantt-left task-left"><button type="button" class="task-dot-add" data-add-same-row="${esc(task.id)}" style="${paletteStyle(task.color, 'task')}" title="${t("task.add_same_row")}" aria-label="${t("task.add_same_row")}"><span aria-hidden="true">＋</span></button><button class="task-label" type="button" draggable="true" title="${t("directory.drag_task")}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-name" title="${esc(task.name)}">${esc(task.name)}</span><span class="task-owner">${esc(task.owner || t("timeline.unassigned"))}</span></button></div>
+        <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div>${row.tasks.map(member=>taskBarsMarkup(member, project, start, pxPerDay, row.offsets.get(member.id))).join('')}</div>
       </div>`;
-      bodyHeight += taskRowHeight(task);
+      bodyHeight += row.height;
     }
     }
   }
@@ -1226,6 +1461,28 @@ function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish) {
     ${actualStart != null ? `<tr><th scope="row">${t("inspector.actual_dates")}</th><td>${actualStart}</td><td>${actualFinish}</td></tr>` : ''}</tbody></table>`;
 }
 
+function rowTaskSectionTitle(index) {
+  return index > 0 ? t('task.numbered_properties', {p0:index + 1}) : t('template.task_properties');
+}
+function renderRowTaskSections(project, task) {
+  const section = $('#task-inspector-section');
+  if (!section) return;
+  $$('.row-task-inspector-section').forEach(node=>node.remove());
+  const members = rowTaskMembers(project, task);
+  const selectedIndex = members.findIndex(item=>item.id === task?.id);
+  $('#task-accordion [data-i18n]').textContent = rowTaskSectionTitle(selectedIndex);
+  let after = section;
+  members.forEach((member,index)=>{
+    if (member.id === task.id) return;
+    const extra = document.createElement('section');
+    extra.className = 'inspector-section row-task-inspector-section';
+    extra.innerHTML = `<button class="inspector-accordion" type="button" aria-expanded="false"><span class="accordion-chevron">›</span><span>${esc(rowTaskSectionTitle(index))}</span><small class="task-color-tag" style="${paletteStyle(member.color,'task-tag')}">${esc(member.name)}</small></button>`;
+    extra.querySelector('button').addEventListener('click',()=>selectItem('task',member.id));
+    if (index < selectedIndex) section.before(extra);
+    else { after.after(extra); after = extra; }
+  });
+}
+
 function paintInspectorContext(project,task) {
   $('#project-context-label').textContent = project ? project.name : t("inspector.select_an_item");
   $('#project-context-label').classList.toggle('task-color-tag', Boolean(project));
@@ -1238,6 +1495,7 @@ function paintInspectorContext(project,task) {
   $('#task-context-label').classList.toggle('task-color-tag', Boolean(task));
   applyPalette($('#task-context-label'), task?.color || project?.color || '#5872d9');
   $('#task-context-label').title = task?.name || '';
+  renderRowTaskSections(project, task);
   $('#inspector-save-state').textContent = state.selection ? t("inspector.auto_save") : t("inspector.nothing_selected");
 }
 function syncInspectorProjection() {
@@ -1266,7 +1524,7 @@ function syncInspectorProjection() {
 const externalRelationRows = new Map();
 function relationRows(project, task, projects) {
   const extra = externalRelationRows.get(task.id) || new Set();
-  const decorate = (item, parent) => ({...item, relationProjectColor:parent.is_unassigned?'#94a3b8':parent.color, relationProjectOrder:parent.is_unassigned?'':(parent.sort_order ?? ''), relationProjectLabel:parent.is_unassigned?t('inspector.no_project'):parent.name});
+  const decorate = (item, parent) => ({...item, ...taskRelationDetails(parent,item), relationProjectColor:parent.is_unassigned?'#94a3b8':parent.color, relationProjectOrder:parent.is_unassigned?'':(parent.sort_order ?? ''), relationProjectLabel:parent.is_unassigned?t('inspector.no_project'):parent.name});
   const own = project.tasks.filter(item=>item.id!==task.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(item=>decorate(item,project));
   const external = projects.filter(parent=>parent.id!==project.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).flatMap(parent=>[...parent.tasks].sort((a,b)=>(a.sort_order||0)-(b.sort_order||0))
     .filter(item=>extra.has(item.id) || task.dependencies.includes(item.id) || (item.dependencies||[]).includes(task.id))
@@ -1289,6 +1547,10 @@ function syncRelationRowOrder(project, task, form) {
     const row = rows.get(item.id);
     if (!row) continue;
     body.insertBefore(row,addRow || null);
+    const name = $('.relation-task-name',row);
+    if (name) name.innerHTML = `${item.relationProjectName?`<small class="relation-project-name">${esc(item.relationProjectName)}</small>`:''}${esc(item.relationTaskName)}${item.relationTaskDates?`<small class="relation-task-dates">${esc(item.relationTaskDates)}</small>`:''}`;
+    $('.ins-task-dependency',row)?.setAttribute('aria-label',`${item.relationTaskLabel} ${t('inspector.predecessors')}`);
+    $('.ins-task-successor',row)?.setAttribute('aria-label',`${item.relationTaskLabel} ${t('inspector.successors')}`);
     const badge = $('.relation-project-badge',row);
     if (badge) {
       badge.hidden = !item.showRelationProject;
@@ -1319,7 +1581,7 @@ function openExternalRelationPicker(taskId, projectId, trigger) {
   const projectSelect=popup.querySelector('[data-project]'),taskSelect=popup.querySelector('[data-task]'),add=popup.querySelector('[data-add]');
   const update=()=>{
     const parent=choices.find(item=>item.id===projectSelect.value);
-    taskSelect.innerHTML=(parent?.tasks || []).filter(item=>!listed.has(item.id)).map(item=>`<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('');
+    taskSelect.innerHTML=(parent?.tasks || []).filter(item=>!listed.has(item.id)).map(item=>`<option value="${esc(item.id)}">${esc(taskRelationDetails(parent,item).relationTaskLabel)}</option>`).join('');
     add.disabled=!taskSelect.value;projectSelect.disabled=!choices.length;taskSelect.disabled=!taskSelect.value;
   };
   projectSelect.addEventListener('change',update);update();
@@ -1375,7 +1637,7 @@ function renderInspector() {
         <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.owner_placeholder")}"></label>
         <div class="inspector-field task-status-help" data-hover-help="${esc(t("help.progress_knob_stop"))}"><span><button type="button" class="status-help-trigger" aria-describedby="floating-help">${t("calendar.status")}</button></span><div class="task-progress-control" style="${paletteStyle(task.color)}"><div class="task-progress-track"><div class="task-progress-fill"></div><button type="button" id="task-progress-knob" aria-describedby="floating-help" class="task-progress-knob" role="slider" aria-label="${t("inspector.task_progress")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${taskProgress(task)}"></button></div><output id="task-progress-label"></output></div></div>
         <label id="ins-task-blocker-row" class="inspector-field${task.status === 'blocked' ? '' : ' hidden'}"><span>${t("inspector.stopped_waiting_reason")}</span><input id="ins-task-blocker" class="text-input" value="${esc(task.blocker || '')}" placeholder="${t("inspector.blocker_placeholder")}"></label>
-        <div class="inspector-field property-relations"><div class="inspector-relations"><table aria-label="${t("inspector.predecessors_and_successors")}"><thead><tr><th scope="col" class="relation-heading">${t("relations.title")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="task-relations-help">i</button><span id="task-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}<br>${t("inspector.select_multiple_tasks")}</span></span></th><th scope="col">${t("inspector.predecessors")}</th><th scope="col">${t("inspector.successors")}</th></tr></thead><tbody>${relatedTasks.map(item=>`<tr class="${item.id===task.id?'relation-current-task':''}"><th scope="row"><span class="relation-task-label"><span class="relation-project-badge" ${item.showRelationProject?'':'hidden'} style="background:${colorPalette(item.relationProjectColor).base};color:${colorPalette(item.relationProjectColor).ink}" title="${esc(item.relationProjectLabel)}">${esc(item.relationProjectOrder)}</span><span class="relation-task-dot" style="background:${colorPalette(item.color).base}" aria-hidden="true"></span><span class="relation-task-name">${item.relationProjectName?`<small class="relation-project-name">${esc(item.relationProjectName)}</small>`:''}${esc(item.name)}</span></span></th><td><input type="checkbox" class="ins-task-dependency" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t('inspector.predecessors')}" ${item.id===task.id?'disabled':''} ${task.dependencies.includes(item.id)?'checked':''}></td><td><input type="checkbox" class="ins-task-successor" value="${esc(item.id)}" aria-label="${esc(item.name)} ${t('inspector.successors')}" ${item.id===task.id?'disabled':''} ${(item.dependencies||[]).includes(task.id)?'checked':''}></td></tr>`).join('')}<tr><td colspan="3" class="relation-add-cell"><button id="add-external-relation" type="button" aria-label="${t('relations.add_external')}">＋</button></td></tr></tbody></table></div></div>
+        <div class="inspector-field property-relations"><div class="inspector-relations"><table aria-label="${t("inspector.predecessors_and_successors")}"><thead><tr><th scope="col" class="relation-heading">${t("relations.title")} <span class="info-tip relation-info"><button type="button" class="info-tip-button" aria-label="${t("inspector.predecessor_successor_help")}" aria-describedby="task-relations-help">i</button><span id="task-relations-help" class="info-tip-text" role="tooltip">${t("inspector.predecessor_before_this_task_successor_after")}<br>${t("inspector.select_multiple_tasks")}</span></span></th><th scope="col">${t("inspector.predecessors")}</th><th scope="col">${t("inspector.successors")}</th></tr></thead><tbody>${relatedTasks.map(item=>`<tr class="${item.id===task.id?'relation-current-task':''}"><th scope="row"><span class="relation-task-label"><span class="relation-project-badge" ${item.showRelationProject?'':'hidden'} style="background:${colorPalette(item.relationProjectColor).base};color:${colorPalette(item.relationProjectColor).ink}" title="${esc(item.relationProjectLabel)}">${esc(item.relationProjectOrder)}</span><span class="relation-task-dot" style="background:${colorPalette(item.color).base}" aria-hidden="true"></span><span class="relation-task-name">${item.relationProjectName?`<small class="relation-project-name">${esc(item.relationProjectName)}</small>`:''}${esc(item.relationTaskName)}${item.relationTaskDates?`<small class="relation-task-dates">${esc(item.relationTaskDates)}</small>`:''}</span></span></th><td><input type="checkbox" class="ins-task-dependency" value="${esc(item.id)}" aria-label="${esc(item.relationTaskLabel)} ${t('inspector.predecessors')}" ${item.id===task.id?'disabled':''} ${task.dependencies.includes(item.id)?'checked':''}></td><td><input type="checkbox" class="ins-task-successor" value="${esc(item.id)}" aria-label="${esc(item.relationTaskLabel)} ${t('inspector.successors')}" ${item.id===task.id?'disabled':''} ${(item.dependencies||[]).includes(task.id)?'checked':''}></td></tr>`).join('')}<tr><td colspan="3" class="relation-add-cell"><button id="add-external-relation" type="button" aria-label="${t('relations.add_external')}">＋</button></td></tr></tbody></table></div></div>
         <label class="inspector-field"><span>${t("inspector.tags")} <small>${t("inspector.comma_separated")}</small></span><input id="ins-task-tags" class="text-input" value="${esc((task.tags || []).join(', '))}" placeholder="${t("inspector.tags_placeholder")}"></label>
         <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.notes_placeholder")}">${esc(task.notes || '')}</textarea></label>
         </div>
@@ -1714,7 +1976,7 @@ function openTaskMenu(event) {
   const taskId = bar.dataset.taskSelect;
   const menu = document.createElement('div');
   menu.id = 'task-context-menu'; menu.className = 'task-context-menu'; menu.setAttribute('role', 'menu');
-  menu.innerHTML = `<button type="button" role="menuitem" data-action="complete">${t("task.mark_complete")}</button><button type="button" role="menuitem" data-action="actual">${t("task.show_actual_start_finish")}</button>`;
+  menu.innerHTML = `<button type="button" role="menuitem" data-action="same-row">${t("task.add_same_row")}</button><button type="button" role="menuitem" data-action="complete">${t("task.mark_complete")}</button><button type="button" role="menuitem" data-action="actual">${t("task.show_actual_start_finish")}</button>`;
   document.body.append(menu);
   menu.style.left = `${Math.max(8, Math.min(event.clientX, innerWidth - menu.offsetWidth - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(event.clientY, innerHeight - menu.offsetHeight - 8))}px`;
@@ -1733,7 +1995,8 @@ function openTaskMenu(event) {
     if (!action) return;
     close();
     try {
-      if (action === 'complete') await completeTask(taskId);
+      if (action === 'same-row') openSameRowTask(taskId);
+      else if (action === 'complete') await completeTask(taskId);
       else {
         const task = state.data.projects.flatMap(project => project.tasks).find(item => item.id === taskId);
         if (!task.actual_start && !task.actual_finish) await saveTaskFields(taskId, { actual_start: todayInput(), cascade_dependents: state.cascadeDependents });
@@ -2085,7 +2348,8 @@ function renderTemplateEditorContent() {
         <div class="schedule-legend"><span>${t("timeline.predecessor_successor_legend")}</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
-      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${mobileLayout() && !document.body.classList.contains('inspector-open') ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
+      <button type="button" class="desktop-inspector-toggle" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("inspector.toggle")}"><span aria-hidden="true">›</span><span>${t("template.properties")}</span></button>
+      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${(mobileLayout() ? !document.body.classList.contains('inspector-open') : document.body.classList.contains('desktop-inspector-collapsed')) ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
         <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.template_properties")}</span><small class="task-color-tag" style="${paletteStyle(draft.project_color || projectColors[0], 'task-tag')}">${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
           <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
           <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code>${randomColorButton()}</div></div>
@@ -2603,6 +2867,21 @@ function openProjectCreate(useTemplate) {
     $('#project-name').focus();
   });
 }
+const sameRowCreates = new Set();
+async function openSameRowTask(taskId) {
+  const project = state.data.projects.find(item=>item.tasks.some(task=>task.id === taskId));
+  const task = project?.tasks.find(item=>item.id === taskId);
+  if (!task || sameRowCreates.has(taskId)) return;
+  sameRowCreates.add(taskId);
+  try {
+    await api(`/api/projects/${encodeURIComponent(project.id)}/tasks`, {method:'POST', body:JSON.stringify({
+      name:task.name, planned_start:task.planned_start, planned_finish:task.planned_finish, same_row_as:task.id,
+    })});
+    setMobileDrawer('inspector');
+  } catch (error) { toast(error.message); }
+  finally { sameRowCreates.delete(taskId); }
+}
+
 function openTaskEditor(projectId, taskId) {
   const project = state.data.projects.find((item) => item.id === projectId);
   const task = project?.tasks.find((item) => item.id === taskId);
@@ -2896,7 +3175,7 @@ function bindMobileSearch() {
 function scrollTimelineToToday() {
   const wrap = $('#gantt-wrap');
   if (state.layout !== 'gantt' || wrap.classList.contains('hidden')) return;
-  const offset = dayDiff(timelineCalendarRange().start,clockParts(timelineReferenceTime).date);
+  const offset = dayDiff(timelineCalendarRange().start,browserClockParts().date);
   // The sticky label column occupies the same width in the content and viewport.
   wrap.scrollLeft = Math.max(0, offset * state.zoom);
   bindTimelineCalendarScroll();
@@ -3053,7 +3332,7 @@ function setMobileDrawer(panel) {
   $('#drawer-backdrop').hidden = !panel;
   const sidebar = $('.sidebar'), inspector = activeMobileInspector();
   sidebar.inert = mobileLayout() ? panel !== 'menu' : document.body.classList.contains('sidebar-collapsed');
-  for (const item of $$('#mobile-inspector, #template-inspector')) item.inert = mobileLayout() && (panel !== 'inspector' || item !== inspector);
+  for (const item of $$('#mobile-inspector, #template-inspector')) item.inert = mobileLayout() ? (panel !== 'inspector' || item !== inspector) : document.body.classList.contains('desktop-inspector-collapsed');
   if (panel) (panel === 'menu' ? sidebar : inspector)?.querySelector('[data-close-drawer]')?.focus();
   else if (mobileDrawerReturnFocus?.isConnected) { mobileDrawerReturnFocus.focus(); mobileDrawerReturnFocus = null; }
 }
@@ -3095,27 +3374,21 @@ function bindMobileMenuSwipe() {
   }, options);
   document.addEventListener('touchcancel', () => { swipe = null; }, options);
 }
-let sidebarMotion = null;
 function toggleDesktopSidebar() {
-  const elements = [$('.sidebar'),$('.topbar'),...$$('.view-panel:not(.hidden) .timeline-main, .view-panel:not(.hidden) .inspector')].filter(Boolean);
-  const before = elements.map(el=>el.getBoundingClientRect());
-  sidebarMotion?.();
-  document.body.style.setProperty('--sidebar-width', `${before[0].width}px`);
+  const sidebar = $('.sidebar');
+  document.body.style.setProperty('--sidebar-width', `${sidebar.getBoundingClientRect().width}px`);
   document.body.classList.toggle('sidebar-collapsed');
   setMobileDrawer(null);
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const after = elements.map(el=>el.getBoundingClientRect());
-  const sidebar=elements[0], visibility=sidebar.style.visibility;
-  sidebar.style.visibility='visible';
-  const animations=elements.map((el,i)=>el.animate([
-    {transform:`translate(${before[i].left-after[i].left}px,${before[i].top-after[i].top}px)`},
-    {transform:'translate(0px,0px)'}
-  ],{duration:180,easing:'linear',fill:'both'}));
-  const cleanup=()=>{animations.forEach(a=>a.cancel());sidebar.style.visibility=visibility;if(sidebarMotion===cleanup)sidebarMotion=null;};
-  sidebarMotion=cleanup;
-  Promise.all(animations.map(a=>a.finished)).then(()=>{if(sidebarMotion===cleanup)cleanup();},()=>{});
 }
 function bindMobileDrawers() {
+  document.addEventListener('click', event => {
+    const toggle = event.target.closest('[data-toggle-inspector]');
+    if (!toggle || mobileLayout()) return;
+    const collapsed = document.body.classList.toggle('desktop-inspector-collapsed');
+    $$('[data-toggle-inspector]').forEach(button => button.setAttribute('aria-expanded', String(!collapsed)));
+    setMobileDrawer(null);
+    toggle.focus();
+  });
   bindMobileMenuSwipe();
   $('#mobile-menu-toggle').addEventListener('click', () => {
     if(mobileLayout()) setMobileDrawer(document.body.classList.contains('menu-open') ? null : 'menu');
@@ -3264,6 +3537,7 @@ function attachEvents() {
     const originalFinish = task[`${period}_finish`] || '';
     if (!originalStart && !originalFinish) return;
     const pxPerDay = state.zoom;
+    const requiresHold = edge === 'move' && event.pointerType === 'touch';
     state.drag = {
       pointerId: event.pointerId,
       edge,
@@ -3273,7 +3547,7 @@ function attachEvents() {
       handle: handle || bar,
       startX: event.clientX,
       startY: event.clientY,
-      active: edge !== 'move',
+      active: !requiresHold,
       pxPerDay,
       left: Number.parseFloat(bar.style.left) || 0,
       width: Number.parseFloat(bar.style.width) || pxPerDay,
@@ -3285,7 +3559,7 @@ function attachEvents() {
       delta: 0,
       valid: true,
     };
-    if (edge === 'move') {
+    if (requiresHold) {
       const pending = state.drag;
       pending.holdTimer = setTimeout(() => {
         if (state.drag !== pending || !bar.isConnected) return;
@@ -3362,6 +3636,8 @@ function attachEvents() {
     }
   });
   $('#gantt').addEventListener('click', (event) => {
+    const addSameRow = event.target.closest('[data-add-same-row]');
+    if (addSameRow) { openSameRowTask(addSameRow.dataset.addSameRow); return; }
     const collapse = event.target.closest('[data-collapse]');
     if (collapse) {
       const projectId = collapse.dataset.collapse;
@@ -3406,6 +3682,7 @@ I18n.apply(document);
 bindFloatingHelp();
 bindTextCellSelection(document);
 attachEvents();
+bindCurrentTimeClock();
 loadState().catch((error) => { toast(t("common.cannot_connect_to_the_local_backend", {p0:error.message})); $('#gantt').innerHTML = `<div class="empty-state"><strong>${t("common.check_that_the_server_is_running")}</strong><span>python3 -m mygantt.server --port 8765</span></div>`; });
 
 });
