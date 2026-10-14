@@ -7,7 +7,7 @@ try { savedUi = JSON.parse(localStorage.getItem('mygantt-ui') || '{}'); } catch 
 function restoreZoom(value, minimum) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(minimum, Math.min(62, value)) : 46;
 }
-const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', zoom: restoreZoom(savedUi.zoom, 24), templateZoom: restoreZoom(savedUi.templateZoom, 12), filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
+const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', compactBy: ['owner','group','tags'].includes(savedUi.compactBy) ? savedUi.compactBy : '', zoom: restoreZoom(savedUi.zoom, 24), templateZoom: restoreZoom(savedUi.templateZoom, 12), filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
 const statusNames = { get todo() { return t("status.planned"); }, get doing() { return t("status.in_progress"); }, get blocked() { return t("status.stopped"); }, get done() { return t("status.complete"); } };
 const durationNames = { get days() { return t("common.days"); }, get weeks() { return t("common.weeks"); } };
 const projectColors = ['#5872d9', '#b96749', '#27897f', '#a45ca8', '#b48527', '#3978a8', '#c45670', '#5a8d45', '#765bb2', '#368a9b', '#c06f2d', '#657386'];
@@ -73,6 +73,7 @@ function timeOfDayFraction(now = new Date()) {
 function updateCurrentTimeMarker(now = new Date()) {
   const chart = $('#gantt');
   if (state.view !== 'timeline' || !chart?.dataset.todayDate || state.drag) return;
+  if (state.layout === 'month') { updateMonthToday(now); return; }
   const parts=browserClockParts(now), fraction=timeOfDayFraction(now);
   const offset=dayDiff(timelineCalendarRange().start,parts.date);
   chart.dataset.todayDate=parts.date;
@@ -219,20 +220,26 @@ async function loadState() {
   renderAll();
 }
 function persistUi() {
-  localStorage.setItem('mygantt-ui', JSON.stringify({ zoom: state.zoom, templateZoom: state.templateZoom, selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
+  localStorage.setItem('mygantt-ui', JSON.stringify({ compactBy:state.compactBy, zoom: state.zoom, templateZoom: state.templateZoom, selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
 }
 function setCascadeSetting(value) {
   state.cascadeDependents = Boolean(value);
   persistUi();
   $$('[data-cascade-dependents]').forEach((input) => { input.checked = state.cascadeDependents; });
 }
-function selectItem(type, id) {
-  const closeMobile = mobileLayout() && document.body.classList.contains('inspector-open') && state.selection?.type === type && state.selection?.id === id;
-  const collapseProject = type === 'project' && state.selection?.type === 'project' && state.selection.id === id && state.inspectorOpen === 'project';
+function selectItem(type, id, { preserveChart = false, toggleInspector = true } = {}) {
+  const closeMobile = toggleInspector && mobileLayout() && document.body.classList.contains('inspector-open') && state.selection?.type === type && state.selection?.id === id;
+  const collapseProject = toggleInspector && type === 'project' && state.selection?.type === 'project' && state.selection.id === id && state.inspectorOpen === 'project';
   state.selection = id ? { type, id } : null;
   state.inspectorOpen = collapseProject ? '' : type === 'task' ? 'task' : 'project';
   persistUi();
-  renderTimeline();
+  if (preserveChart) {
+    // Keep the clicked summary in place so the browser can deliver dblclick.
+    $$('.selected-row', $('#gantt')).forEach(row=>row.classList.remove('selected-row'));
+    $$('[data-project-select]', $('#gantt')).find(bar=>bar.dataset.projectSelect===id)?.closest('.project-row')?.classList.add('selected-row');
+    renderDependencyLinks();
+    renderInspector();
+  } else renderTimeline();
   if (mobileLayout()) setMobileDrawer(closeMobile ? null : 'inspector');
 }
 function switchView(view) {
@@ -381,10 +388,14 @@ function dateColumns(start, days, perDay) {
     const isWeekend = current.getDay() === 0 || current.getDay() === 6;
     const today = key === browserClockParts().date;
     const dateText = String(current.getDate());
+    // Sunday-start weeks belong to the month containing their Thursday.
+    const thursday = new Date(current);
+    thursday.setDate(current.getDate() + 4 - current.getDay());
     const weekText = current.getDay() === 0 && current.getDate() !== 1
-      ? t("calendar.week_number", {p0: Math.ceil((current.getDate() - 1) / 7)}) : '';
-    const periodText = weekText || (current.getDate() === 1 || index === 0 ? String(current.getMonth() + 1) : '');
-    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, periodText, weekday: t(weekdayIDs[current.getDay()]), x: index * perDay };
+      ? t("calendar.week_number", {p0: Math.ceil(thursday.getDate() / 7)}) : '';
+    const isMonthLabel = !weekText && (current.getDate() === 1 || index === 0);
+    const periodText = weekText || (isMonthLabel ? `${current.getMonth() + 1}.` : '');
+    return { key, holiday, isWeekend, saturday: current.getDay() === 6, sunday: current.getDay() === 0, today, dateText, periodText, isMonthLabel, weekday: t(weekdayIDs[current.getDay()]), x: index * perDay };
   });
 }
 function renderHolidayStatus() {
@@ -453,7 +464,7 @@ function timelineCalendarRange() {
   return state.calendarRange;
 }
 function calendarHeaderMarkup(dates, pxPerDay) {
-  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period${item.isMonthLabel ? ' date-month' : ''}">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
 }
 function calendarShadingMarkup(dates, pxPerDay) {
   return dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
@@ -1285,10 +1296,16 @@ function taskRelationDetails(project, task) {
   const dates = task.gantt_row_id ? [task.planned_start, task.planned_finish].filter(Boolean).join(' – ') : '';
   return {relationTaskName:name, relationTaskDates:dates, relationTaskLabel:dates ? `${name} · ${dates}` : name};
 }
-function groupedTaskRows(tasks) {
+function groupedTaskRows(tasks, compactBy = '') {
+  const tagsFor = task => [...new Set((task.tags || []).map(tag=>String(tag).normalize('NFKC').trim()).filter(Boolean))].sort();
+  const labelFor = task => {
+    if (compactBy === 'tags') return tagsFor(task).join(', ');
+    return String(compactBy === 'owner' ? task.owner || '' : compactBy === 'group' ? task.group_name || '' : '').normalize('NFKC').trim();
+  };
   const groups = new Map();
   for (const task of tasks) {
-    const key = task.gantt_row_id || task.id;
+    const label = labelFor(task);
+    const key = label ? JSON.stringify(['compact',compactBy === 'tags' ? tagsFor(task) : label]) : JSON.stringify(['row',task.gantt_row_id || task.id]);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   }
@@ -1304,7 +1321,7 @@ function groupedTaskRows(tasks) {
       ends[lane] = finish;
       offsets.set(task.id, lane * tierHeight);
     }
-    return {tasks: members, height: Math.max(1, ends.length) * tierHeight, offsets};
+    return {tasks: members, label:labelFor(members[0]), height: Math.max(1, ends.length) * tierHeight, offsets};
   });
 }
 function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
@@ -1321,6 +1338,135 @@ function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
   return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
 }
 
+function monthCalendar(year, firstMonth = 0) {
+  const first = new Date(year,firstMonth,1), last = new Date(year,firstMonth+12,0);
+  const start = dateKey(first), end = dateKey(last), days = dayDiff(start,end)+1;
+  const months = Array.from({length:12}, (_,index) => {
+    const date = new Date(year,firstMonth+index,1);
+    return {year:date.getFullYear(),month:date.getMonth()+1,offset:dayDiff(start,dateKey(date)),days:new Date(year,firstMonth+index+1,0).getDate()};
+  });
+  const weeks = [0];
+  for (let day=1;day<days;day++) if (new Date(year,firstMonth,day+1).getDay()===0) weeks.push(day);
+  return {start,end,days,months,weeks};
+}
+function monthPageStart(today) {
+  const date=dateFrom(today);
+  return dateKey(new Date(date.getFullYear(),date.getMonth()<6?0:6,1));
+}
+function currentMonthCalendar() {
+  const start=dateFrom(state.monthStart);
+  return monthCalendar(start.getFullYear(),start.getMonth());
+}
+function monthProjectSpan(project, calendar) {
+  const starts = project.tasks.map(task=>task.planned_start).filter(Boolean).sort();
+  const finishes = project.tasks.map(task=>task.planned_finish).filter(Boolean).sort();
+  const start = starts[0] || project.start_date, end = finishes.at(-1) || start;
+  if (!start || !end || end < calendar.start || start > calendar.end) return null;
+  const left = Math.max(0,dayDiff(calendar.start,start));
+  const right = Math.min(calendar.days,dayDiff(calendar.start,end)+1);
+  return {start,end,left,width:right-left};
+}
+function updateMonthToday(now = new Date()) {
+  const chart = $('#gantt'), calendar = currentMonthCalendar();
+  const offset = dayDiff(calendar.start,browserClockParts(now).date)+timeOfDayFraction(now);
+  $$('.today-line',chart).forEach(line=>{
+    line.style.left=`${offset / calendar.days * 100}%`;
+    line.hidden=offset<0 || offset>=calendar.days;
+  });
+}
+function moveMonthPage(direction, focusButton = false) {
+  if (state.layout !== 'month' || inlineNameEditor?.isConnected) return;
+  state.monthStart=calendarMonthOffset(state.monthStart,direction*6);
+  renderTimeline({preserveInspector:true});
+  const chart=$('#gantt');
+  if (focusButton) $(`[data-month-step="${direction}"]`,chart)?.focus({preventScroll:true});
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  // Slide only the calendar contents; project names and row positions stay fixed.
+  for (const track of $$('.month-track, .month-today-layer',chart)) {
+    const distance=track.clientWidth/2*direction;
+    for (const child of track.children) child.animate([
+      {transform:`translateX(${distance}px)`,opacity:.3},
+      {transform:'translateX(0)',opacity:1}
+    ],{duration:240,easing:'cubic-bezier(.2,.8,.2,1)'});
+  }
+}
+function bindMonthPaging(chart) {
+  if (chart.monthPagingBound) return;
+  chart.monthPagingBound=true;
+  let wheelTotal=0, wheelMoved=false, wheelTimer, swipe=null, suppressClickUntil=0;
+  chart.addEventListener('wheel',event=>{
+    if (state.layout!=='month' || event.ctrlKey) return;
+    const dx=event.shiftKey && !event.deltaX?event.deltaY:event.deltaX;
+    if (!dx || (!event.shiftKey && Math.abs(dx)<=Math.abs(event.deltaY))) return;
+    event.preventDefault();
+    clearTimeout(wheelTimer);
+    wheelTimer=setTimeout(()=>{wheelTotal=0;wheelMoved=false;},220);
+    if (wheelMoved) return;
+    wheelTotal+=dx*(event.deltaMode===1?16:event.deltaMode===2?chart.clientWidth:1);
+    if (Math.abs(wheelTotal)>=50) {wheelMoved=true;moveMonthPage(Math.sign(wheelTotal));}
+  },{passive:false});
+  chart.addEventListener('touchstart',event=>{
+    swipe=null;
+    if (state.layout!=='month' || event.touches.length!==1 || event.touches[0].clientX<=20) return;
+    const touch=event.touches[0];
+    swipe={id:touch.identifier,x:touch.clientX,y:touch.clientY,horizontal:false};
+  },{passive:true});
+  chart.addEventListener('touchmove',event=>{
+    if (!swipe) return;
+    if (event.touches.length!==1 || state.layout!=='month') {swipe=null;return;}
+    const touch=event.touches[0], dx=touch.clientX-swipe.x, dy=touch.clientY-swipe.y;
+    if (!swipe.horizontal && Math.abs(dy)>Math.max(8,Math.abs(dx))) {swipe=null;return;}
+    if (Math.abs(dx)>8 && Math.abs(dx)>Math.abs(dy)*1.2) swipe.horizontal=true;
+    if (swipe.horizontal && event.cancelable) event.preventDefault();
+  },{passive:false});
+  chart.addEventListener('touchend',event=>{
+    if (!swipe) return;
+    const current=swipe;swipe=null;
+    const touch=[...event.changedTouches].find(item=>item.identifier===current.id);
+    if (!touch || state.layout!=='month') return;
+    const dx=touch.clientX-current.x,dy=touch.clientY-current.y;
+    if (current.horizontal) {
+      if (event.cancelable) event.preventDefault();
+      suppressClickUntil=Date.now()+400;
+      if (Math.abs(dx)>=40 && Math.abs(dx)>Math.abs(dy)*1.2) moveMonthPage(-Math.sign(dx));
+    }
+  },{passive:false});
+  chart.addEventListener('touchcancel',()=>{swipe=null;});
+  chart.addEventListener('click',event=>{
+    if (Date.now()<suppressClickUntil) {event.preventDefault();event.stopImmediatePropagation();}
+  },true);
+  chart.addEventListener('keydown',event=>{
+    if (state.layout!=='month' || !['ArrowLeft','ArrowRight'].includes(event.key) || event.target.closest('input,textarea,select,[contenteditable]')) return;
+    event.preventDefault();moveMonthPage(event.key==='ArrowRight'?1:-1,true);
+  });
+}
+function renderMonthTimeline({preserveInspector = false} = {}) {
+  state.monthStart ??= monthPageStart(browserClockParts().date);
+  const calendar = currentMonthCalendar(), chart = $('#gantt'), wrap = $('#gantt-wrap');
+  wrap.onscroll = null;
+  wrap.scrollLeft = 0;
+  wrap.classList.remove('hidden');
+  $('#list-wrap').classList.add('hidden');
+  $('#empty-state').classList.add('hidden');
+  $('#range-label').textContent=dateRangeLabel(calendar.start,calendar.end);
+  chart.classList.remove('labels-collapsed');
+  chart.style.setProperty('--label-width',mobileLayout()?'120px':'200px');
+  chart.dataset.todayDate=browserClockParts().date;
+  // Filters select projects; their full schedules define the summary bounds.
+  const projects=filteredProjects().filter(project=>!project.is_unassigned).map(project=>state.data.projects.find(item=>item.id===project.id));
+  const weeks=calendar.weeks.map(day=>`<i class="month-week-line" style="left:${day/calendar.days*100}%"></i>`).join('');
+  const rows=projects.map(project=>{
+    const span=monthProjectSpan(project,calendar);
+    const title=span?`${project.name} · ${dateRangeLabel(span.start,span.end)} · ${project.progress}%`:project.name;
+    return `<div class="gantt-row project-row ${state.selection?.type==='project' && state.selection.id===project.id?'selected-row':''}" style="${paletteStyle(project.color,'project')}"><div class="gantt-left"><button type="button" class="project-select" data-project-select="${esc(project.id)}" title="${esc(title)}"><i class="group-dot" style="background:${colorPalette(project.color).base}"></i><span class="project-name">${esc(project.name)}</span><span class="project-meta">${project.progress}%</span></button></div><div class="gantt-right month-track">${weeks}${span?`<button type="button" class="project-summary-bar" data-project-select="${esc(project.id)}" style="left:${span.left/calendar.days*100}%;width:${span.width/calendar.days*100}%;${paletteStyle(project.color,'bar')}" title="${esc(title)}" aria-label="${esc(title)}"><i style="width:${project.progress}%"></i><span>${esc(project.name)} · ${project.progress}%</span></button>`:''}</div></div>`;
+  }).join('');
+  chart.innerHTML=`<div class="gantt-head"><div class="gantt-left gantt-head-left month-year-nav"><button type="button" data-month-step="-1" aria-label="${t('timeline.previous_half_year')}">‹</button><b aria-live="polite">${calendar.months[0].year}${calendar.months[11].year!==calendar.months[0].year?`–${calendar.months[11].year}`:''}</b><button type="button" data-month-step="1" aria-label="${t('timeline.next_half_year')}">›</button></div><div class="gantt-right month-track month-axis">${calendar.months.map(month=>`<div class="month-heading" title="${month.year}.${month.month}" style="left:${month.offset/calendar.days*100}%;width:${month.days/calendar.days*100}%">${esc(new Intl.DateTimeFormat(I18n.locale,{month:'short'}).format(new Date(month.year,month.month-1,1)))}</div>`).join('')}<div class="month-week-axis">${weeks}</div><div class="today-line" aria-hidden="true"></div></div></div><div class="gantt-body"><div class="month-today-layer" aria-hidden="true"><div class="today-line"></div></div>${rows || `<p class="month-empty">${t('timeline.no_projects')}</p>`}</div>`;
+  $$('[data-month-step]',chart).forEach(button=>button.addEventListener('click',()=>moveMonthPage(Number(button.dataset.monthStep),true)));
+  bindMonthPaging(chart);
+  updateMonthToday();
+  if (!preserveInspector) renderInspector();
+}
+
 function renderTimeline({ preserveInspector = false } = {}) {
   if (inlineNameEditor?.isConnected) return;
   labelWidthMotion?.cancel();
@@ -1329,6 +1475,8 @@ function renderTimeline({ preserveInspector = false } = {}) {
   if (typeof projectMotion !== 'undefined') projectMotion.observe();
   const calendarWrap = $('#gantt-wrap');
   const calendarScroll = {left:calendarWrap.scrollLeft,top:calendarWrap.scrollTop};
+  $('#gantt').classList.toggle('month-gantt', state.layout === 'month');
+  if (state.layout === 'month') { renderMonthTimeline({preserveInspector}); return; }
   const visibleProjects = filteredProjects();
   const rootProject = visibleProjects.find(project => project.is_unassigned) || {id:'__unassigned__',is_unassigned:true,name:t("inspector.no_project"),color:'#94a3b8',tasks:[],progress:0};
   const projects = [...visibleProjects.filter(project => !project.is_unassigned), rootProject];
@@ -1374,7 +1522,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
       bodyHeight += 30;
     }
     for (const project of projectGroup.projects) {
-    const taskRows = groupedTaskRows(project.tasks);
+    const taskRows = groupedTaskRows(project.tasks, state.compactBy);
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
@@ -1397,11 +1545,13 @@ function renderTimeline({ preserveInspector = false } = {}) {
     if (collapsed) continue;
     for (const row of taskRows) {
       const task = row.tasks.find(item=>state.selection?.type === 'task' && state.selection.id === item.id) || row.tasks[0];
+      const rowName = row.label || task.name;
+      const rowTitle = row.label ? `${row.label} · ${row.tasks.map(item=>item.name).join(', ')}` : task.name;
       const actual = row.tasks.some(item=>actualTaskRange(item));
       const status = task.status;
       const isSelected = state.selection?.type === 'task' && row.tasks.some(item=>item.id === state.selection.id);
       rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row task-row${project.is_unassigned ? ' unassigned-task-row' : ''}${actual ? ' has-actual' : ''} ${isSelected ? 'selected-row' : ''}" style="height:${row.height}px;${paletteStyle(project.color, 'project')}">
-        <div class="gantt-left task-left"><button type="button" class="task-dot-add" data-add-same-row="${esc(task.id)}" style="${paletteStyle(task.color, 'task')}" title="${t("task.add_same_row")}" aria-label="${t("task.add_same_row")}"><span aria-hidden="true">＋</span></button><button class="task-label" type="button" draggable="true" title="${t("directory.drag_task")}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-name" title="${esc(task.name)}">${esc(task.name)}</span><span class="task-owner">${esc(task.owner || t("timeline.unassigned"))}</span></button></div>
+        <div class="gantt-left task-left"><button type="button" class="task-dot-add" data-add-same-row="${esc(task.id)}" style="${paletteStyle(task.color, 'task')}" title="${t("task.add_same_row")}" aria-label="${t("task.add_same_row")}"><span aria-hidden="true">＋</span></button><button class="task-label" type="button" draggable="${!row.label}" ${row.label?'data-compact-row="true"':''} title="${esc(row.label ? rowTitle : t("directory.drag_task"))}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-name" title="${esc(rowTitle)}">${esc(rowName)}</span><span class="task-owner">${esc(row.label ? row.tasks.length : task.owner || t("timeline.unassigned"))}</span></button></div>
         <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div>${row.tasks.map(member=>taskBarsMarkup(member, project, start, pxPerDay, row.offsets.get(member.id))).join('')}</div>
       </div>`;
       bodyHeight += row.height;
@@ -1476,7 +1626,7 @@ function renderRowTaskSections(project, task) {
     if (member.id === task.id) return;
     const extra = document.createElement('section');
     extra.className = 'inspector-section row-task-inspector-section';
-    extra.innerHTML = `<button class="inspector-accordion" type="button" aria-expanded="false"><span class="accordion-chevron">›</span><span>${esc(rowTaskSectionTitle(index))}</span><small class="task-color-tag" style="${paletteStyle(member.color,'task-tag')}">${esc(member.name)}</small></button>`;
+    extra.innerHTML = `<button class="inspector-accordion" type="button" aria-expanded="false"><svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>${esc(rowTaskSectionTitle(index))}</span><small class="task-color-tag" style="${paletteStyle(member.color,'task-tag')}">${esc(member.name)}</small></button>`;
     extra.querySelector('button').addEventListener('click',()=>selectItem('task',member.id));
     if (index < selectedIndex) section.before(extra);
     else { after.after(extra); after = extra; }
@@ -1487,10 +1637,10 @@ function paintInspectorContext(project,task) {
   $('#project-context-label').textContent = project ? project.name : t("inspector.select_an_item");
   $('#project-context-label').classList.toggle('task-color-tag', Boolean(project));
   applyPalette($('#project-context-label'), project?.color || '#5872d9');
-  $('#project-context-label').title = task ? t("inspector.change_task_project") : project?.name || '';
-  $('#project-context-label').disabled = !task;
-  $('#project-context-label').setAttribute('aria-label', task ? t("inspector.change_task_project_2", {p0:project.name}) : project?.name || t("inspector.select_an_item"));
-  $('#project-context-label').onclick = task ? () => openTaskProjectMenu(task.id) : null;
+  $('#project-context-label').title = t("inspector.select_project");
+  $('#project-context-label').disabled = !state.data.projects.length;
+  $('#project-context-label').setAttribute('aria-label', t("inspector.select_project"));
+  $('#project-context-label').onclick = () => openInspectorProjectMenu(project?.id);
   $('#task-context-label').textContent = task ? task.name : t("inspector.not_selected");
   $('#task-context-label').classList.toggle('task-color-tag', Boolean(task));
   applyPalette($('#task-context-label'), task?.color || project?.color || '#5872d9');
@@ -1507,6 +1657,7 @@ function syncInspectorProjection() {
     renderInspector();return;
   }
   projectForm?.syncProjection?.();taskForm?.syncProjection?.();taskForm?.syncProgress?.();
+  $$('#ins-project-tags,#ins-task-tags').forEach(input=>input.syncTags?.());
   paintInspectorContext(project,task);
   if (projectForm) {
     $('.color-field code',projectForm).textContent = $('#ins-project-color').value;
@@ -1642,7 +1793,7 @@ function renderInspector() {
         <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.notes_placeholder")}">${esc(task.notes || '')}</textarea></label>
         </div>
         <small class="task-autosave-state" role="status" aria-live="polite">${t("inspector.changes_are_saved_when_you_leave")}</small>
-        <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button complete-button" id="ins-task-complete" type="button">${t("task.complete")}</button></div>
+        <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button save-button" id="ins-task-add-same-row" type="button">${t("task.create_same")}</button></div>
       </form>`;
   } else {
     $('#task-inspector').innerHTML = `<div class="inspector-empty"><span>⌁</span><b>${t("inspector.select_a_task")}</b><small>${t("inspector.click_a_task_name_or_bar")}</small></div>`;
@@ -1675,14 +1826,14 @@ async function deleteInspectorItem(kind, id, name) {
   } catch (error) { toast(error.message); }
 }
 
-function openTaskProjectMenu(taskId) {
+function openInspectorProjectMenu(projectId) {
   document.querySelector('#task-project-menu')?.closeMenu();
   const trigger = $('#project-context-label');
-  const current = state.data.projects.find(project => project.tasks.some(task => task.id === taskId));
-  const choices = [{id:null, name:t("inspector.no_project"), color:'#94a3b8'}, ...state.data.projects.filter(project => !project.is_unassigned)];
+  const current = state.data.projects.find(project => project.id === projectId);
+  const choices = state.data.projects;
   const menu = document.createElement('div');
   menu.id = 'task-project-menu'; menu.className = 'task-context-menu project-picker'; menu.setAttribute('role','menu');
-  menu.innerHTML = choices.map((project, index) => `<button type="button" role="menuitemradio" aria-checked="${project.id === current?.id || (!project.id && current?.is_unassigned) ? 'true' : 'false'}" data-choice="${index}"><i style="background:${colorPalette(project.color).base}" aria-hidden="true"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><small>${esc(project.color)}</small></button>`).join('') + `<p>${t("inspector.moving_a_task_removes_its_existing")}</p>`;
+  menu.innerHTML = choices.map((project, index) => `<button type="button" role="menuitemradio" aria-checked="${project.id === current?.id || (!project.id && current?.is_unassigned) ? 'true' : 'false'}" data-choice="${index}"><i style="background:${colorPalette(project.color).base}" aria-hidden="true"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><small>${esc(project.color)}</small></button>`).join('');
   document.body.append(menu);
   const rect = trigger.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(rect.right - menu.offsetWidth, innerWidth - menu.offsetWidth - 8))}px`;
@@ -1703,12 +1854,12 @@ function openTaskProjectMenu(taskId) {
     if (!button) return;
     const destination = choices[Number(button.dataset.choice)];
     close();
-    const request = (async () => {
-      const project = await api(`/api/tasks/${encodeURIComponent(taskId)}/project`, {method:'PATCH',body:JSON.stringify({project_id:destination.id})});
-      persistUi();
-      toast(t("inspector.task_moved_to", {p0:destination.name}));
-    })();
-      try { await request; } catch(error) { toast(error.message); }
+    state.selection = {type:'project', id:destination.id};
+    state.inspectorOpen = 'project';
+    persistUi();
+    renderSidebar();
+    renderTimeline();
+    trigger.focus({preventScroll:true});
   });
 }
 
@@ -1747,7 +1898,6 @@ function syncAccordionVisibility() {
   for (const section of ['project', 'task']) {
     const open = state.inspectorOpen === section;
     $(`#${section}-accordion`).setAttribute('aria-expanded', String(open));
-    $(`#${section}-accordion .accordion-chevron`).textContent = open ? '⌄' : '›';
     animateInspectorSection($(`#${section}-inspector`), open);
   }
 }
@@ -1890,9 +2040,7 @@ function bindInspector(project, task) {
     }));
     syncRelationRowOrder(project,task,taskForm);
     bindTaskAutoSave(taskForm, task);
-    $('#ins-task-complete').addEventListener('click', async () => {
-      try { await chartActions.run(`complete-task:${task.id}`,()=>saveTaskFields(task.id, {status:'done'})); toast(t("task.marked_complete")); } catch (error) { toast(error.message); }
-    });
+    $('#ins-task-add-same-row').addEventListener('click', () => openSameRowTask(task.id));
   }
 }
 
@@ -1948,16 +2096,21 @@ function bindTaskAutoSave(form, task) {
   for (const input of inputs) {
     input.addEventListener('input', () => fields.edit(input));
     input.addEventListener('blur', () => save(input));
-    if (input.tagName === 'SELECT' || ['color', 'checkbox'].includes(input.type)) input.addEventListener('change', () => save(input));
+    if (input.id === 'ins-task-owner' || input.tagName === 'SELECT' || ['color', 'checkbox'].includes(input.type)) input.addEventListener('change', () => save(input));
     input.addEventListener('keydown', event => {
-      if (['Escape', 'Backspace'].includes(event.key) && input.type === 'date' && !event.isComposing) {
+      if (['Escape', 'Backspace', 'Delete'].includes(event.key) && input.type === 'date' && !event.isComposing) {
         event.preventDefault();event.stopPropagation();input.value = '';
         input.dispatchEvent(new Event('input', { bubbles: true }));fields.edit(input);
         if (!input.required) save(input);
         else status.textContent = t("task.enter_a_planned_date_to_save");
         return;
       }
-      if (event.key === 'Enter' && input.tagName !== 'TEXTAREA' && !event.isComposing) { event.preventDefault(); input.blur(); }
+      if (event.key === 'Enter' && input.id === 'ins-task-owner' && !event.isComposing) {
+        // Let the browser accept its native suggestion before blur saves the value.
+        requestAnimationFrame(() => { if (document.activeElement === input) input.blur(); });
+        return;
+      }
+      if (event.key === 'Enter' && input.id !== 'ins-task-owner' && input.tagName !== 'TEXTAREA' && !event.isComposing) { event.preventDefault(); input.blur(); }
     });
   }
 }
@@ -2349,8 +2502,8 @@ function renderTemplateEditorContent() {
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
       <button type="button" class="desktop-inspector-toggle" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("inspector.toggle")}"><span aria-hidden="true">›</span><span>${t("template.properties")}</span></button>
-      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${(mobileLayout() ? !document.body.classList.contains('inspector-open') : document.body.classList.contains('desktop-inspector-collapsed')) ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
-        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><span class="accordion-chevron">${projectOpen?'⌄':'›'}</span><span>${t("template.template_properties")}</span><small class="task-color-tag" style="${paletteStyle(draft.project_color || projectColors[0], 'task-tag')}">${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
+      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${(mobileLayout() ? !document.body.classList.contains('inspector-open') : document.body.classList.contains('desktop-inspector-collapsed')) ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="icon-button desktop-inspector-close" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("timeline.close_properties")}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
+        <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>${t("template.template_properties")}</span><small class="task-color-tag" style="${paletteStyle(draft.project_color || projectColors[0], 'task-tag')}">${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
           <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
           <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code>${randomColorButton()}</div></div>
           <label class="inspector-field"><span>${t("inspector.start_date")}</span><input class="text-input" value="D+0" disabled></label>
@@ -2359,7 +2512,7 @@ function renderTemplateEditorContent() {
           <label class="inspector-field"><span>${t("inspector.tags")}</span><input id="template-tags" class="text-input" value="${esc((draft.tags || []).join(', '))}"></label>
           <label class="inspector-field"><span>${t("template.description")}</span><textarea id="template-description" class="text-area" rows="3">${esc(draft.description || '')}</textarea></label>
         </div><div class="inspector-actions"><button id="delete-template" type="button" class="button delete-button">${t("template.delete")}</button><button id="save-template" type="button" class="button save-button">${t("template.save")}</button></div></div></section>
-        <section class="inspector-section"><button type="button" id="template-task-accordion" class="inspector-accordion" aria-expanded="${taskOpen}"><span class="accordion-chevron">${taskOpen?'⌄':'›'}</span><span>${t("template.task_properties")}</span><small class="${!projectSelected ? 'task-color-tag' : ''}" style="${paletteStyle(selectedTask?.color || taskColors[0], 'task-tag')}">${esc(projectSelected ? t("inspector.not_selected") : selectedTask?.name || t("inspector.not_selected"))}</small></button><div id="template-tasks" class="inspector-content ${taskOpen?'':'hidden'}">${selectedTask ? templateTaskProperties(selectedTask,draft.tasks.indexOf(selectedTask),draft.tasks) : `<p>${t("template.add_a_task")}</p>`}</div></section>
+        <section class="inspector-section"><button type="button" id="template-task-accordion" class="inspector-accordion" aria-expanded="${taskOpen}"><svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>${t("template.task_properties")}</span><small class="${!projectSelected ? 'task-color-tag' : ''}" style="${paletteStyle(selectedTask?.color || taskColors[0], 'task-tag')}">${esc(projectSelected ? t("inspector.not_selected") : selectedTask?.name || t("inspector.not_selected"))}</small></button><div id="template-tasks" class="inspector-content ${taskOpen?'':'hidden'}">${selectedTask ? templateTaskProperties(selectedTask,draft.tasks.indexOf(selectedTask),draft.tasks) : `<p>${t("template.add_a_task")}</p>`}</div></section>
       </aside>
     </div>`;
   $('#template-editor').oninput = () => {
@@ -2620,25 +2773,54 @@ function matchingCategoryNames(names, value) {
   const key=groupKey(value);
   return key ? names.filter(name=>groupKey(name).includes(key)) : [];
 }
+function matchingOwnerNames(value) {
+  const prefix=groupKey(value);
+  return prefix ? ownerNames().filter(name=>groupKey(name).startsWith(prefix)) : [];
+}
+function bindOwnerSuggestions() {
+  const list=document.createElement('datalist');
+  list.id='owner-suggestions';document.body.append(list);
+  const isOwner=node=>node.matches?.('#ins-task-owner,#edit-task-owner,.template-task-owner');
+  const update=input=>{
+    input.setAttribute('list',list.id);
+    list.replaceChildren(...matchingOwnerNames(input.value).map(name=>{
+      const option=document.createElement('option');option.value=name;return option;
+    }));
+  };
+  document.addEventListener('focusin',event=>{
+    if (!isOwner(event.target)) return;
+    // Opening an existing value alone must not expose all saved owners.
+    list.replaceChildren();event.target.setAttribute('list',list.id);
+  });
+  document.addEventListener('input',event=>{
+    if (isOwner(event.target) && !event.isComposing) update(event.target);
+  });
+  document.addEventListener('compositionend',event=>{if(isOwner(event.target))update(event.target);});
+  document.addEventListener('blur',event=>{
+    if (!isOwner(event.target)) return;
+    const input=event.target;
+    input.value=ownerNames().find(name=>groupKey(name)===groupKey(input.value)) || normalizeGroupName(input.value);
+    list.replaceChildren();
+  },true);
+}
 function bindGroupSuggestions() {
   // A body-level popover avoids clipping by the inspector's scroll container.
   const menu=document.createElement('div');menu.className='group-suggestions';menu.setAttribute('popover','manual');document.body.append(menu);
   let active=null, selected=-1;
   const close=()=>{if(menu.matches(':popover-open')) menu.hidePopover();active=null;};
   const show=input=>{
-    active=input;selected=-1;const names=isOwner(input)?ownerNames():groupNames();const matches=matchingCategoryNames(names,input.value);
+    active=input;selected=-1;const matches=matchingCategoryNames(groupNames(),input.value);
     if (!matches.length) {close();return;}
     menu.innerHTML=matches.map(name=>`<button type="button">${esc(name)}</button>`).join('');
     const rect=input.getBoundingClientRect();menu.style.left=`${rect.left}px`;menu.style.top=`${rect.bottom+3}px`;menu.style.width=`${rect.width}px`;
     if(!menu.matches(':popover-open'))menu.showPopover();
   };
-  const isOwner=node=>node.matches?.('#ins-task-owner,#edit-task-owner,.template-task-owner');
-  const isGroup=node=>node.matches?.('#ins-project-group,#ins-task-group,#template-group,.template-task-group') || isOwner(node);
+  const isGroup=node=>node.matches?.('#ins-project-group,#ins-task-group,#template-group,.template-task-group');
   document.addEventListener('focusin',event=>{if(isGroup(event.target))show(event.target);});
   document.addEventListener('input',event=>{if(isGroup(event.target))show(event.target);});
   menu.addEventListener('pointerdown',event=>{if(event.target.closest('button'))event.preventDefault();});
   menu.addEventListener('click',event=>{const button=event.target.closest('button');if(!button||!active)return;const input=active;input.value=button.textContent;input.dispatchEvent(new Event('input',{bubbles:true}));close();input.blur();});
-  document.addEventListener('blur',event=>{if(isGroup(event.target)){const input=event.target;input.value=isOwner(input)?(ownerNames().find(name=>groupKey(name)===groupKey(input.value)) || normalizeGroupName(input.value)):canonicalGroupName(input.value);close();}},true);
+  document.addEventListener('blur',event=>{if(isGroup(event.target)){const input=event.target;input.value=canonicalGroupName(input.value);close();}},true);
   document.addEventListener('keydown',event=>{
     if(event.isComposing || event.keyCode===229)return;
     if(event.key==='Enter' && isGroup(event.target)) {
@@ -2662,6 +2844,19 @@ function bindGroupSuggestions() {
 }
 function firstTagColor(text, colors) {
   return text.split(',').map(tag=>colors[groupKey(tag)]).find(color=>/^#[0-9a-f]{6}$/i.test(color || '')) || null;
+}
+function resolvedTagColor(tag) {
+  const key=groupKey(tag), saved=state.data.tag_colors?.[key];
+  if (/^#[0-9a-f]{6}$/i.test(saved || '')) return saved;
+  let hash=2166136261;
+  for (const char of key) hash=Math.imul(hash ^ char.codePointAt(0),16777619) >>> 0;
+  return projectColors[hash % projectColors.length];
+}
+function ensureTagColors(tags) {
+  for (const tag of tags) {
+    if (/^#[0-9a-f]{6}$/i.test(state.data.tag_colors?.[groupKey(tag)] || '')) continue;
+    api('/api/settings/tag-color',{method:'PATCH',body:JSON.stringify({tag,color:resolvedTagColor(tag)})}).catch(error=>toast(error.message));
+  }
 }
 function tagColorStyle(color) {
   if (!/^#[0-9a-f]{6}$/i.test(color || '')) return '';
@@ -2694,11 +2889,21 @@ function bindTagColors() {
     };
     const render=()=>{
       entry.placeholder=tags.length ? '' : t('tags.add_hint');
-      chips.innerHTML=tags.map(tag=>`<button type="button" class="colored-tag" data-tag="${esc(tag)}" aria-haspopup="dialog" style="${tagColorStyle(state.data.tag_colors?.[groupKey(tag)])}">${esc(tag)}</button>`).join('');
+      const existing=new Map([...chips.children].map(node=>[groupKey(node.dataset.tag),node]));
+      for (const [index,tag] of tags.entries()) {
+        const key=groupKey(tag);
+        let chip=existing.get(key);
+        if (!chip) { chip=document.createElement('button');chip.type='button';chip.className='colored-tag';chip.setAttribute('aria-haspopup','dialog'); }
+        chip.dataset.tag=tag;chip.textContent=tag;chip.style.cssText=tagColorStyle(resolvedTagColor(tag));
+        if (chips.children[index] !== chip) chips.insertBefore(chip,chips.children[index] || null);
+        existing.delete(key);
+      }
+      for (const chip of existing.values()) chip.remove();
     };
+    input.syncTags=()=>{tags=mergeTagTokens([],input.value);render();};
     const commit=()=>{
       if(!entry.value.trim())return;
-      tags=mergeTagTokens(tags,entry.value);entry.value='';render();saveTags();
+      tags=mergeTagTokens(tags,entry.value);entry.value='';render();saveTags();ensureTagColors(tags);
     };
     entry.addEventListener('keydown',event=>{
       if(event.isComposing || event.keyCode===229)return;
@@ -2719,7 +2924,7 @@ function bindTagColors() {
       const tag=button.dataset.tag;
       const popup=document.createElement('div');popup.id='tag-palette-popover';popup.className='tag-palette-popover';
       popup.setAttribute('popover','auto');popup.setAttribute('role','dialog');popup.setAttribute('aria-label',t('tags.color'));
-      const current=state.data.tag_colors?.[groupKey(tag)] || '#5872d9';
+      const current=resolvedTagColor(tag);
       popup.innerHTML=`<div class="tag-palette-heading"><strong>${esc(tag)}</strong><button type="button" class="icon-button tag-remove-button" data-remove aria-label="${t('tags.remove')}" title="${t('tags.remove')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><div class="tag-swatches">${projectColors.map(color=>`<button type="button" data-color="${color}" style="background:${color}" aria-label="${color}"></button>`).join('')}</div><label class="tag-custom-color">${t('tags.color')}<input type="color" value="${current}" aria-label="${t('tags.color')}"></label>${randomColorButton().replace('class="random-color-button"', 'class="tag-random-button" data-random')}<small role="status"></small>`;
       document.body.append(popup);popup.showPopover();
       const rect=button.getBoundingClientRect();
@@ -2733,7 +2938,8 @@ function bindTagColors() {
         try {
           const result=await api('/api/settings/tag-color',{method:'PATCH',body:JSON.stringify({tag,color})});
           for(const node of $$('button.colored-tag[data-tag]')) if(groupKey(node.dataset.tag)===result.key)node.style.cssText=tagColorStyle(result.color);
-          popup.querySelector('input').value=result.color;status.textContent=t('inspector.saved_automatically');
+          popup.hidePopover();popup.remove();
+          if (button.isConnected) button.focus({preventScroll:true});
         } catch(error) {status.textContent=error.message;}
         finally {busy=false;controls.forEach(node=>node.disabled=false);}
       };
@@ -2990,7 +3196,7 @@ function bindTaskReordering() {
       return;
     }
     const label = event.target.closest('.task-label[data-task-select]');
-    if (!label) {event.preventDefault();return;}
+    if (!label || label.dataset.compactRow) {event.preventDefault();return;}
     dragged = {id:label.dataset.taskSelect,projectId:label.dataset.project};
     event.dataTransfer.effectAllowed='move';
     event.dataTransfer.setData('text/plain',dragged.id);
@@ -3001,6 +3207,7 @@ function bindTaskReordering() {
     clearPreview();
     const cell = event.target.closest('.gantt-left');
     const label = cell?.querySelector('.task-label[data-task-select]');
+    if (label?.dataset.compactRow) return;
     const folderId = cell?.dataset.dropProject;
     const row = cell?.closest('.gantt-row');
     const rect = row?.getBoundingClientRect();
@@ -3049,6 +3256,7 @@ function bindTaskReordering() {
     try {await request;} catch(error) {toast(error.message);}
   });
   $('#sort-select').addEventListener('change',stop);
+  $('#compact-select')?.addEventListener('change',stop);
 }
 
 // A top-layer popover avoids clipping by the sticky Gantt header and scroll containers.
@@ -3173,6 +3381,7 @@ function bindMobileSearch() {
   window.matchMedia('(max-width: 760px)').addEventListener('change', event => { if (!event.matches && dialog.open) dialog.close(); });
 }
 function scrollTimelineToToday() {
+  if (state.layout === 'month') { state.monthStart = monthPageStart(browserClockParts().date); renderTimeline({preserveInspector:true}); return; }
   const wrap = $('#gantt-wrap');
   if (state.layout !== 'gantt' || wrap.classList.contains('hidden')) return;
   const offset = dayDiff(timelineCalendarRange().start,browserClockParts().date);
@@ -3198,7 +3407,7 @@ function startInlineRowRename(selection) {
   if (!item) return;
   const selector = selection.type === 'project' ? `.project-select[data-collapse="${CSS.escape(selection.id)}"]` : `.task-label[data-task-select="${CSS.escape(selection.id)}"]`;
   const button = $(selector, $('#gantt'));
-  if (!button) return;
+  if (!button || button.dataset?.compactRow) return;
   const cell = button.closest('.gantt-left'), input = document.createElement('input');
   input.type='text';input.className='inline-row-name';input.value=item.name;
   input.setAttribute('aria-label',t(selection.type === 'project' ? 'project.project_production_batch_name' : 'timeline.task_name'));
@@ -3308,12 +3517,14 @@ function bindRowRenameShortcut() {
   }, true);
 }
 function syncLayoutToggle() {
+  $('#compact-select').disabled = state.layout === 'month';
   const button = $('#mobile-layout-toggle');
   button.dataset.currentLayout = state.layout;
-  const label = state.layout === 'gantt' ? t("common.switch_to_list_view") : t("common.switch_to_gantt_view");
+  const label = t(state.layout === 'gantt' ? 'timeline.month_view' : 'timeline.day_view');
+  $('.zoom-slider-control').classList.toggle('hidden', state.layout === 'month');
   button.setAttribute('aria-label', label);
   button.title = label;
-  $$('[data-layout]').forEach(item => item.classList.toggle('selected', item.dataset.layout === state.layout));
+  $$('[data-layout]').forEach(item => { item.classList.toggle('selected', item.dataset.layout === state.layout); item.setAttribute('aria-pressed', String(item.dataset.layout === state.layout)); });
 }
 function mobileLayout() { return window.matchMedia('(max-width: 760px)').matches; }
 function activeMobileInspector() { return state.view === 'templates' ? $('#template-inspector') : $('#mobile-inspector'); }
@@ -3387,7 +3598,9 @@ function bindMobileDrawers() {
     const collapsed = document.body.classList.toggle('desktop-inspector-collapsed');
     $$('[data-toggle-inspector]').forEach(button => button.setAttribute('aria-expanded', String(!collapsed)));
     setMobileDrawer(null);
-    toggle.focus();
+    const panel = activeMobileInspector();
+    const focusTarget = collapsed ? panel?.parentElement.querySelector('.desktop-inspector-toggle') : panel?.querySelector('.desktop-inspector-close');
+    focusTarget?.focus({preventScroll:true});
   });
   bindMobileMenuSwipe();
   $('#mobile-menu-toggle').addEventListener('click', () => {
@@ -3427,6 +3640,34 @@ function focusCreatedName() {
   const input = target.type === 'project' ? $('#ins-project-name') : $('#ins-task-name');
   input?.focus();input?.select();
 }
+function bindProjectBarGestures(chart) {
+  let pendingClick;
+  const cancelClick = () => { clearTimeout(pendingClick); pendingClick = null; };
+  const projectBar = event => state.layout === 'gantt' ? event.target.closest('.project-summary-bar[data-project-select]') : null;
+  chart.addEventListener('click', event => {
+    cancelClick();
+    const bar = projectBar(event);
+    if (!bar) return;
+    event.stopImmediatePropagation();
+    // Keyboard activation has no double-click ambiguity.
+    if (event.detail === 0) { selectItem('project',bar.dataset.projectSelect,{preserveChart:true}); return; }
+    if (event.detail > 1) return;
+    pendingClick = setTimeout(() => {
+      pendingClick = null;
+      if (bar.isConnected && state.layout === 'gantt') selectItem('project',bar.dataset.projectSelect,{preserveChart:true});
+    },400);
+  },true);
+  chart.addEventListener('dblclick', event => {
+    cancelClick();
+    const bar = projectBar(event);
+    if (!bar) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    selectItem('project',bar.dataset.projectSelect,{preserveChart:true,toggleInspector:false});
+    projectMotion.toggle(bar.dataset.projectSelect);
+  });
+}
+
 function bindChartAutoRefresh() {
   const renderer = ChartEditing.createRenderer({
     frame:callback=>requestAnimationFrame(callback),
@@ -3444,6 +3685,7 @@ function bindChartAutoRefresh() {
 }
 function attachEvents() {
   bindGroupSuggestions();
+  bindOwnerSuggestions();
   bindRandomColorButtons();
   bindRowRenameShortcut();
   bindRowClipboard();
@@ -3485,6 +3727,12 @@ function attachEvents() {
   $('#search-filter').addEventListener('input', renderTimeline);
   $('#status-filter').addEventListener('change', renderTimeline);
   $('#sort-select').addEventListener('change', () => { renderSidebar(); renderTimeline(); });
+  $('#compact-select').value = state.compactBy;
+  $('#compact-select').addEventListener('change', event => {
+    state.compactBy = event.target.value;
+    persistUi();
+    renderTimeline({preserveInspector:true});
+  });
   $$('[data-layout]').forEach((button) => button.addEventListener('click', () => {
     state.layout = button.dataset.layout;
     syncLayoutToggle();
@@ -3492,7 +3740,7 @@ function attachEvents() {
     scrollTimelineToToday();
   }));
   $('#mobile-layout-toggle').addEventListener('click', () => {
-    state.layout = state.layout === 'gantt' ? 'list' : 'gantt';
+    state.layout = state.layout === 'gantt' ? 'month' : 'gantt';
     syncLayoutToggle();
     renderTimeline();
     scrollTimelineToToday();
@@ -3635,6 +3883,7 @@ function attachEvents() {
       selectItem('task', edge.dataset.taskSelect);
     }
   });
+  bindProjectBarGestures($('#gantt'));
   $('#gantt').addEventListener('click', (event) => {
     const addSameRow = event.target.closest('[data-add-same-row]');
     if (addSameRow) { openSameRowTask(addSameRow.dataset.addSameRow); return; }

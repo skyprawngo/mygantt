@@ -45,3 +45,28 @@ test('chart controls do not clear selection',()=>{
  const h=setup(false);h.click('button,input,textarea,select,[contenteditable],[role="button"]');
  assert.equal(h.state.selection.id,'task-1');assert.deepEqual(h.calls,[]);
 });
+function gestures() {
+ const handlers={},calls=[],state={layout:'gantt'};let pending;
+ const chart={addEventListener:(event,fn)=>handlers[event]=fn};
+ const context={state,clearTimeout:()=>{pending=null;},setTimeout:fn=>{pending=fn;return 1;},selectItem:(type,id,options)=>calls.push({type,id,...options}),projectMotion:{toggle:id=>calls.push({toggle:id})}};
+ vm.runInNewContext(source.slice(source.indexOf('function bindProjectBarGestures('),source.indexOf('function bindChartAutoRefresh(')),context);
+ context.bindProjectBarGestures(chart);
+ const bar={isConnected:true,dataset:{projectSelect:'p'}};
+ const event=detail=>({detail,target:{closest:()=>bar},preventDefault(){},stopImmediatePropagation(){}});
+ return {handlers,calls,state,bar,event,flush(){pending?.();pending=null;}};
+}
+test('double-click selects and opens inspector once before toggling project, without single-click toggle',()=>{
+ const h=gestures();h.handlers.click(h.event(1));h.handlers.click(h.event(2));h.handlers.dblclick(h.event(2));h.flush();
+ assert.deepEqual(h.calls,[{type:'project',id:'p',preserveChart:true,toggleInspector:false},{toggle:'p'}]);
+});
+test('single click retains normal inspector toggle and keyboard activation is immediate',()=>{
+ const h=gestures();h.handlers.click(h.event(1));assert.equal(h.calls.length,0);h.flush();
+ assert.deepEqual(h.calls,[{type:'project',id:'p',preserveChart:true}]);
+ h.handlers.click(h.event(0));assert.equal(h.calls.length,2);
+});
+test('detached bars and switching to monthly view cancel delayed selection',()=>{
+ for(const mode of ['detached','month']){
+  const h=gestures();h.handlers.click(h.event(1));if(mode==='detached')h.bar.isConnected=false;else h.state.layout='month';h.flush();assert.equal(h.calls.length,0);
+ }
+ const h=gestures();h.state.layout='month';h.handlers.dblclick(h.event(2));assert.equal(h.calls.length,0);
+});

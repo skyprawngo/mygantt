@@ -30,3 +30,14 @@ test('tag popover random selection has no family restriction and persists throug
  assert.ok(!ui.includes('manualColorVariant('));
  assert.ok(ui.includes("api('/api/settings/tag-color'"));
 });
+test('uncolored tags have stable automatic colors and manual colors take precedence',()=>{
+ c.state={data:{tag_colors:{}}};c.projectColors=['#5872d9','#b96749','#27897f'];
+ assert.match(c.resolvedTagColor('신규 태그'),/^#[0-9a-f]{6}$/);
+ assert.equal(c.resolvedTagColor(' Ｔeam   A '),c.resolvedTagColor('team a'));
+ c.state.data.tag_colors['team a']='#123456';assert.equal(c.resolvedTagColor('TEAM A'),'#123456');
+});
+test('creating tags persists missing colors without overwriting existing manual choices',()=>{
+ const calls=[];c.state={data:{tag_colors:{existing:'#123456'}}};c.projectColors=['#5872d9','#b96749'];
+ c.api=(path,options)=>{calls.push({path,...JSON.parse(options.body)});return Promise.resolve();};c.toast=()=>{};
+ c.ensureTagColors(['existing','new']);assert.equal(calls.length,1);assert.equal(calls[0].tag,'new');assert.match(calls[0].color,/^#[0-9a-f]{6}$/);
+});

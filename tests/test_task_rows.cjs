@@ -42,3 +42,18 @@ test('row inspector lists only the selected project row in task order',()=>{
  assert.equal(members.length,2);assert.equal(members[0].id,'a');assert.equal(members[1].id,'b');
  assert.equal(h.rowTaskSectionTitle(0),'작업 속성');assert.equal(h.rowTaskSectionTitle(1),'작업2 속성');
 });
+test('owner compaction combines different task names without changing stored row membership',()=>{
+ const tasks=[task('a','01','03',{name:'자삽',owner:'에스엠티에스',gantt_row_id:''}),task('b','10','12',{name:'코팅',owner:'에스엠티에스',gantt_row_id:''}),task('c','14','15',{owner:'다른 업체',gantt_row_id:''})];
+ const before=JSON.stringify(tasks),rows=c.groupedTaskRows(tasks,'owner');
+ assert.equal(rows.length,2);assert.equal(rows[0].label,'에스엠티에스');assert.equal(rows[0].tasks.length,2);
+ assert.equal(rows[0].offsets.get('a'),rows[0].offsets.get('b'));assert.equal(JSON.stringify(tasks),before);
+ assert.equal(c.groupedTaskRows(tasks).length,3);
+});
+test('compact rows keep overlaps reachable and blank values in their original rows',()=>{
+ const rows=c.groupedTaskRows([task('a','01','08',{group_name:'제조',gantt_row_id:''}),task('b','07','12',{group_name:'제조',gantt_row_id:''}),task('c','01','03',{gantt_row_id:''}),task('d','05','06',{gantt_row_id:''})],'group');
+ assert.equal(rows.length,3);assert.equal(rows[0].height,72);assert.notEqual(rows[0].offsets.get('a'),rows[0].offsets.get('b'));
+});
+test('tag compaction compares complete tag sets regardless of ordering',()=>{
+ const rows=c.groupedTaskRows([task('a','01','03',{tags:['긴급','외주'],gantt_row_id:''}),task('b','05','08',{tags:['외주','긴급'],gantt_row_id:''}),task('c','09','11',{tags:['외주'],gantt_row_id:''})],'tags');
+ assert.equal(rows.length,2);assert.equal(rows[0].tasks.length,2);assert.equal(rows[1].tasks.length,1);
+});

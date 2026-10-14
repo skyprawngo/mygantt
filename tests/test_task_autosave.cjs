@@ -35,18 +35,18 @@ test('a rejected save does not block the next correction',async()=>{
   await h.saveTaskFields('t',{actual_start:'2026-10-04'});
   assert.equal(h.state.data.projects[0].tasks[0].actual_finish,'');
 });
-test('Backspace clears the whole date; only optional actual dates save empty',async()=>{
- for(const required of [false,true]){
+test('Backspace and Delete clear full dates; only optional actual dates save empty',async()=>{
+ for(const key of ['Backspace','Delete']) for(const edge of ['start','finish']) for(const required of [false,true]){
   const events={},patches=[];
-  const input={id:required?'ins-task-planned-start':'ins-task-actual-start',type:'date',tagName:'INPUT',value:'2026-10-04',required,checked:false,addEventListener(k,fn){events[k]=fn;},checkValidity(){return !required||!!this.value;},dispatchEvent(){},removeAttribute(){},setAttribute(){}};
+  const input={id:`ins-task-${required?'planned':'actual'}-${edge}`,type:'date',tagName:'INPUT',value:'2026-10-04',required,checked:false,addEventListener(k,fn){events[k]=fn;},checkValidity(){return !required||!!this.value;},dispatchEvent(){},removeAttribute(){},setAttribute(){}};
   const status={textContent:'',classList:{toggle(){}}},form={isConnected:false,addEventListener(){}};
   const c={ChartEditing:require('../web/editing.js'),chartMutations:{resolveId:id=>id},document:{},$$:()=>[input],$:()=>status,state:{cascadeDependents:false,data:{projects:[]}},Event,saveTaskFields:async(id,fields)=>{patches.push(fields);return {tasks:[]};},toast(){}};
   withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),c);vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
   c.bindTaskAutoSave(form,{id:'t'});
-  let prevented=false;events.keydown({key:'Backspace',isComposing:false,preventDefault(){prevented=true;},stopPropagation(){}});
+  let prevented=false;events.keydown({key,isComposing:false,preventDefault(){prevented=true;},stopPropagation(){}});
   await new Promise(resolve=>setImmediate(resolve));
   assert.equal(input.value,'');assert.equal(prevented,true);assert.equal(patches.length,required?0:1);
-  if(!required)assert.equal(patches[0].actual_start,'');
+  if(!required)assert.equal(patches[0][`actual_${edge}`],'');
  }
 });
 test('numeric task order resolves insertion against full project order in the save queue',async()=>{
@@ -59,4 +59,15 @@ test('numeric task order resolves insertion against full project order in the sa
  assert.deepEqual(calls[1],{path:'/api/tasks/c/order',anchor_id:'b',after:true});
  await assert.rejects(h.saveTaskFields('c',{sort_order:0}));
  assert.equal(calls.length,2);
+});
+test('owner Enter allows native selection before saving the accepted value',async()=>{
+ const events={},patches=[];let frame;
+ const input={id:'ins-task-owner',type:'text',tagName:'INPUT',value:'',addEventListener:(key,fn)=>events[key]=fn,checkValidity:()=>true,removeAttribute(){},setAttribute(){},blur(){events.blur();}};
+ const status={classList:{toggle(){}}},form={addEventListener(){}};
+ const c={ChartEditing:require('../web/editing.js'),chartMutations:{resolveId:id=>id},document:{activeElement:input},$$:()=>[input],$:()=>status,state:{cascadeDependents:false,data:{projects:[]}},requestAnimationFrame:fn=>frame=fn,saveTaskFields:async(id,fields)=>patches.push(fields),toast(){}};
+ withI18n(vm.createContext(c));vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),c);vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
+ c.bindTaskAutoSave(form,{id:'t'});input.value='에';let prevented=false;
+ events.keydown({key:'Enter',isComposing:false,preventDefault(){prevented=true;}});
+ assert.equal(prevented,false);assert.equal(patches.length,0);
+ input.value='에스엠티에스';frame();await new Promise(resolve=>setImmediate(resolve));assert.equal(patches[0].owner,'에스엠티에스');
 });

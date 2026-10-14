@@ -1,4 +1,17 @@
 [
+{"textID":"timeline.compact","KR":"축약","US":"Compact rows","JP":"行の集約"},
+{"textID":"timeline.compact_none","KR":"축약 안 함","US":"No grouping","JP":"集約なし"},
+{"textID":"task.create_same","KR":"동일 작업 생성","US":"Create same task","JP":"同じ作業を作成"},
+{"textID": "timeline.previous_half_year", "KR": "이전 6개월", "US": "Previous 6 months", "JP": "前の6か月"},
+{"textID": "timeline.next_half_year", "KR": "다음 6개월", "US": "Next 6 months", "JP": "次の6か月"},
+
+{"textID": "timeline.day_view", "KR": "일 간트", "US": "Daily Gantt", "JP": "日別ガント"},
+{"textID": "timeline.month_view", "KR": "월 간트 · 프로젝트 연간 보기", "US": "Monthly Gantt · Yearly projects", "JP": "月別ガント・年間プロジェクト"},
+{"textID": "timeline.previous_year", "KR": "이전 연도", "US": "Previous year", "JP": "前年"},
+{"textID": "timeline.next_year", "KR": "다음 연도", "US": "Next year", "JP": "翌年"},
+{"textID": "timeline.no_projects", "KR": "표시할 프로젝트가 없습니다.", "US": "No projects to display.", "JP": "表示するプロジェクトはありません。"},
+
+{"textID":"inspector.select_project","KR":"프로젝트 선택","US":"Select project","JP":"プロジェクトを選択"},
 {"textID":"inspector.toggle","KR":"속성 열기/닫기","US":"Toggle properties","JP":"プロパティを開く／閉じる"},
 {"textID":"task.numbered_label","KR":"작업{p0}","US":"Task {p0}","JP":"作業{p0}"},
 {"textID":"task.add_same_row","KR":"같은 행에 작업 추가","US":"Add task to this row","JP":"同じ行に作業を追加"},

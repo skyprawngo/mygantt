@@ -8,3 +8,20 @@ test('blank categories never suggest and owner names are shared across tasks and
  assert.equal(c.ownerNames().length,2);
  assert.equal(c.matchingCategoryNames(c.ownerNames(),'TEAM').length,2);
 });
+test('native owner suggestions require input and match only the beginning',()=>{
+ c.state.data={projects:[{tasks:[{owner:'에스엠티에스'},{owner:'한국 에스엠티에스'},{owner:'Team A'}]}],templates:[]};
+ assert.equal(c.matchingOwnerNames('').length,0);assert.equal(c.matchingOwnerNames('  ').length,0);
+ assert.deepEqual(Array.from(c.matchingOwnerNames('에스')),['에스엠티에스']);
+ assert.equal(c.matchingOwnerNames('엠티').length,0);
+ assert.deepEqual(Array.from(c.matchingOwnerNames('team')),['Team A']);
+});
+test('owner datalist stays empty on focus and follows typed prefixes including IME completion',()=>{
+ const handlers={},list={id:'',options:[],replaceChildren(...items){this.options=items;}};
+ const h={document:{body:{append(){}},createElement:type=>type==='datalist'?list:{},addEventListener:(type,fn)=>handlers[type]=fn},matchingOwnerNames:value=>value==='에'?['에스엠티에스']:[],ownerNames:()=>['에스엠티에스'],groupKey:v=>v,normalizeGroupName:v=>v};
+ vm.createContext(h);vm.runInContext(src.slice(src.indexOf('function bindOwnerSuggestions('),src.indexOf('function bindGroupSuggestions(')),h);h.bindOwnerSuggestions();
+ const input={value:'에스엠티에스',matches:()=>true,setAttribute(key,value){this[key]=value;}};
+ handlers.focusin({target:input});assert.equal(list.options.length,0);assert.equal(input.list,'owner-suggestions');
+ input.value='에';handlers.input({target:input,isComposing:true});assert.equal(list.options.length,0);
+ handlers.compositionend({target:input});assert.equal(list.options[0].value,'에스엠티에스');
+ input.value='';handlers.input({target:input});assert.equal(list.options.length,0);
+});
