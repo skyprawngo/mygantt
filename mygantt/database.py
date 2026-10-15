@@ -767,6 +767,9 @@ class Database:
         "name": name, "planned_start": fields["planned_start"],
         "planned_finish": fields["planned_finish"], "sort_order": order, "gantt_row_id": row_id,
         "color": anchor["color"] if anchor else TASK_COLORS[order % len(TASK_COLORS)],
+        "owner": anchor["owner"] if anchor else "",
+        "group_name": anchor["group_name"] if anchor else "",
+        "tags": anchor["tags"] if anchor else [],
       }])
       db.execute("UPDATE projects SET updated_at=? WHERE id=?", (now_iso(), project_id))
       return self._project(db, project_id)

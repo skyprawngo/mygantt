@@ -1,4 +1,5 @@
 [
+{"textID":"timeline.search_filter_active","KR":"검색 필터 적용 중","US":"Search filter active","JP":"検索フィルター適用中"},
 {"textID": "timeline.hide_chart_tools", "KR": "조정 도구·설명 숨기기", "US": "Hide chart controls and legend", "JP": "調整ツール・説明を隠す"},
 {"textID": "timeline.show_chart_tools", "KR": "조정 도구·설명 표시", "US": "Show chart controls and legend", "JP": "調整ツール・説明を表示"},
 

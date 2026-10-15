@@ -94,3 +94,27 @@ test('actual labels stay inside the rectangular portion at every display scale',
   }
  }
 });
+
+test('inspector follows visual compaction, filters, order and project boundaries',()=>{
+ const a=task('a','01','03',{owner:'Vendor',sort_order:1}),b=task('b','07','09',{owner:'Vendor',sort_order:2}),cTask=task('c','10','11',{owner:'Vendor',gantt_row_id:'c',sort_order:3}),other=task('other','12','13',{owner:'Other',gantt_row_id:'other'});
+ const p={id:'p',tasks:[a,b,cTask,other]},q={id:'q',tasks:[task('foreign','01','03',{owner:'Vendor'})]};
+ let visible=[p,q];
+ const h={state:{layout:'gantt',compactBy:'owner'},filteredProjects:()=>visible,groupedTaskRows:c.groupedTaskRows};vm.createContext(h);
+ vm.runInContext(source.slice(source.indexOf('function inspectorRowMembers('),source.indexOf('function renderRowTaskSections(')),h);
+ const ids=()=>Array.from(h.inspectorRowMembers(p,b),t=>t.id);
+ assert.deepEqual(ids(),['a','b','c']);
+ h.state.compactBy='';assert.deepEqual(ids(),['a','b']);
+ h.state.compactBy='owner';visible=[{...p,tasks:[cTask,b]},q];assert.deepEqual(ids(),['c','b']);
+ visible=[q];assert.deepEqual(ids(),['b']);
+ h.state.layout='list';visible=[p,q];assert.deepEqual(ids(),['a','b']);
+});
+
+test('same-row optimistic creation inherits compact categories but not another physical row',async()=>{
+ const anchor=task('b','07','09',{gantt_row_id:'physical-b',owner:'Vendor',group_name:'Assembly',tags:['urgent']}),other=task('a','01','03',{gantt_row_id:'physical-a',owner:'Vendor'});
+ let view,resolve;
+ const journal=create({initial:{templates:[],projects:[{id:'p',tasks:[other,anchor]}]},publish:v=>view=v,send:()=>new Promise(done=>resolve=done)});
+ const pending=journal.mutate('/api/projects/p/tasks',{method:'POST',body:JSON.stringify({name:anchor.name,planned_start:anchor.planned_start,planned_finish:anchor.planned_finish,same_row_as:'b'})});
+ const added=view.projects[0].tasks.at(-1);
+ assert.equal(added.gantt_row_id,'physical-b');assert.equal(added.owner,'Vendor');assert.equal(added.group_name,'Assembly');assert.deepEqual(added.tags,['urgent']);assert.equal(view.projects[0].tasks[0].gantt_row_id,'physical-a');
+ await new Promise(done=>setImmediate(done));resolve(view.projects[0]);await pending;
+});

@@ -136,7 +136,7 @@
         const anchor = target.tasks.find(task=>task.id===f.same_row_as);
         const gantt_row_id = anchor ? anchor.gantt_row_id || anchor.id : '';
         if (anchor) anchor.gantt_row_id = gantt_row_id;
-        target.tasks.push(blankTask(tempId,target,{...f,gantt_row_id,...(anchor ? {color:anchor.color} : {})}));
+        target.tasks.push(blankTask(tempId,target,{...f,gantt_row_id,...(anchor ? {color:anchor.color,owner:anchor.owner || '',group_name:anchor.group_name || '',tags:[...(anchor.tags || [])]} : {})}));
       }
     } else if (kind === 'projects' && project) {
       if(method === 'DELETE') {

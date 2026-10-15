@@ -1120,3 +1120,23 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
 .chart-tools-hidden .schedule-card>.toolbar,
 .chart-tools-hidden .schedule-card>.schedule-legend{display:none!important}
 .chart-tools-hidden .chart-tools-toggle svg{transform:rotate(180deg)}
+
+/* Expanding search keeps its filter value when focus leaves the control. */
+#timeline-view .toolbar #mobile-search-button{display:none}
+#timeline-view .toolbar .timeline-search{display:flex;align-items:center;flex:0 1 auto;width:32px;min-width:32px;max-width:100%;height:32px;border:1px solid var(--line);border-radius:7px;background:#fff;overflow:hidden;transition:width .2s ease}
+#timeline-view .toolbar .timeline-search.expanded{width:240px;border-color:var(--blue)}
+.timeline-search button{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 30px;width:30px;height:30px;padding:0;border:0;background:transparent;color:var(--muted)}
+.timeline-search button:hover{background:#edf0ff;color:var(--blue)}
+.timeline-search button:focus-visible{outline:2px solid var(--blue);outline-offset:-3px}
+.timeline-search input{flex:1;min-width:0;width:0;border:0;outline:0;background:transparent;color:var(--ink);font-size:calc(11px * var(--text-scale,1))}
+.timeline-search input::-webkit-search-cancel-button{-webkit-appearance:none}
+.timeline-search [hidden]{display:none}
+.timeline-search.search-active{background:#edf0ff!important;border-color:var(--blue)!important}
+.search-active-dot{display:none;position:absolute;right:4px;top:4px;width:6px;height:6px;background:var(--blue);border-radius:50%}
+.search-active .search-active-dot{display:block}
+.search-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@media(max-width:760px){.timeline-search input{font-size:16px}}
+@media(prefers-reduced-motion:reduce){#timeline-view .toolbar .timeline-search{transition:none}}
+
+/* Reserve the floating chart-tools control even at mobile breakpoints. */
+#timeline-view .schedule-card>.toolbar{padding-right:52px}
