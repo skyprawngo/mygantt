@@ -1,4 +1,12 @@
 [
+{"textID": "timeline.hide_chart_tools", "KR": "조정 도구·설명 숨기기", "US": "Hide chart controls and legend", "JP": "調整ツール・説明を隠す"},
+{"textID": "timeline.show_chart_tools", "KR": "조정 도구·설명 표시", "US": "Show chart controls and legend", "JP": "調整ツール・説明を表示"},
+
+{"textID": "settings.display", "KR": "화면 표시", "US": "Display", "JP": "画面表示"},
+{"textID": "settings.text_scale", "KR": "전체 텍스트 크기", "US": "Global text size", "JP": "全体の文字サイズ"},
+{"textID": "settings.text_scale_description", "KR": "전체 텍스트와 함께 간트 바·행, 날짜 셀, 속성 패널의 크기를 조절합니다. 이 브라우저에 자동 저장됩니다.", "US": "Scale all text together with Gantt bars and rows, date cells, and property panels. Saved automatically in this browser.", "JP": "全体の文字とともに、ガントバーと行、日付セル、プロパティパネルのサイズを調整します。このブラウザーに自動保存されます。"},
+{"textID": "settings.text_scale_reset", "KR": "기본 크기 (100%)", "US": "Default size (100%)", "JP": "標準サイズ (100%)"},
+
 {"textID":"timeline.compact","KR":"축약","US":"Compact rows","JP":"行の集約"},
 {"textID":"timeline.compact_none","KR":"축약 안 함","US":"No grouping","JP":"集約なし"},
 {"textID":"task.create_same","KR":"동일 작업 생성","US":"Create same task","JP":"同じ作業を作成"},

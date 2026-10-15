@@ -57,3 +57,40 @@ test('tag compaction compares complete tag sets regardless of ordering',()=>{
  const rows=c.groupedTaskRows([task('a','01','03',{tags:['긴급','외주'],gantt_row_id:''}),task('b','05','08',{tags:['외주','긴급'],gantt_row_id:''}),task('c','09','11',{tags:['외주'],gantt_row_id:''})],'tags');
  assert.equal(rows.length,2);assert.equal(rows[0].tasks.length,2);assert.equal(rows[1].tasks.length,1);
 });
+
+
+test('display scale preserves lane separation for planned and actual rows',()=>{
+ const tasks=[task('a','01','03',{actual_start:'2026-11-01',actual_finish:'2026-11-08'}),task('b','07','09')];
+ for(const scale of [0.8,1,1.5,2]) {
+  const rows=c.groupedTaskRows(tasks,'',scale);
+  assert.equal(rows[0].height,108*scale);
+  assert.equal(rows[0].offsets.get('b'),54*scale);
+  // Planned (22) and actual (20) tiers remain contiguous and inside their row.
+  assert.equal((7+22)*scale,29*scale);
+  assert.ok((29+20)*scale < rows[0].offsets.get('b'));
+ }
+});
+
+test('open actual bar clipping uses the rendered height at enlarged sizes',()=>{
+ for(const height of [16,20,30,40]) {
+  const right=c.actualOpenStyle({openSide:'right'},200,height);
+  const left=c.actualOpenStyle({openSide:'left'},200,height);
+  assert.ok(right.includes(` ${height} H 0 Z`));
+  assert.ok(left.includes(`V ${height} H`));
+ }
+});
+
+test('actual labels stay inside the rectangular portion at every display scale',()=>{
+ for(const scale of [0.8,1,1.5,2]) {
+  for(const baseWidth of [24,46,168]) {
+   const width=baseWidth*scale,tail=Math.min(96,width*.65);
+   for(const side of ['left','right']) {
+    const safe=c.actualLabelBounds(width,side);
+    assert.ok(safe.width>0);
+    assert.equal(safe.left,side==='left'?tail:0);
+    assert.equal(safe.width,width-tail);
+    assert.ok(safe.left+safe.width<=width+1e-8);
+   }
+  }
+ }
+});

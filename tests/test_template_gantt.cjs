@@ -100,7 +100,7 @@ test('template inspector shares schedule date grid and disables execution-only f
 });
 
 test('template scroll range starts at 45 days and grows by 15 only at the right edge',()=>{
- const chart={scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:'',style:{setProperty(){}},classList:{toggle(){}}};
+ const chart={dataset:{},scrollLeft:0,scrollTop:0,clientWidth:500,innerHTML:'',style:{setProperty(){}},classList:{toggle(){}}};
  const c={labelWidthMotion:null,mobileLayout:()=>false,fitTemplateDayLabels(){},state:{draft:{name:'Template',tasks:[]}},projectColors:['#123456'],taskColors:['#123456'],esc:v=>v,colorPalette:()=>({base:'#123456'}),paletteStyle:()=>'',ganttAddRow:()=>'',addTemplateTask(){},renderTemplateConnections(){},templateDayLabel:d=>String(d),templateSchedule:()=>[],$:s=>s==='#template-gantt'?chart:{style:{},addEventListener(){},textContent:''}};
  Object.defineProperty(chart,'scrollWidth',{get:()=>254+c.state.templateVisibleDays*46});
  withI18n(vm.createContext(c));vm.runInContext(block('function templateWeekendMarkup(', 'function renderTemplateConnections('),c);
@@ -111,6 +111,9 @@ test('template scroll range starts at 45 days and grows by 15 only at the right 
  chart.scrollLeft=chart.scrollWidth-chart.clientWidth;chart.onscroll();assert.equal(c.state.templateVisibleDays,75);
  chart.scrollLeft=0;chart.onscroll();assert.equal(c.state.templateVisibleDays,75);
  c.state.draft={name:'Other',tasks:[]};c.renderTemplateGantt();assert.equal(c.state.templateVisibleDays,45);
+ chart.scrollLeft=100;chart.scrollTop=36;c.state.textScale=200;c.renderTemplateGantt();
+ assert.equal(chart.scrollLeft,200);assert.equal(chart.scrollTop,72);
+ assert.match(chart.innerHTML,/height:152px/);
 });
 
 test('template day headers progressively remove D and plus to fit their own cells',()=>{

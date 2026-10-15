@@ -4,10 +4,22 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 let savedUi = {};
 try { savedUi = JSON.parse(localStorage.getItem('mygantt-ui') || '{}'); } catch { savedUi = {}; }
+function restoreTextScale(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(80, Math.min(200, Math.round(value / 10) * 10)) : 100;
+}
+function applyTextScale(value) {
+  const scale = restoreTextScale(value);
+  document.documentElement.style.setProperty('--text-scale', scale / 100);
+  document.documentElement.toggleAttribute('data-large-text', scale > 100);
+  $('#text-scale-slider').value = scale;
+  $('#text-scale-slider').setAttribute('aria-valuetext', `${scale}%`);
+  $('#text-scale-value').textContent = `${scale}%`;
+  return scale;
+}
 function restoreZoom(value, minimum) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(minimum, Math.min(62, value)) : 46;
 }
-const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', compactBy: ['owner','group','tags'].includes(savedUi.compactBy) ? savedUi.compactBy : '', zoom: restoreZoom(savedUi.zoom, 24), templateZoom: restoreZoom(savedUi.templateZoom, 12), filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
+const state = { data: { templates: [], projects: [] }, view: 'timeline', layout: 'gantt', textScale: restoreTextScale(savedUi.textScale), chartToolsHidden: savedUi.chartToolsHidden === true, compactBy: ['owner','group','tags'].includes(savedUi.compactBy) ? savedUi.compactBy : '', zoom: restoreZoom(savedUi.zoom, 24), templateZoom: restoreZoom(savedUi.templateZoom, 12), filterProject: null, selectedTemplateId: null, draft: null, preview: null, selection: savedUi.selection || null, inspectorOpen: savedUi.inspectorOpen || 'project', collapsedProjects: new Set(savedUi.collapsedProjects || []), hiddenProjects: new Set(savedUi.hiddenProjects || []), cascadeDependents: savedUi.cascadeDependents ?? false, drag: null, holidays: {} };
 const statusNames = { get todo() { return t("status.planned"); }, get doing() { return t("status.in_progress"); }, get blocked() { return t("status.stopped"); }, get done() { return t("status.complete"); } };
 const durationNames = { get days() { return t("common.days"); }, get weeks() { return t("common.weeks"); } };
 const projectColors = ['#5872d9', '#b96749', '#27897f', '#a45ca8', '#b48527', '#3978a8', '#c45670', '#5a8d45', '#765bb2', '#368a9b', '#c06f2d', '#657386'];
@@ -78,7 +90,7 @@ function updateCurrentTimeMarker(now = new Date()) {
   const offset=dayDiff(timelineCalendarRange().start,parts.date);
   chart.dataset.todayDate=parts.date;
   chart.dataset.todayOffset=offset;
-  const x=(offset+fraction)*state.zoom;
+  const x=(offset+fraction)*state.zoom*((state.textScale || 100)/100);
   $$('.today-line',chart).forEach(line=>{line.style.left=`${x}px`;});
   $$('.date-header',chart).forEach(cell=>{
     const today=cell.dataset.date===parts.date;
@@ -220,7 +232,20 @@ async function loadState() {
   renderAll();
 }
 function persistUi() {
-  localStorage.setItem('mygantt-ui', JSON.stringify({ compactBy:state.compactBy, zoom: state.zoom, templateZoom: state.templateZoom, selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
+  localStorage.setItem('mygantt-ui', JSON.stringify({ chartToolsHidden:state.chartToolsHidden, textScale:state.textScale, compactBy:state.compactBy, zoom: state.zoom, templateZoom: state.templateZoom, selection: state.selection, inspectorOpen: state.inspectorOpen, collapsedProjects: [...state.collapsedProjects], hiddenProjects: [...(state.hiddenProjects || [])], cascadeDependents: state.cascadeDependents }));
+}
+function chartToolsButton() {
+  const label = t(state.chartToolsHidden ? 'timeline.show_chart_tools' : 'timeline.hide_chart_tools');
+  return `<button type="button" class="chart-tools-toggle" data-toggle-chart-tools aria-expanded="${!state.chartToolsHidden}" aria-label="${label}" title="${label}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 14 6-6 6 6"/></svg></button>`;
+}
+function syncChartTools() {
+  document.body.classList.toggle('chart-tools-hidden', Boolean(state.chartToolsHidden));
+  const label = t(state.chartToolsHidden ? 'timeline.show_chart_tools' : 'timeline.hide_chart_tools');
+  $$('[data-toggle-chart-tools]').forEach(button => {
+    button.setAttribute('aria-expanded', String(!state.chartToolsHidden));
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  });
 }
 function setCascadeSetting(value) {
   state.cascadeDependents = Boolean(value);
@@ -470,7 +495,7 @@ function calendarShadingMarkup(dates, pxPerDay) {
   return dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
 }
 function extendTimelineCalendar(oldStart, oldEnd) {
-  const chart = $('#gantt'), range = timelineCalendarRange(), px = state.zoom;
+  const chart = $('#gantt'), range = timelineCalendarRange(), px = state.zoom*((state.textScale || 100)/100);
   const prepend = dayDiff(range.start,oldStart), append = dayDiff(oldEnd,range.end);
   const width = (dayDiff(range.start,range.end)+1)*px, shift = prepend*px;
   const addedStart = prepend ? range.start : (() => { const d=dateFrom(oldEnd); d.setDate(d.getDate()+1); return dateKey(d); })();
@@ -502,7 +527,7 @@ function bindTimelineCalendarScroll() {
     if (direction < 0) range.start = calendarMonthOffset(range.start,-1);
     else range.end = calendarMonthOffset(range.end,1);
     extendTimelineCalendar(oldStart,oldEnd);
-    wrap.scrollLeft = left + dayDiff(range.start,oldStart)*state.zoom;
+    wrap.scrollLeft = left + dayDiff(range.start,oldStart)*state.zoom*((state.textScale || 100)/100);
     wrap.scrollTop = top;
     bindTimelineCalendarScroll();
     refreshCalendarHolidays();
@@ -540,15 +565,19 @@ function actualTaskRange(task) {
     label: t("timeline.actual"),
   };
 }
-function actualOpenStyle(range, width) {
+function actualOpenStyle(range, width, height = 20) {
   if (!range?.openSide) return '';
-  const c = Math.min(96, width * .65), h = 20;
+  const c = Math.min(96, width * .65), h = height;
   const path = range.openSide === 'right'
     ? `M 0 0 H ${width} C ${width-c*.45} 0 ${width-c*.55} ${h} ${width-c} ${h} H 0 Z`
     : `M 0 0 H ${width} V ${h} H ${c} C ${c*.55} ${h} ${c*.45} 0 0 0 Z`;
   return `--actual-open-side:${range.openSide};clip-path:path('${path}');`;
 }
-function taskRowHeight(task) { return actualTaskRange(task) ? 54 : 36; }
+function actualLabelBounds(width, side) {
+  const tail = Math.min(96, width * .65);
+  return {left:side === 'left' ? tail : 0, width:Math.max(0, width - tail)};
+}
+function taskRowHeight(task, scale = 1) { return (actualTaskRange(task) ? 54 : 36) * scale; }
 // A filled neck grows from the predecessor's facing edge into the successor.
 // End faces meet square edges; surface joins tuck under the bar's solid fill.
 function dependencyRibbon(from, to, outline = {}) {
@@ -834,18 +863,18 @@ function unifiedTaskPaint(task, plannedBar, actualBar, origin, index, attachment
 }
 
 // Reconstruct a folded task in its expanded coordinate space without rendering it.
-function foldedTaskGeometry(project, task, actual, bounds, above, reference, px, origin) {
-  const rows = groupedTaskRows(project.tasks);
-  const total = 38 + rows.reduce((sum,row)=>sum + row.height,0);
+function foldedTaskGeometry(project, task, actual, bounds, above, reference, px, origin, scale = 1) {
+  const rows = groupedTaskRows(project.tasks, '', scale);
+  const total = 38 * scale + rows.reduce((sum,row)=>sum + row.height,0);
   const top = above ? bounds.bottom-total : bounds.top;
   const index = rows.findIndex(row=>row.offsets.has(task.id));
-  const rowTop = top + 38 + rows.slice(0,index).reduce((sum,row)=>sum + row.height,0) + rows[index].offsets.get(task.id);
+  const rowTop = top + 38 * scale + rows.slice(0,index).reduce((sum,row)=>sum + row.height,0) + rows[index].offsets.get(task.id);
   const recorded = actual ? actualTaskRange(task) : null;
   const start = recorded ? recorded.start : task.planned_start;
   const finish = recorded ? recorded.finish : task.planned_finish;
   const left = reference.left+dayDiff(reference.date,start)*px;
-  const width = Math.max(px,(dayDiff(start,finish)+1)*px), height = actual?20:22;
-  const y = origin.top+rowTop+(actual?29:7);
+  const width = Math.max(px,(dayDiff(start,finish)+1)*px), height = (actual?20:22)*scale;
+  const y = origin.top+rowTop+(actual?29:7)*scale;
   return {rect:{left,right:left+width,top:y,bottom:y+height,width,height},bounds:{top,bottom:top+total}};
 }
 function projectBoundaryMarker(project,x,y,geometry,ownerId='') {
@@ -880,7 +909,7 @@ function foldedDependencyMarkup(projects,bars,actualBars,extents,origin,bodyWidt
     const referenceTask=sourceVisible?predecessor:task;
     const reference={left:referenceBar.getBoundingClientRect().left,date:referenceTask.planned_start};
     const folded=foldedTaskGeometry(hiddenProject,sourceVisible?task:predecessor,!sourceVisible&&actual,
-      sourceVisible?targetBounds:sourceBounds,sourceVisible?!below:below,reference,state.zoom,origin);
+      sourceVisible?targetBounds:sourceBounds,sourceVisible?!below:below,reference,state.zoom*((state.textScale || 100)/100),origin,(state.textScale || 100)/100);
     const source=sourceVisible?visibleRect:folded.rect, target=targetVisible?visibleRect:folded.rect;
     if (sourceVisible) targetBounds=folded.bounds; else sourceBounds=folded.bounds;
     const flare=Math.min(source.height,target.height)*1.5;
@@ -1125,14 +1154,22 @@ function renderDependencyLinks(options = null) {
   }).join('');
   body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="${t("timeline.predecessor_and_successor_connections")}"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}${foldedMarkup}</svg>${hiddenMarkup || boundaryMarkup ? `<svg class="dependency-hidden-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${hiddenMarkup}${boundaryMarkup}</svg>` : ''}${selectionMarkup ? `<svg class="task-selection-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${selectionMarkup}</svg>` : ''}`);
   connectedBars.forEach((bar) => bar.classList.add('svg-backed'));
-  if (hiddenMarkup) {
+  if (hiddenMarkup || [...actualBars.values()].some(bar => bar.classList.contains('partial-actual'))) {
     // Read all styles before inserting overlays: no per-label layout flushes.
-    const labels=[...bars.values(),...actualBars.values()].filter(bar=>crossingTaskIds.has(bar.dataset.taskSelect)).flatMap(bar=>{
+    const labels=[...bars.values(),...actualBars.values()].filter(bar=>crossingTaskIds.has(bar.dataset.taskSelect) || bar.classList.contains('partial-actual')).flatMap(bar=>{
       const text=$('.bar-text',bar);if (!text) return [];
       const style=getComputedStyle(bar),textStyle=getComputedStyle(text);
       const properties={};
       for (const key of ['left','top','width','height','paddingLeft','paddingRight','color','fontSize','borderRadius']) properties[key]=style[key];
-      return [{bar,text,properties,marginLeft:textStyle.marginLeft,marginRight:textStyle.marginRight}];
+      // Paint labels outside the SVG/HTML silhouette clipping. Reserve the whole
+      // curved end so sticky text never slides into the narrowing actual tail.
+      const side = style.getPropertyValue('--actual-open-side').trim();
+      if (side === 'left' || side === 'right') {
+        const bounds = actualLabelBounds(parseFloat(properties.width), side);
+        properties.left = `${parseFloat(properties.left) + bounds.left}px`;
+        properties.width = `${bounds.width}px`;
+      }
+      return [{bar,text,properties,marginLeft:side?'0px':textStyle.marginLeft,marginRight:side?'0px':textStyle.marginRight}];
     });
     for (const {bar,text,properties,marginLeft,marginRight} of labels) {
       const label=document.createElement('div');label.className='bar-label-overlay';label.setAttribute('aria-hidden','true');
@@ -1258,7 +1295,7 @@ function toggleGanttLabels(chart) {
   const expanded=chart.classList.contains('labels-collapsed');
   const previous=parseFloat(chart.style.getPropertyValue('--label-width'));
   if (!expanded) chart.dataset.expandedLabelWidth=String(previous);
-  const width=expanded?Number(chart.dataset.expandedLabelWidth || 254):36;
+  const width=expanded?Number(chart.dataset.expandedLabelWidth || (254 + 64 * ((state.textScale || 100)/100 - 1))):36;
   const delta=width-previous;
   if(mobileLayout()) state.mobileLabelsExpanded=expanded; else state.desktopLabelsExpanded=expanded;
   chart.classList.toggle('labels-collapsed',!expanded);
@@ -1296,7 +1333,7 @@ function taskRelationDetails(project, task) {
   const dates = task.gantt_row_id ? [task.planned_start, task.planned_finish].filter(Boolean).join(' – ') : '';
   return {relationTaskName:name, relationTaskDates:dates, relationTaskLabel:dates ? `${name} · ${dates}` : name};
 }
-function groupedTaskRows(tasks, compactBy = '') {
+function groupedTaskRows(tasks, compactBy = '', scale = 1) {
   const tagsFor = task => [...new Set((task.tags || []).map(tag=>String(tag).normalize('NFKC').trim()).filter(Boolean))].sort();
   const labelFor = task => {
     if (compactBy === 'tags') return tagsFor(task).join(', ');
@@ -1310,7 +1347,7 @@ function groupedTaskRows(tasks, compactBy = '') {
     groups.get(key).push(task);
   }
   return [...groups.values()].map(members => {
-    const tierHeight = Math.max(...members.map(taskRowHeight));
+    const tierHeight = Math.max(...members.map(task => taskRowHeight(task, scale)));
     const ends = [], offsets = new Map();
     for (const task of [...members].sort((a,b)=>(a.planned_start || '').localeCompare(b.planned_start || ''))) {
       const actual = actualTaskRange(task);
@@ -1333,9 +1370,9 @@ function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
   const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
   const actualWidth = actual ? Math.max(pxPerDay, (dayDiff(actual.start, actual.finish) + 1) * pxPerDay) : 0;
   const actualTitle = actual ? `${displayName} · ${actual.label} · ${fmtDate(task.actual_start || task.actual_finish, true)}${actual.partial ? '' : `–${fmtDate(actual.finish, true)}`}` : '';
-  const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${29 + offset}px;left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth)}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(displayName)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
+  const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${29 * ((state.textScale || 100)/100) + offset}px;left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth, 20*((state.textScale || 100)/100))}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(displayName)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
   const status = task.status;
-  return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
+  return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 * ((state.textScale || 100)/100) + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
 }
 
 function monthCalendar(year, firstMonth = 0) {
@@ -1450,7 +1487,7 @@ function renderMonthTimeline({preserveInspector = false} = {}) {
   $('#empty-state').classList.add('hidden');
   $('#range-label').textContent=dateRangeLabel(calendar.start,calendar.end);
   chart.classList.remove('labels-collapsed');
-  chart.style.setProperty('--label-width',mobileLayout()?'120px':'200px');
+  chart.style.setProperty('--label-width',`${(mobileLayout()?120:200)*(1 + .25*((state.textScale || 100)/100 - 1))}px`);
   chart.dataset.todayDate=browserClockParts().date;
   // Filters select projects; their full schedules define the summary bounds.
   const projects=filteredProjects().filter(project=>!project.is_unassigned).map(project=>state.data.projects.find(item=>item.id===project.id));
@@ -1474,7 +1511,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
   $('#gantt').style.removeProperty('--label-content-opacity');
   if (typeof projectMotion !== 'undefined') projectMotion.observe();
   const calendarWrap = $('#gantt-wrap');
-  const calendarScroll = {left:calendarWrap.scrollLeft,top:calendarWrap.scrollTop};
+  const renderedScale = (state.textScale || 100)/100;
+  const scaleRatio = renderedScale/(Number($('#gantt').dataset.renderedScale) || renderedScale);
+  const calendarScroll = {left:calendarWrap.scrollLeft*scaleRatio,top:calendarWrap.scrollTop*scaleRatio};
+  $('#gantt').dataset.renderedScale = renderedScale;
   $('#gantt').classList.toggle('month-gantt', state.layout === 'month');
   if (state.layout === 'month') { renderMonthTimeline({preserveInspector}); return; }
   const visibleProjects = filteredProjects();
@@ -1486,9 +1526,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
   const today = browserClockParts().date;
   const days = dayDiff(start,end) + 1;
   $('#range-label').textContent = dateRangeLabel(start,end);
-  const pxPerDay = state.zoom;
+  const pxPerDay = state.zoom*((state.textScale || 100)/100);
   const labelsExpanded = mobileLayout() ? Boolean(state.mobileLabelsExpanded) : state.desktopLabelsExpanded !== false;
-  const labelWidth = labelsExpanded ? 254 : 36;
+  const scale = (state.textScale || 100)/100;
+  const labelWidth = labelsExpanded ? (254 + 64 * (scale - 1)) : 36;
   $('#gantt').style.setProperty('--label-width', `${labelWidth}px`);
   $('#gantt').classList.toggle('labels-collapsed', !labelsExpanded);
   const timelineWidth = Math.max(720, days * pxPerDay);
@@ -1519,10 +1560,10 @@ function renderTimeline({ preserveInspector = false } = {}) {
   for (const projectGroup of groupedProjects) {
     if (groupMode && projectGroup.name) {
       rows += `<div class="gantt-row group-header-row"><div class="gantt-left"><span class="group-header-label"><i></i>${esc(projectGroup.name)}<small>${projectGroup.projects.length}${t("timeline.projects")}</small></span></div><div class="gantt-right" style="width:${timelineWidth}px"></div></div>`;
-      bodyHeight += 30;
+      bodyHeight += 30 * scale;
     }
     for (const project of projectGroup.projects) {
-    const taskRows = groupedTaskRows(project.tasks, state.compactBy);
+    const taskRows = groupedTaskRows(project.tasks, state.compactBy, scale);
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
@@ -1531,7 +1572,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
     const projectBarWidth = Math.max(pxPerDay, (dayDiff(projectStart || start, projectFinish || projectStart || start) + 1) * pxPerDay);
     const isProjectSelected = state.selection?.type === 'project' && state.selection.id === project.id;
     const projectTop = bodyHeight;
-    const projectHeight = 38 + (collapsed ? 0 : taskRows.reduce((height, row) => height + row.height, 0));
+    const projectHeight = 38 * scale + (collapsed ? 0 : taskRows.reduce((height, row) => height + row.height, 0));
     if (!collapsed) projectBands.push({ project, top: projectTop, height: projectHeight, left: labelWidth + projectX, width: projectBarWidth });
     const summaryClass = collapsed ? '' : ' expanded-project-label';
       rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
@@ -1540,7 +1581,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
       </div>
       <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="${t("timeline.project_duration")} ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><i style="width:${project.progress}%"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} · ${project.progress}%</span></button></div>
     </div>`;
-    bodyHeight += 38;
+    bodyHeight += 38 * scale;
     }
     if (collapsed) continue;
     for (const row of taskRows) {
@@ -1560,7 +1601,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   }
   rows += ganttAddRow('add-empty-project', timelineWidth, t("project.add_row"), true);
   rows += ganttAddRow('add-project-task', timelineWidth, t("timeline.add_single_task"), true);
-  bodyHeight += 76;
+  bodyHeight += 76 * scale;
   const headerDates = calendarHeaderMarkup(dates,pxPerDay);
   const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" data-project-band="${esc(band.project.id)}" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
   $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${`<button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")} ${labelsExpanded ? t("timeline.collapse_2") : t("timeline.expand_2")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button>`}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
@@ -2323,15 +2364,18 @@ function renderTemplateGantt() {
   const requiredDays = Math.max(45, ...rows.map(row => row.end));
   state.templateVisibleDays = Math.max(state.templateVisibleDays, 45 + Math.ceil((requiredDays - 45) / 15) * 15);
   const labelsExpanded = mobileLayout() ? Boolean(state.mobileLabelsExpanded) : state.desktopLabelsExpanded !== false;
-  const px = state.templateZoom || 46, label = labelsExpanded ? 254 : 36, days = state.templateVisibleDays;
+  const scale = (state.textScale || 100)/100;
+  const px = (state.templateZoom || 46)*scale, label = labelsExpanded ? (254 + 64 * (scale - 1)) : 36, days = state.templateVisibleDays;
   chart.style.setProperty('--label-width', `${label}px`);
   chart.classList.toggle('labels-collapsed', !labelsExpanded);
   const weekendMarkup=templateWeekendMarkup(days,px,state.draft.calendar_type);
   const projectStart = rows.length ? Math.min(...rows.map(r => r.start)) : 1;
   const projectEnd = Math.max(1, ...rows.map(r => r.end));
   const projectRow = `<div class="gantt-row project-row ${state.templateTaskKey === '__project__' ? 'selected-row' : ''}"><div class="gantt-left project-left"><button class="project-select" data-template-project aria-pressed="${state.templateTaskKey === '__project__'}"><i class="group-dot" style="background:${colorPalette(state.draft.project_color || projectColors[0]).base}"></i><span class="project-name">${esc(state.draft.name || t("template.new_project"))}</span><span class="project-meta">${rows.length}${t("template.tasks")}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px">${weekendMarkup}<button class="project-summary-bar" data-template-project style="left:${(projectStart-1)*px}px;width:${(projectEnd-projectStart+1)*px}px;${paletteStyle(state.draft.project_color || projectColors[0], 'bar')}"><span>${templateDayLabel(projectStart)}–${templateDayLabel(projectEnd)}</span></button></div></div>`;
-  const scroll = chart.scrollLeft, scrollTop = chart.scrollTop;
-  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left gantt-head-left"><button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button></div><div class="gantt-right date-axis">${weekendMarkup}${Array.from({length:days},(_,i)=>`<div class="template-day" data-day="${i+1}" title="${esc(templateDayLabel(i+1))}" aria-label="${esc(templateDayLabel(i+1))}"><span>${templateDayLabel(i+1)}</span></div>`).join('')}</div></div><div class="gantt-body" style="height:${76+rows.length*36}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" draggable="true" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px">${weekendMarkup}<button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
+  const scaleRatio = scale/(Number(chart.dataset.renderedScale) || scale);
+  const scroll = chart.scrollLeft*scaleRatio, scrollTop = chart.scrollTop*scaleRatio;
+  chart.dataset.renderedScale = scale;
+  chart.innerHTML = `<div class="template-chart-content" style="${paletteStyle(state.draft.project_color || projectColors[0], 'project')};width:${label+days*px}px;--day-width:${px}px"><div class="gantt-head"><div class="gantt-left gantt-head-left"><button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button></div><div class="gantt-right date-axis">${weekendMarkup}${Array.from({length:days},(_,i)=>`<div class="template-day" data-day="${i+1}" title="${esc(templateDayLabel(i+1))}" aria-label="${esc(templateDayLabel(i+1))}"><span>${templateDayLabel(i+1)}</span></div>`).join('')}</div></div><div class="gantt-body" style="height:${(76+rows.length*36)*scale}px">${projectRow}${rows.map(({task,start,end},index)=>`<div class="gantt-row task-row ${task.key===state.templateTaskKey?'selected-row':''}"><div class="gantt-left task-left"><button class="task-label" draggable="true" data-template-select="${esc(task.key)}"><span class="task-state task-order" style="${paletteStyle(task.color || taskColors[0], 'task')}" aria-label="${t("timeline.default_order")} ${index+1}">${index+1}</span><span class="task-name">${esc(task.name)}</span></button></div><div class="gantt-right project-timeline" style="width:${days*px}px">${weekendMarkup}<button class="task-bar template-bar ${task.key===state.templateTaskKey?'template-selected':''}" data-template-select="${esc(task.key)}" data-task-select="${esc(task.key)}" style="left:${(start-1)*px}px;width:${(end-start+1)*px}px;${paletteStyle(task.color || taskColors[0], 'bar')}" title="${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}"><span class="resize-handle resize-start" data-template-edge="start"></span><span class="bar-text">${esc(task.name)} · ${templateDayLabel(start)}–${templateDayLabel(end)}</span><span class="resize-handle resize-end" data-template-edge="end"></span></button></div></div>`).join('')}${ganttAddRow('add-template-task',days*px)}</div></div>`;
   const content = $('.template-chart-content', chart), body = $('.gantt-body', chart);
   let width = label;
   if (mobileLayout() && labelsExpanded) {
@@ -2394,12 +2438,12 @@ function attachTemplateDrag() {
   });
   chart.addEventListener('pointermove', event => {
     if (!drag || drag.id!==event.pointerId) return;
-    const delta=Math.round((event.clientX-drag.x)/(state.templateZoom || 46));
+    const delta=Math.round((event.clientX-drag.x)/((state.templateZoom || 46)*((state.textScale || 100)/100)));
     const start=drag.edge==='end'?drag.start:Math.max(1,Math.min(10000,drag.start+delta));
     const end=drag.edge==='start'?drag.end:drag.edge==='end'?Math.max(start,drag.end+delta):start+drag.end-drag.start;
     if (start>end) return;
     drag.preview={start,end}; drag.delta=delta;
-    drag.bar.style.left=`${(start-1)*(state.templateZoom || 46)}px`; drag.bar.style.width=`${(end-start+1)*(state.templateZoom || 46)}px`;
+    drag.bar.style.left=`${(start-1)*(state.templateZoom || 46)*((state.textScale || 100)/100)}px`; drag.bar.style.width=`${(end-start+1)*(state.templateZoom || 46)*((state.textScale || 100)/100)}px`;
     $('.bar-text',drag.bar).textContent=`${drag.task.name} · ${templateDayLabel(start)}–${templateDayLabel(end)}`;
     renderTemplateConnections();
   });
@@ -2496,7 +2540,7 @@ function renderTemplateEditorContent() {
   if (!projectSelected) state.templateTaskKey = selectedTask.key;
   $('#template-editor').innerHTML = `
     <div class="timeline-layout">
-      <div class="timeline-main"><div class="schedule-card">
+      <div class="timeline-main"><div class="schedule-card">${chartToolsButton()}
         <div class="toolbar"><div class="toolbar-left"><input id="template-title" class="template-chart-title text-input" aria-label="${t("template.template_title")}" value="${esc(draft.name)}" placeholder="${t("template.template_title")}"></div><div class="toolbar-right"><label class="cascade-toggle"><input id="template-cascade-setting" data-cascade-dependents type="checkbox" ${state.cascadeDependents ? 'checked' : ''}><span class="cascade-label-full">${t("template.move_successors")}</span><span class="cascade-label-short">${t("template.successors")}</span></label><label class="zoom-slider-control">${t("template.zoom")} <input id="template-zoom" type="range" min="12" max="62" value="${state.templateZoom || 46}" aria-label="${t("template.template_zoom")}"><output>${Math.round((state.templateZoom || 46)/46*100)}%</output></label><span class="info-tip mobile-only mobile-chart-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_chart_legend")}" aria-describedby="mobile-template-tooltip">i</button><span id="mobile-template-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg>${t("timeline.predecessor_successor_legend")}</b><br>${t("template.connections_lead_from_predecessors_to_successors")}<br><br>${t("template.d_is_the_project_s_first")}</span></span></div></div>
         <div class="schedule-legend"><span>${t("timeline.predecessor_successor_legend")}</span><span class="legend-date-range" id="template-range"></span><span class="info-tip schedule-info"><button type="button" class="info-tip-button" aria-label="${t("template.template_calendar_help")}" aria-describedby="template-rules">i</button><span id="template-rules" class="info-tip-text" role="tooltip">${t("template.d_is_the_project_s_first_2")}</span></span></div>
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
@@ -3386,7 +3430,7 @@ function scrollTimelineToToday() {
   if (state.layout !== 'gantt' || wrap.classList.contains('hidden')) return;
   const offset = dayDiff(timelineCalendarRange().start,browserClockParts().date);
   // The sticky label column occupies the same width in the content and viewport.
-  wrap.scrollLeft = Math.max(0, offset * state.zoom);
+  wrap.scrollLeft = Math.max(0, offset * state.zoom*((state.textScale || 100)/100));
   bindTimelineCalendarScroll();
 }
 function rowRenameKey(device = navigator) {
@@ -3705,6 +3749,7 @@ function attachEvents() {
   $('#language-select').addEventListener('change', async event => {
       I18n.setLanguage(event.target.value);
     I18n.apply(document);
+    syncChartTools();
     $('#breadcrumb-title').textContent = t({timeline:'navigation.all_schedules',templates:'navigation.schedule_templates',settings:'navigation.settings'}[state.view]);
     $('#page-description').textContent = t({timeline:'navigation.view_each_project_s_daily_schedule',templates:'navigation.define_a_workflow_once_and_apply',settings:'navigation.view_the_app_version_and_public'}[state.view]);
     syncLayoutToggle();
@@ -3763,11 +3808,11 @@ function attachEvents() {
       const wrap = $('#gantt-wrap');
       const oldLeft = wrap.scrollLeft, oldTop = wrap.scrollTop;
       const halfVisible = Math.max(0, wrap.clientWidth - ($('.gantt-head-left', $('#gantt'))?.getBoundingClientRect().width || 254)) / 2;
-      const centerDay = (oldLeft + halfVisible) / state.zoom;
+      const centerDay = (oldLeft + halfVisible) / (state.zoom*((state.textScale || 100)/100));
       state.zoom = value;
       persistUi();
       renderTimeline({ preserveInspector: true });
-      wrap.scrollLeft = oldLeft === 0 ? 0 : centerDay * value - halfVisible;
+      wrap.scrollLeft = oldLeft === 0 ? 0 : centerDay * value*((state.textScale || 100)/100) - halfVisible;
       wrap.scrollTop = oldTop;
     });
   });
@@ -3784,7 +3829,7 @@ function attachEvents() {
     const originalStart = task[`${period}_start`] || '';
     const originalFinish = task[`${period}_finish`] || '';
     if (!originalStart && !originalFinish) return;
-    const pxPerDay = state.zoom;
+    const pxPerDay = state.zoom*((state.textScale || 100)/100);
     const requiresHold = edge === 'move' && event.pointerType === 'touch';
     state.drag = {
       pointerId: event.pointerId,
@@ -3840,7 +3885,7 @@ function attachEvents() {
     drag.bar.style.left = `${drag.left + dayDiff(drag.displayStart, display.start) * drag.pxPerDay}px`;
     drag.bar.style.width = `${displayWidth}px`;
     if (drag.period === 'actual' && display.openSide) {
-      const shape = actualOpenStyle(display, displayWidth).match(/clip-path:([^;]+);/);
+      const shape = actualOpenStyle(display, displayWidth, 20*((state.textScale || 100)/100)).match(/clip-path:([^;]+);/);
       drag.bar.style.clipPath = shape[1];
     }
     renderDependencyLinks();
@@ -3931,6 +3976,24 @@ I18n.apply(document);
 bindFloatingHelp();
 bindTextCellSelection(document);
 attachEvents();
+$('#timeline-view .schedule-card').insertAdjacentHTML('afterbegin', chartToolsButton());
+syncChartTools();
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-toggle-chart-tools]');
+  if (!button) return;
+  state.chartToolsHidden = !state.chartToolsHidden;
+  persistUi();
+  syncChartTools();
+});
+applyTextScale(state.textScale);
+$('#text-scale-slider').addEventListener('input', event => {
+  state.textScale = applyTextScale(Number(event.target.value));
+  persistUi();
+});
+$('#text-scale-reset').addEventListener('click', () => {
+  state.textScale = applyTextScale(100);
+  persistUi();
+});
 bindCurrentTimeClock();
 loadState().catch((error) => { toast(t("common.cannot_connect_to_the_local_backend", {p0:error.message})); $('#gantt').innerHTML = `<div class="empty-state"><strong>${t("common.check_that_the_server_is_running")}</strong><span>python3 -m mygantt.server --port 8765</span></div>`; });
 

@@ -15,7 +15,10 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from socketserver import ThreadingUnixStreamServer
+try:
+  from socketserver import ThreadingUnixStreamServer
+except ImportError:  # Unix sockets are optional and unavailable on Windows.
+  ThreadingUnixStreamServer = None
 from typing import Any
 
 from .timezones import server_clock
@@ -53,12 +56,14 @@ def storage_location(database: Database) -> dict[str, str]:
   }
 
 
-class UnixHTTPServer(ThreadingUnixStreamServer):
+class UnixHTTPServer(ThreadingUnixStreamServer or object):
   daemon_threads = True
 
 
 def unix_server(path: Path, handler):
   """Bind a private HTTP socket, refusing to replace live or unrelated files."""
+  if ThreadingUnixStreamServer is None:
+    raise OSError("Unix HTTP sockets are not supported on this platform")
   path.parent.mkdir(parents=True, exist_ok=True)
   if path.exists() or path.is_symlink():
     existing = path.lstat()
