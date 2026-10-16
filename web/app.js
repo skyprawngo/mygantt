@@ -162,6 +162,7 @@ const chartMutations = ChartMutations.create({
       if (newProject || newTask) {
         state.filterProject = null;
         $('#search-filter').value = ''; $('#status-filter').value = 'all';
+        syncTimelineSearch();
         state.selection = {type:newProject ? 'project' : 'task',id:op.tempId};
         state.inspectorOpen = state.selection.type;
       }
@@ -1699,11 +1700,27 @@ function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish, co
 function rowTaskSectionTitle(index) {
   return index > 0 ? t('task.numbered_properties', {p0:index + 1}) : t('template.task_properties');
 }
+// Use the same filtered, sorted visual rows as the chart. Physical row helpers
+// remain separate: naming, relations and same-row creation must keep stored IDs.
+function inspectorRowMembers(project, task) {
+  if (!project || !task) return [];
+  const visible = filteredProjects().find(item=>item.id === project.id);
+  if (!visible?.tasks.some(item=>item.id === task.id)) return [task];
+  const compactBy = state.layout === 'gantt' ? state.compactBy : '';
+  return groupedTaskRows(visible.tasks, compactBy).find(row=>row.tasks.some(item=>item.id === task.id))?.tasks || [task];
+}
+
 function renderRowTaskSections(project, task) {
   const section = $('#task-inspector-section');
   if (!section) return;
+  const members = inspectorRowMembers(project, task);
+  const signature = JSON.stringify([I18n.language, project?.id, task?.id, members.map(item=>[item.id,item.name,item.color])]);
+  // Keep header focus during optimistic confirmations and background refreshes.
+  if (section.dataset.rowSignature === signature) return;
+  section.dataset.rowSignature = signature;
+  section.dataset.rowTaskId = task?.id || '';
+  section.dataset.projectId = project?.id || '';
   $$('.row-task-inspector-section').forEach(node=>node.remove());
-  const members = rowTaskMembers(project, task);
   const selectedIndex = members.findIndex(item=>item.id === task?.id);
   $('#task-accordion [data-i18n]').textContent = rowTaskSectionTitle(selectedIndex);
   let after = section;
@@ -1711,8 +1728,10 @@ function renderRowTaskSections(project, task) {
     if (member.id === task.id) return;
     const extra = document.createElement('section');
     extra.className = 'inspector-section row-task-inspector-section';
+    extra.dataset.rowTaskId = member.id;
+    extra.dataset.projectId = project.id;
     extra.innerHTML = `<button class="inspector-accordion" type="button" aria-expanded="false"><svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>${esc(rowTaskSectionTitle(index))}</span><small class="task-color-tag" style="${paletteStyle(member.color,'task-tag')}">${esc(member.name)}</small></button>`;
-    extra.querySelector('button').addEventListener('click',()=>selectItem('task',member.id));
+    extra.querySelector('button').addEventListener('click',()=>selectItem('task',member.id,{toggleInspector:false}));
     if (index < selectedIndex) section.before(extra);
     else { after.after(extra); after = extra; }
   });
@@ -1878,7 +1897,7 @@ function renderInspector() {
         <label class="inspector-field"><span>${t("inspector.notes")}</span><textarea id="ins-task-notes" class="text-area" rows="3" placeholder="${t("inspector.notes_placeholder")}">${esc(task.notes || '')}</textarea></label>
         </div>
         <small class="task-autosave-state" role="status" aria-live="polite">${t("inspector.changes_are_saved_when_you_leave")}</small>
-        <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button save-button" id="ins-task-add-same-row" type="button">${t("task.create_same")}</button></div>
+        <div class="inspector-actions"><button class="button delete-button" id="ins-task-delete" type="button">${t("task.delete")}</button><button class="button save-button" id="ins-task-add-same-row" type="button">${t("task.add_same_row")}</button></div>
       </form>`;
   } else {
     $('#task-inspector').innerHTML = `<div class="inspector-empty"><span>⌁</span><b>${t("inspector.select_a_task")}</b><small>${t("inspector.click_a_task_name_or_bar")}</small></div>`;
@@ -3439,6 +3458,50 @@ function bindCascadeHelp() {
   });
 }
 
+function syncTimelineSearch() {
+  const search = $('#search-filter');
+  const active = Boolean(search.value.trim());
+  $('#timeline-search').classList.toggle('search-active', active);
+  $('#search-active-description').textContent = active ? `${t('timeline.search_filter_active')}: ${search.value.trim()}` : '';
+}
+
+function bindTimelineSearch() {
+  const box = $('#timeline-search'), input = $('#search-filter');
+  const toggle = $('#search-toggle'), clear = $('#search-clear');
+  function expand() {
+    box.classList.add('expanded');
+    toggle.setAttribute('aria-expanded', 'true');
+    input.hidden = clear.hidden = false;
+    input.focus();
+  }
+  function collapse(restoreFocus = false) {
+    box.classList.remove('expanded');
+    toggle.setAttribute('aria-expanded', 'false');
+    input.hidden = clear.hidden = true;
+    if (restoreFocus) toggle.focus();
+  }
+  toggle.addEventListener('click', expand);
+  input.addEventListener('input', syncTimelineSearch);
+  clear.addEventListener('click', () => {
+    input.value = '';
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.focus();
+  });
+  box.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || event.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    collapse(true);
+  }, true);
+  box.addEventListener('focusout', event => {
+    if (!box.contains(event.relatedTarget)) collapse();
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!box.contains(event.target)) collapse();
+  });
+  syncTimelineSearch();
+}
+
 function bindMobileSearch() {
   const dialog = $('#mobile-search-dialog'), input = $('#mobile-search-input');
   const button = $('#mobile-search-button'), search = $('#search-filter');
@@ -3797,8 +3860,10 @@ function attachEvents() {
     $('#breadcrumb-title').textContent = t({timeline:'navigation.all_schedules',templates:'navigation.schedule_templates',settings:'navigation.settings'}[state.view]);
     $('#page-description').textContent = t({timeline:'navigation.view_each_project_s_daily_schedule',templates:'navigation.define_a_workflow_once_and_apply',settings:'navigation.view_the_app_version_and_public'}[state.view]);
     syncLayoutToggle();
+    syncTimelineSearch();
     renderAll();
   });
+  bindTimelineSearch();
   bindMobileSearch();
   bindCascadeHelp();
   bindChartAutoRefresh();
@@ -3821,6 +3886,7 @@ function attachEvents() {
     state.compactBy = event.target.value;
     persistUi();
     renderTimeline({preserveInspector:true});
+    syncInspectorProjection();
   });
   $$('[data-layout]').forEach((button) => button.addEventListener('click', () => {
     state.layout = button.dataset.layout;

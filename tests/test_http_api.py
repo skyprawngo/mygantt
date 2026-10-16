@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 import threading
 import unittest
@@ -280,7 +281,9 @@ class HttpApiTests(unittest.TestCase):
     self.assertIn("일정 템플릿", html)
     self.assertIn("프로젝트 속성", html)
     self.assertIn("작업 속성", html)
-    self.assertRegex(html, r'value="group"[^>]*data-i18n="timeline.group_view"')
+    compact_select = re.search(r'<select\b[^>]*id="compact-select"[^>]*>(.*?)</select>', html, re.S)
+    self.assertIsNotNone(compact_select)
+    self.assertRegex(compact_select.group(1), r'<option\b[^>]*value="group"[^>]*data-i18n="inspector\.group"')
     self.assertIn('/i18n.js', html)
 
   def test_translations_and_language_specific_manifest(self):

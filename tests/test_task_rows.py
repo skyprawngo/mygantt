@@ -99,3 +99,15 @@ class TaskRowTests(unittest.TestCase):
         by_id = {task['id']:task for task in self.db.get_project(self.p)['tasks']}
         self.assertEqual(by_id[first_child]['dependencies'],[self.first])
         self.assertEqual(by_id[second_child]['dependencies'],[])
+
+    def test_same_row_creation_preserves_compact_category_and_physical_anchor(self):
+        self.db.update_task(self.first, {'owner':'Vendor', 'group_name':'Assembly', 'tags':['urgent']})
+        self.db.create_task(self.p, {**self.fields, 'name':'Different physical row'})
+        tasks = self.add()['tasks']
+        first, other, added = tasks
+        self.assertEqual(added['gantt_row_id'], first['gantt_row_id'])
+        self.assertEqual(other['gantt_row_id'], '')
+        for field in ['owner','group_name','tags']:
+            self.assertEqual(added[field],first[field])
+        reopened = Database(self.path, seed_samples=False, holiday_fetcher=lambda year: [])
+        self.assertEqual(reopened.get_project(self.p)['tasks'][-1]['tags'],['urgent'])
