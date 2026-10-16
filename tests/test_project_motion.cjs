@@ -47,13 +47,14 @@ for(const collapsed of [false,true])test(`native project ${collapsed?'expansion'
  const band=el('band');Object.assign(band.style,{top:'0px',height:'92px'});band.dataset.projectBand='p';
  const later=el('later');later.style.top='92px';const svg=el('svg',0,300);
  body.querySelectorAll=s=>s==='.project-summary-bar'?[]:s.includes('project-duration')?[band,later]:[svg];
- const control={dataset:{collapse:'p'},closest:()=>({querySelector:()=>({offsetTop:7,offsetHeight:23})})};
+ const control={dataset:{collapse:'p'},closest:()=>({querySelector:()=>({offsetTop:7,offsetHeight:23,classList:{add(){},remove(){}}})})};
  const state={collapsedProjects:new Set(collapsed?['p']:[])};let renders=0;
  const c={matchMedia:()=>({matches:false}),requestAnimationFrame(fn){frames.push(fn)},CustomEvent:class{},document:{timeline:{currentTime:1250},querySelectorAll:s=>s.includes('task-row')?[row]:[control],dispatchEvent(){}}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
  const motion=c.createProjectMotion({getState:()=>state,render(){renders++},persist(){},redraw(){throw Error('unexpected SVG rebuild')}});
- const pending=motion.toggle('p');await tick();assert.equal(animations.length,6);
+ const pending=motion.toggle('p');await tick();assert.equal(animations.length,5);
  assert(animations.every(a=>a.paused&&a.currentTime===0));
+ assert(animations.some(a=>a.frames.some(f=>f.transform==='scaleY(0.13043478260869565)')));
  assert.equal(frames.length,1);
  preparationDone=true;
  frames.shift()(); // first paint retains the initial pose

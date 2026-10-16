@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/gantt-typography.css">
 </head>
 <body>
   <template id="chart-info-template"><span class="info-tip chart-header-info"><button type="button" class="info-tip-button" aria-label="간트 표시 설명" aria-describedby="floating-help" data-i18n-attrs="aria-label:help.chart_legend">i</button><span id="mobile-chart-tooltip" class="info-tip-text" role="tooltip"><b class="tooltip-legend-heading"><i class="legend-swatch actual-swatch" aria-hidden="true"></i><span data-i18n="help.planned_actual_tasks">예정·실제 작업</span></b><br><span data-i18n="help.the_upper_bar_is_planned_and">위 막대는 예정, 아래 막대는 실제 작업 기간입니다. 같은 작업은 같은 색상입니다.</span><br><br><b class="tooltip-legend-heading"><svg class="dependency-legend" width="22" height="12" viewBox="0 0 22 12" aria-hidden="true"><path d="M0 0 H9 V3 C9 7 13 8 22 8 V12 H13 V9 C13 5 9 4 0 4 Z"/></svg><span data-i18n="timeline.predecessor_successor_legend">선⋅후행 작업</span></b><br><span data-i18n="help.connections_show_the_relationship_from_a">선행 작업에서 후행 작업으로 이어지는 관계를 나타냅니다.</span><br><br><b><span data-i18n="inspector.calendar">일정 기준</span></b><br><span data-i18n="timeline.new_projects_using_a_5_day">새 프로젝트의 주 5일 일정은 주말·공휴일을 제외해 계산합니다. 기간은 완료일을 포함합니다.</span></span></span></template>

@@ -2649,5 +2649,6 @@
     "KR": "랜덤 색상 적용",
     "US": "Apply random color",
     "JP": "ランダムな色を適用"
-  }
+  },
+  {"textID":"calendar.month_number","KR":"{p0}월","US":"Month {p0}","JP":"{p0}月"}
 ]

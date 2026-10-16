@@ -94,3 +94,11 @@ test('actual labels stay inside the rectangular portion at every display scale',
   }
  }
 });
+
+test('label footprints split non-overlapping dates into lanes until all text fits',()=>{
+ const tasks=[task('a','01','03'),task('b','07','09')];
+ const crowded=c.groupedTaskRows(tasks,'',1,(item)=>item.id==='a'?{start:0,end:220}:{start:200,end:300});
+ assert.equal(crowded[0].offsets.get('b'),36);assert.equal(crowded[0].height,72);
+ const clear=c.groupedTaskRows(tasks,'',2,(item)=>item.id==='a'?{start:0,end:220}:{start:230,end:330});
+ assert.equal(clear[0].offsets.get('b'),0);assert.equal(clear[0].height,72);
+});
