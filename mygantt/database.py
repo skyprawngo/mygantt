@@ -80,6 +80,35 @@ class Database:
     finally:
       connection.close()
 
+  def list_notes(self) -> list[dict]:
+    with self.connection() as db:
+      return [dict(row) for row in db.execute("SELECT * FROM notes ORDER BY created_at, rowid")]
+
+  def delete_note(self, note_id: str) -> bool:
+    with self.connection() as db:
+      return db.execute("DELETE FROM notes WHERE id=?", (note_id,)).rowcount > 0
+
+  def save_note(self, payload: dict, note_id: str | None = None) -> dict | None:
+    fields = {key: payload[key] for key in ("title", "content") if key in payload}
+    for key, value in fields.items():
+      if not isinstance(value, str) or len(value) > (200 if key == "title" else 100000):
+        raise ScheduleError("메모 제목은 200자, 본문은 100000자 이내의 문자열이어야 합니다.")
+    with self.connection() as db:
+      if note_id is None:
+        note_id = new_id()
+        last = db.execute("SELECT color FROM notes ORDER BY rowid DESC LIMIT 1").fetchone()
+        color = (last[0] + 1) % 5 if last else 0
+        db.execute("INSERT INTO notes (id, title, content, created_at, updated_at, color) VALUES (?, ?, ?, ?, ?, ?)",
+                   (note_id, fields.get("title", ""), fields.get("content", ""), now_iso(), now_iso(), color))
+      else:
+        if not db.execute("SELECT 1 FROM notes WHERE id=?", (note_id,)).fetchone():
+          return None
+        if fields:
+          fields["updated_at"] = now_iso()
+          db.execute("UPDATE notes SET " + ", ".join(key + "=?" for key in fields) + " WHERE id=?",
+                     (*fields.values(), note_id))
+      return dict(db.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone())
+
   def initialize(self) -> None:
     from .directory_schema import backup_before_migration, migrate
     backup_before_migration(self.path)
@@ -87,6 +116,13 @@ class Database:
     dependency_schema.backup_before_migration(self.path)
     with self.connection() as db:
       db.executescript("""
+        CREATE TABLE IF NOT EXISTS notes (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL DEFAULT '',
+          content TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS templates (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -157,6 +193,10 @@ class Database:
           holidays_json TEXT NOT NULL DEFAULT '[]'
         );
       """)
+      if "color" not in {row[1] for row in db.execute("PRAGMA table_info(notes)")}:
+        db.execute("ALTER TABLE notes ADD COLUMN color INTEGER NOT NULL DEFAULT 0")
+        for index, row in enumerate(db.execute("SELECT id FROM notes ORDER BY created_at, rowid").fetchall()):
+          db.execute("UPDATE notes SET color=? WHERE id=?", (index % 5, row[0]))
       self._migrate(db)
       migrate(db, now_iso())
       self._migrate_project_order(db)

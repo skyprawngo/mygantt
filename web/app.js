@@ -186,9 +186,9 @@ const chartMutations = ChartMutations.create({
 });
 let undoBusy = false;
 document.addEventListener('keydown', async event => {
-  if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'z' || event.isComposing) return;
+  if (!Shortcuts.matches(event,'undo') || event.defaultPrevented) return;
   // Native text editing keeps its own undo stack until the field loses focus.
-  if (event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea,[contenteditable="true"]')) return;
+  if (event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea,[contenteditable="true"],.modal,dialog[open]')) return;
   event.preventDefault();
   if (undoBusy || event.repeat) return;
   undoBusy = true;
@@ -276,10 +276,7 @@ function switchView(view) {
   $('#templates-view').classList.toggle('hidden', view !== 'templates');
   $('#settings-view').classList.toggle('hidden', view !== 'settings');
   $$('.nav-item').forEach((item) => item.classList.toggle('active', item.dataset.view === view));
-  $('#new-project').classList.toggle('hidden', view !== 'timeline');
   $('#import-project-template').classList.toggle('hidden', view !== 'templates');
-  $('#breadcrumb-title').textContent = { timeline: t("navigation.all_schedules"), templates: t("navigation.schedule_templates"), settings: t("navigation.settings") }[view];
-  $('#page-description').textContent = { timeline: t("navigation.view_each_project_s_daily_schedule"), templates: t("navigation.define_a_workflow_once_and_apply"), settings: t("navigation.view_the_app_version_and_public") }[view];
   renderAll();
 }
 function renderAll() {
@@ -294,9 +291,7 @@ function renderStorageLocation() {
   const label = storage?.label || t("navigation.storage_location_unavailable");
   const detail = storage?.database_path ? `${label}\nSQLite: ${storage.database_path}` : label;
   $('#storage-location-name').textContent = label;
-  $('#storage-indicator-name').textContent = label;
   $('#storage-location').title = detail;
-  $('#storage-indicator').title = detail;
 }
 function renderSidebar() {
   $('#sidebar-project-section').classList.toggle('hidden', state.view !== 'timeline');
@@ -367,8 +362,8 @@ function bindSidebarProjectSwipe() {
       if(shell.classList.contains('swipe-open')&&!event.target.closest('.side-project-delete')){setOpen(shell,false);event.preventDefault();event.stopImmediatePropagation();}
     },true);
     shell.addEventListener('keydown',event=>{
-      if(event.key==='ArrowLeft'){event.preventDefault();shells.forEach(other=>setOpen(other,other===shell));remove.focus();}
-      if(event.key==='Escape'||event.key==='ArrowRight'){setOpen(shell,false);$('.side-project',shell)?.focus();}
+      if(Shortcuts.matches(event,'revealDelete')){event.preventDefault();shells.forEach(other=>setOpen(other,other===shell));remove.focus();}
+      if(Shortcuts.matches(event,'close')||Shortcuts.matches(event,'hideDelete')){setOpen(shell,false);$('.side-project',shell)?.focus();}
     });
     let wheelOffset=0;
     shell.addEventListener('wheel',event=>{
@@ -490,10 +485,10 @@ function timelineCalendarRange() {
   return state.calendarRange;
 }
 function calendarHeaderMarkup(dates, pxPerDay) {
-  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period${item.isMonthLabel ? ' date-month' : ''}">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period${item.isMonthLabel ? ' date-month' : ''}">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
 }
 function calendarShadingMarkup(dates, pxPerDay) {
-  return dates.map((item) => `<div class="date-shade ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
+  return dates.map((item) => `<div class="date-shade ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
 }
 function extendTimelineCalendar(oldStart, oldEnd) {
   const chart = $('#gantt'), range = timelineCalendarRange(), px = state.zoom*((state.textScale || 100)/100);
@@ -1474,8 +1469,8 @@ function bindMonthPaging(chart) {
     if (Date.now()<suppressClickUntil) {event.preventDefault();event.stopImmediatePropagation();}
   },true);
   chart.addEventListener('keydown',event=>{
-    if (state.layout!=='month' || !['ArrowLeft','ArrowRight'].includes(event.key) || event.target.closest('input,textarea,select,[contenteditable]')) return;
-    event.preventDefault();moveMonthPage(event.key==='ArrowRight'?1:-1,true);
+    if (state.layout!=='month' || !(Shortcuts.matches(event,'previous') || Shortcuts.matches(event,'next')) || event.target.closest('input,textarea,select,[contenteditable]')) return;
+    event.preventDefault();moveMonthPage(Shortcuts.matches(event,'next')?1:-1,true);
   });
 }
 function renderMonthTimeline({preserveInspector = false} = {}) {
@@ -1904,8 +1899,8 @@ function openInspectorProjectMenu(projectId) {
   function outside(event) { if (!menu.contains(event.target) && event.target !== trigger) close(); }
   function keyboard(event) {
     const buttons = [...menu.querySelectorAll('button')];
-    if (event.key === 'Escape') { close(); trigger.focus({preventScroll:true}); }
-    if (['ArrowDown','ArrowUp'].includes(event.key)) { event.preventDefault(); buttons[(buttons.indexOf(document.activeElement) + (event.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length].focus(); }
+    if (Shortcuts.matches(event,'close')) { close(); trigger.focus({preventScroll:true}); }
+    if ((Shortcuts.matches(event,'menuDown') || Shortcuts.matches(event,'menuUp'))) { event.preventDefault(); buttons[(buttons.indexOf(document.activeElement) + (Shortcuts.matches(event,'menuDown') ? 1 : buttons.length - 1)) % buttons.length].focus(); }
   }
   document.addEventListener('pointerdown', outside); document.addEventListener('keydown', keyboard);
   menu.querySelector('[aria-checked="true"]')?.focus({preventScroll:true});
@@ -2001,7 +1996,7 @@ function bindProjectAutoSave(form, project) {
     input.addEventListener('blur', () => save(input));
     if (input.tagName === 'SELECT' || input.type === 'color') input.addEventListener('change', () => save(input));
     input.addEventListener('keydown', event => {
-      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); input.blur(); }
+      if (Shortcuts.matches(event,'confirm') && !event.isComposing) { event.preventDefault(); input.blur(); }
     });
   }
 }
@@ -2060,10 +2055,10 @@ function bindTaskProgress(form, task) {
   });
   knob.addEventListener('pointercancel', () => {if(drag){progress=drag.progress;stopped=drag.stopped;drag=null;paint();}});
   knob.addEventListener('keydown', event => {
-    if(!['ArrowLeft','ArrowDown','ArrowRight','ArrowUp','Home','End',' ','Enter'].includes(event.key)) return;
+    if(!['increase','decrease','minimum','maximum','stop'].some(id=>Shortcuts.matches(event,id))) return;
     event.preventDefault();
-    if([' ','Enter'].includes(event.key)) stopped=!stopped;
-    else {stopped=false;progress=event.key==='Home'?0:event.key==='End'?100:Math.max(0,Math.min(100,progress+(['ArrowRight','ArrowUp'].includes(event.key)?10:-10)));}
+    if(Shortcuts.matches(event,'stop')) stopped=!stopped;
+    else {stopped=false;progress=Shortcuts.matches(event,'minimum')?0:Shortcuts.matches(event,'maximum')?100:Math.max(0,Math.min(100,progress+(Shortcuts.matches(event,'increase')?10:-10)));}
     paint();commit();
   });
   paint();
@@ -2139,7 +2134,11 @@ function bindTaskAutoSave(form, task) {
   async function save(input) {
     const value = input.type === 'checkbox' ? input.checked : input.value;
     if (!fields.needsSave(input)) return;
-    if (!input.checkValidity() || (input.id === 'ins-task-name' && !value.trim())) {
+    // WebKit can report checkValidity() false after clearing a date even
+    // when its ValidityState is valid. Empty actual dates explicitly mean removal.
+    const clearedActualDate = ['ins-task-actual-start','ins-task-actual-finish'].includes(input.id)
+      && value === '' && !input.required && input.validity?.valid === true;
+    if ((!clearedActualDate && !input.checkValidity()) || (input.id === 'ins-task-name' && !value.trim())) {
       fields.invalid(input,t("task.check_the_input_value"));return;
     }
     const payload = { cascade_dependents: state.cascadeDependents };
@@ -2158,19 +2157,19 @@ function bindTaskAutoSave(form, task) {
     input.addEventListener('blur', () => save(input));
     if (input.id === 'ins-task-owner' || input.tagName === 'SELECT' || ['color', 'checkbox'].includes(input.type)) input.addEventListener('change', () => save(input));
     input.addEventListener('keydown', event => {
-      if (['Escape', 'Backspace', 'Delete'].includes(event.key) && input.type === 'date' && !event.isComposing) {
+      if (Shortcuts.matches(event,'clearDate') && input.type === 'date' && !event.isComposing) {
         event.preventDefault();event.stopPropagation();input.value = '';
         input.dispatchEvent(new Event('input', { bubbles: true }));fields.edit(input);
         if (!input.required) save(input);
         else status.textContent = t("task.enter_a_planned_date_to_save");
         return;
       }
-      if (event.key === 'Enter' && input.id === 'ins-task-owner' && !event.isComposing) {
+      if (event.key === 'Enter' && Shortcuts.matches(event,'confirm') && input.id === 'ins-task-owner' && !event.isComposing) {
         // Let the browser accept its native suggestion before blur saves the value.
         requestAnimationFrame(() => { if (document.activeElement === input) input.blur(); });
         return;
       }
-      if (event.key === 'Enter' && input.id !== 'ins-task-owner' && input.tagName !== 'TEXTAREA' && !event.isComposing) { event.preventDefault(); input.blur(); }
+      if (Shortcuts.matches(event,'confirm') && (input.id !== 'ins-task-owner' || event.key !== 'Enter') && input.tagName !== 'TEXTAREA' && !event.isComposing) { event.preventDefault(); input.blur(); }
     });
   }
 }
@@ -2198,8 +2197,8 @@ function openTaskMenu(event) {
   function outside(e) { if (!menu.contains(e.target)) close(); }
   function keyboard(e) {
     const buttons = [...menu.querySelectorAll('button')];
-    if (e.key === 'Escape') { close(); bar.focus({preventScroll:true}); }
-    if (['ArrowDown','ArrowUp'].includes(e.key)) { e.preventDefault(); buttons[(buttons.indexOf(document.activeElement) + (e.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length].focus(); }
+    if (Shortcuts.matches(e,'close')) { close(); bar.focus({preventScroll:true}); }
+    if ((Shortcuts.matches(e,'menuDown') || Shortcuts.matches(e,'menuUp'))) { e.preventDefault(); buttons[(buttons.indexOf(document.activeElement) + (Shortcuts.matches(e,'menuDown') ? 1 : buttons.length - 1)) % buttons.length].focus(); }
   }
   document.addEventListener('pointerdown', outside); document.addEventListener('keydown', keyboard); window.addEventListener('scroll', close, true);
   menu.querySelector('button').focus({preventScroll:true});
@@ -2444,7 +2443,7 @@ function attachTemplateDrag() {
     syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=button.dataset.templateSelect || button.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor(); setMobileDrawer('inspector');
   });
   chart.addEventListener('keydown', event => {
-    if (!['Enter', ' '].includes(event.key) || !event.target.matches('.dependency-link')) return;
+    if (!Shortcuts.matches(event,'activate') || !event.target.matches('.dependency-link')) return;
     event.preventDefault(); syncDraftFromEditor(); queueTemplateSave(); state.templateTaskKey=event.target.dataset.taskSelect; state.templateTaskCollapsed=false; renderTemplateEditor(); setMobileDrawer('inspector');
   });
   chart.addEventListener('pointerdown', event => {
@@ -2565,7 +2564,7 @@ function renderTemplateEditorContent() {
         <div id="template-gantt" class="gantt-wrap template-gantt"></div>
       </div></div>
       <button type="button" class="desktop-inspector-toggle" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("inspector.toggle")}"><span aria-hidden="true">›</span><span>${t("template.properties")}</span></button>
-      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${(mobileLayout() ? !document.body.classList.contains('inspector-open') : document.body.classList.contains('desktop-inspector-collapsed')) ? 'inert' : ''}><div class="inspector-title"><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="icon-button desktop-inspector-close" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("timeline.close_properties")}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
+      <aside id="template-inspector" class="inspector" aria-label="${t("template.template_properties")}" ${(mobileLayout() ? !document.body.classList.contains('inspector-open') : document.body.classList.contains('desktop-inspector-collapsed')) ? 'inert' : ''}><div class="inspector-title"><button type="button" class="icon-button desktop-inspector-close" data-toggle-inspector aria-controls="template-inspector" aria-expanded="${!document.body.classList.contains('desktop-inspector-collapsed')}" aria-label="${t("timeline.close_properties")}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button><div><span class="eyebrow">${t("template.inspector")}</span><h2>${t("template.properties")}</h2></div><span id="template-save-state" class="inspector-state" role="status" aria-live="polite">${t("inspector.auto_save")}</span><button type="button" class="mobile-only drawer-close" data-close-drawer aria-label="${t("timeline.close_properties")}">×</button></div>
         <section class="inspector-section"><button type="button" id="template-project-accordion" class="inspector-accordion" aria-expanded="${projectOpen}"><svg class="accordion-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg><span>${t("template.template_properties")}</span><small class="task-color-tag" style="${paletteStyle(draft.project_color || projectColors[0], 'task-tag')}">${esc(draft.name)}</small></button><div class="inspector-content ${projectOpen?'':'hidden'}"><div class="property-grid">
           <label class="inspector-field"><span>${t("template.template_name")}</span><input id="template-name" class="text-input" value="${esc(draft.name)}"></label>
           <div class="inspector-field"><span>${t("template.color")}</span><div class="color-field"><input id="template-project-color" type="color" value="${esc(draft.project_color || projectColors[0])}" aria-label="${t("template.color")}"><code>${esc(draft.project_color || projectColors[0])}</code>${randomColorButton()}</div></div>
@@ -2764,7 +2763,7 @@ function bindTemplateAutoSave() {
     if (event.target.matches('input,textarea,select') && !event.target.disabled) queueTemplateSave();
   };
   editor.addEventListener('focusout',editor.templateFocusOut);
-  editor.onkeydown = event => { if (event.key === 'Escape' && event.target.matches('input,textarea,select')) { event.preventDefault(); event.target.blur(); } };
+  editor.onkeydown = event => { if (Shortcuts.matches(event,'close') && event.target.matches('input,textarea,select')) { event.preventDefault(); event.target.blur(); } };
   editor.onchange = event => {
     if (event.target.matches('select,input[type="checkbox"],input[type="color"]') && !event.target.disabled) queueTemplateSave();
   };
@@ -2804,7 +2803,7 @@ function openModal(title, subtitle, body, footer, onOpen = null) {
 }
 function modalEscape(event) {
   // Windows IMEs may report a composition key as 229 before isComposing flips.
-  if (event.isComposing || event.keyCode === 229 || event.key !== 'Escape') return;
+  if (event.isComposing || event.keyCode === 229 || !Shortcuts.matches(event,'close')) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   closeModal();
@@ -2886,7 +2885,7 @@ function bindGroupSuggestions() {
   document.addEventListener('blur',event=>{if(isGroup(event.target)){const input=event.target;input.value=canonicalGroupName(input.value);close();}},true);
   document.addEventListener('keydown',event=>{
     if(event.isComposing || event.keyCode===229)return;
-    if(event.key==='Enter' && isGroup(event.target)) {
+    if(Shortcuts.matches(event,'confirm') && isGroup(event.target)) {
       event.preventDefault();event.stopImmediatePropagation();
       if(event.target===active && menu.matches(':popover-open') && selected>=0) {
         menu.querySelectorAll('button')[selected].click();
@@ -2896,12 +2895,12 @@ function bindGroupSuggestions() {
       return;
     }
     if(event.target!==active || !menu.matches(':popover-open'))return;
-    if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close();return;}
+    if(Shortcuts.matches(event,'close')){event.preventDefault();event.stopImmediatePropagation();close();return;}
     const buttons=[...menu.querySelectorAll('button')];
-    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
-      event.preventDefault();selected=(selected+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length;
+    if(Shortcuts.matches(event,'menuDown')||Shortcuts.matches(event,'menuUp')){
+      event.preventDefault();selected=(selected+(Shortcuts.matches(event,'menuDown')?1:-1)+buttons.length)%buttons.length;
       buttons.forEach((button,index)=>button.classList.toggle('selected',index===selected));
-    } else if(event.key==='Enter' && selected>=0){event.preventDefault();event.stopImmediatePropagation();buttons[selected].click();}
+    } else if(Shortcuts.matches(event,'confirm') && selected>=0){event.preventDefault();event.stopImmediatePropagation();buttons[selected].click();}
   },true);
   document.addEventListener('scroll',event=>{if(!menu.contains(event.target))close();},true);
 }
@@ -2970,10 +2969,10 @@ function bindTagColors() {
     };
     entry.addEventListener('keydown',event=>{
       if(event.isComposing || event.keyCode===229)return;
-      if(event.key==='Backspace' && entry.value==='' && tags.length) {
+      if(Shortcuts.matches(event,'tagRemove') && entry.value==='' && tags.length) {
         event.preventDefault();event.stopPropagation();
         tags.pop();render();saveTags();
-      } else if(event.key===',' || event.key==='Enter') {event.preventDefault();event.stopPropagation();commit();}
+      } else if(Shortcuts.matches(event,'tagAdd')) {event.preventDefault();event.stopPropagation();commit();}
     });
     entry.addEventListener('input',event=>{if(!event.isComposing && entry.value.includes(','))commit();});
     entry.addEventListener('compositionend',()=>{if(entry.value.includes(','))commit();});
@@ -3371,7 +3370,7 @@ function bindFloatingHelp() {
     if (target?.matches('.info-tip') || event.target.closest('.status-help-trigger')) show(target);
     else if (!target && !overlay.contains(event.target)) hide();
   });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') hide(); });
+  document.addEventListener('keydown', event => { if (Shortcuts.matches(event,'close')) hide(); });
   document.addEventListener('scroll', event => { if (!overlay.contains(event.target)) hide(); }, true);
   window.addEventListener('resize', hide);
 }
@@ -3410,7 +3409,7 @@ function bindCascadeHelp() {
   }, true);
   control.addEventListener('contextmenu', event => { event.preventDefault(); show(); });
   control.addEventListener('keydown', event => {
-    if (event.key === 'F1') { event.preventDefault(); show(); }
+    if (Shortcuts.matches(event,'help')) { event.preventDefault(); show(); }
   });
 }
 
@@ -3444,7 +3443,7 @@ function bindTimelineSearch() {
     input.focus();
   });
   box.addEventListener('keydown', event => {
-    if (event.key !== 'Escape' || event.isComposing) return;
+    if (!Shortcuts.matches(event,'close') || event.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
     collapse(true);
@@ -3471,12 +3470,12 @@ function bindMobileSearch() {
   $('#mobile-search-clear').addEventListener('click', () => { input.value = ''; sync(); input.focus(); });
   // Capture Escape before a search input can consume it to clear its value.
   dialog.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') return;
+    if (!Shortcuts.matches(event,'close')) return;
     event.preventDefault();
     event.stopPropagation();
     dialog.close();
   }, true);
-  dialog.addEventListener('cancel', event => { event.preventDefault(); dialog.close(); });
+  dialog.addEventListener('cancel', event => { event.preventDefault(); });
   dialog.addEventListener('pointerdown', event => {
     const rect = dialog.getBoundingClientRect();
     if (event.target === dialog && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) {
@@ -3495,15 +3494,6 @@ function scrollTimelineToToday() {
   // The sticky label column occupies the same width in the content and viewport.
   wrap.scrollLeft = Math.max(0, offset * state.zoom*((state.textScale || 100)/100));
   bindTimelineCalendarScroll();
-}
-function rowRenameKey(device = navigator) {
-  const platform = device.userAgentData?.platform || device.platform || '';
-  if (/mac/i.test(platform)) return 'Enter';
-  if (/win/i.test(platform)) return 'F2';
-  const agent = device.userAgent || '';
-  if (/Macintosh|Mac OS X/i.test(agent)) return 'Enter';
-  if (/Windows/i.test(agent)) return 'F2';
-  return /Safari/i.test(agent) && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Android/i.test(agent) ? 'Enter' : 'F2';
 }
 let inlineNameEditor = null;
 const rowNameDrafts = ChartEditing.createDrafts();
@@ -3547,7 +3537,7 @@ function startInlineRowRename(selection) {
   };
   input.addEventListener('keydown',event=>{
     event.stopPropagation();
-    if((event.key==='Enter'||event.key==='Escape')&&!event.isComposing){event.preventDefault();save();}
+    if((Shortcuts.matches(event,'confirm')||Shortcuts.matches(event,'close'))&&!event.isComposing){event.preventDefault();save();}
   });
   input.addEventListener('input',()=>{
     input.removeAttribute('aria-invalid');
@@ -3563,8 +3553,8 @@ function startInlineRowRename(selection) {
   input.focus({preventScroll:true});input.select();
 }
 function bindRowClipboard() {
-  const editable = event => event.target.closest('input,textarea,select,[contenteditable],.modal,[role="dialog"]');
-  document.addEventListener('copy', event => {
+  const editable = event => event.target.closest('input,textarea,select,[contenteditable],.modal,[role="dialog"],dialog[open]');
+  const copyRow = event => {
     if (editable(event) || state.view !== 'timeline' || !state.selection || !event.clipboardData) return;
     if (window.getSelection()?.toString()) return;
     const {type, id} = state.selection;
@@ -3572,9 +3562,10 @@ function bindRowClipboard() {
     event.clipboardData.setData('text/plain', JSON.stringify({myganttRow:1, kind:type, source_id:id}));
     event.preventDefault();
     toast(t("clipboard.copied"));
-  });
+  };
+  document.addEventListener('copy',copyRow);
   let pasting = false;
-  document.addEventListener('paste', async event => {
+  const pasteRow = async event => {
     if (editable(event) || state.view !== 'timeline' || !event.clipboardData) return;
     let row;
     try { row = JSON.parse(event.clipboardData.getData('text/plain')); } catch { return; }
@@ -3599,6 +3590,31 @@ function bindRowClipboard() {
       toast(t("clipboard.pasted"));
     } catch(error) { toast(error.message); }
     finally { pasting = false; }
+  };
+  document.addEventListener('paste',pasteRow);
+  let copiedText = '';
+  document.addEventListener('keydown',async event=>{
+    if(event.defaultPrevented || event.repeat || editable(event) || state.view!=='timeline')return;
+    const copy=Shortcuts.matches(event,'copy'),paste=Shortcuts.matches(event,'paste');
+    const nativeChord=Shortcuts.chord(event);
+    if(!copy && !paste) {
+      if(state.selection && !window.getSelection()?.toString() && ['Mod+c','Mod+v'].includes(nativeChord)) event.preventDefault();
+      return;
+    }
+    if(window.getSelection()?.toString())return;
+    if(copy && !state.selection)return;
+    // Keep native clipboard events for the platform defaults.
+    if((copy && nativeChord==='Mod+c') || (paste && nativeChord==='Mod+v'))return;
+    event.preventDefault();
+    try {
+      if(copy) {
+        let text='';copyRow({target:event.target,preventDefault(){},clipboardData:{setData(type,value){text=value;}}});
+        if(text){copiedText=text;try{await navigator.clipboard.writeText(text);}catch{}}
+      } else {
+        let text;try{text=await navigator.clipboard.readText();}catch{text=copiedText;}
+        await pasteRow({target:event.target,preventDefault(){},clipboardData:{getData(){return text;}}});
+      }
+    } catch(error){toast(error.message);}
   });
 }
 
@@ -3609,8 +3625,8 @@ function bindRowRenameShortcut() {
     selectedRow = row ? {type:row.dataset.taskSelect ? 'task' : 'project',id:row.dataset.taskSelect || row.dataset.collapse} : null;
   }, true); // Capture before the chart click handler replaces the selected row DOM.
   document.addEventListener('keydown', event => {
-    if (event.isComposing || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key !== rowRenameKey()) return;
-    if (event.target.closest('input,textarea,select,[contenteditable="true"],.modal')) return;
+    if (event.repeat || !Shortcuts.matches(event,'rename')) return;
+    if (event.target.closest('input,textarea,select,[contenteditable="true"],.modal,dialog[open]')) return;
     if (state.view !== 'timeline' || state.layout !== 'gantt') return;
     const row = event.target.closest('#gantt .task-label, #gantt .project-select');
     const selection = row ? {type:row.dataset.taskSelect ? 'task' : 'project',id:row.dataset.taskSelect || row.dataset.collapse} : selectedRow;
@@ -3650,6 +3666,14 @@ function setMobileDrawer(panel) {
   $('#drawer-backdrop').hidden = !panel;
   const sidebar = $('.sidebar'), inspector = activeMobileInspector();
   sidebar.inert = mobileLayout() ? panel !== 'menu' : document.body.classList.contains('sidebar-collapsed');
+  const menuToggle = $('#mobile-menu-toggle');
+  const toggleContainer = sidebar.inert ? $('.app-shell') : sidebar;
+  if (menuToggle.parentElement !== toggleContainer) {
+    const focused = document.activeElement === menuToggle;
+    toggleContainer.prepend(menuToggle);
+    if (focused) menuToggle.focus({preventScroll:true});
+  }
+  if (panel === 'menu') menuToggle.focus({preventScroll:true});
   for (const item of $$('#mobile-inspector, #template-inspector')) item.inert = mobileLayout() ? (panel !== 'inspector' || item !== inspector) : document.body.classList.contains('desktop-inspector-collapsed');
   if (panel) (panel === 'menu' ? sidebar : inspector)?.querySelector('[data-close-drawer]')?.focus();
   else if (mobileDrawerReturnFocus?.isConnected) { mobileDrawerReturnFocus.focus(); mobileDrawerReturnFocus = null; }
@@ -3725,7 +3749,7 @@ function bindMobileDrawers() {
     if (!mobileLayout()) return;
     const panel = document.body.classList.contains('menu-open') ? $('.sidebar') : document.body.classList.contains('inspector-open') ? activeMobileInspector() : null;
     if (!panel) return;
-    if (event.key === 'Escape') { event.preventDefault(); setMobileDrawer(null); }
+    if (Shortcuts.matches(event,'close')) { event.preventDefault(); setMobileDrawer(null); }
     if (event.key === 'Tab') {
       const items = [...panel.querySelectorAll('button, input, select, textarea, a[href], [tabindex="0"]')].filter(el => !el.disabled && el.getClientRects().length);
       const first=items[0], last=items.at(-1);
@@ -3813,8 +3837,6 @@ function attachEvents() {
       I18n.setLanguage(event.target.value);
     I18n.apply(document);
     syncChartTools();
-    $('#breadcrumb-title').textContent = t({timeline:'navigation.all_schedules',templates:'navigation.schedule_templates',settings:'navigation.settings'}[state.view]);
-    $('#page-description').textContent = t({timeline:'navigation.view_each_project_s_daily_schedule',templates:'navigation.define_a_workflow_once_and_apply',settings:'navigation.view_the_app_version_and_public'}[state.view]);
     syncLayoutToggle();
     syncTimelineSearch();
     renderAll();
@@ -3829,7 +3851,6 @@ function attachEvents() {
   cascadeSetting.checked = state.cascadeDependents;
   cascadeSetting.addEventListener('change', () => setCascadeSetting(cascadeSetting.checked));
   $$('.nav-item').forEach((button) => button.addEventListener('click', () => switchView(button.dataset.view)));
-  $('#new-project').addEventListener('click', openInstantiate);
   $('#new-project-side').addEventListener('click', openInstantiate);
   $('#create-template').addEventListener('click', createTemplate);
   $('#import-project-template').addEventListener('click', openProjectTemplateImport);
@@ -3882,7 +3903,6 @@ function attachEvents() {
       wrap.scrollTop = oldTop;
     });
   });
-  $('#today-button').addEventListener('click', scrollTimelineToToday);
   $('#gantt').addEventListener('pointerdown', (event) => {
     const handle = event.target.closest('.resize-handle');
     const bar = handle?.closest('.task-bar, .actual-task-bar') || event.target.closest('.task-bar, .actual-task-bar');
@@ -3989,7 +4009,7 @@ function attachEvents() {
   });
   $('#gantt').addEventListener('keydown', (event) => {
     const edge = event.target.closest('.dependency-link');
-    if (edge && (event.key === 'Enter' || event.key === ' ')) {
+    if (edge && Shortcuts.matches(event,'activate')) {
       event.preventDefault();
       selectItem('task', edge.dataset.taskSelect);
     }
@@ -4059,6 +4079,13 @@ $('#text-scale-slider').addEventListener('input', event => {
 $('#text-scale-reset').addEventListener('click', () => {
   state.textScale = applyTextScale(100);
   persistUi();
+});
+document.addEventListener('keydown',event=>{
+  if(!Shortcuts.matches(event,'today') || event.defaultPrevented || event.repeat)return;
+  if(event.target.closest('input,textarea,select,[contenteditable],.modal,dialog[open]'))return;
+  event.preventDefault();
+  if(state.view!=='timeline')switchView('timeline');
+  scrollTimelineToToday();
 });
 bindCurrentTimeClock();
 loadState().catch((error) => { toast(t("common.cannot_connect_to_the_local_backend", {p0:error.message})); $('#gantt').innerHTML = `<div class="empty-state"><strong>${t("common.check_that_the_server_is_running")}</strong><span>python3 -m mygantt.server --port 8765</span></div>`; });

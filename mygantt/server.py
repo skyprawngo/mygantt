@@ -153,6 +153,9 @@ def make_handler(database: Database):
       parsed = urllib.parse.urlparse(self.path)
       path = parsed.path
       try:
+        if path == "/api/notes":
+          self._json(database.list_notes())
+          return
         if path == "/api/state":
           self._json({**database.state(), "storage": storage_location(database), "server_clock": server_clock(), "holiday_country": database.holiday_country()})
           return
@@ -208,6 +211,9 @@ def make_handler(database: Database):
       try:
         payload = self._body()
         parts = path.strip("/").split("/")
+        if path == "/api/notes":
+          self._json(database.save_note(payload), 201)
+          return
         if path == "/api/duplicate":
           self._json(database.duplicate_row(payload), 201)
           return
@@ -261,6 +267,10 @@ def make_handler(database: Database):
     def do_DELETE(self) -> None:
       parts = urllib.parse.urlparse(self.path).path.strip("/").split("/")
       try:
+        if len(parts) == 3 and parts[:2] == ["api", "notes"]:
+          removed = database.delete_note(urllib.parse.unquote(parts[2]))
+          self._json({"deleted": True} if removed else {"error": "메모를 찾을 수 없습니다."}, 200 if removed else 404)
+          return
         if len(parts) == 3 and parts[0] == "api" and parts[1] in ("projects", "tasks", "templates"):
           delete = {"projects": database.delete_project, "tasks": database.delete_task, "templates": database.delete_template}[parts[1]]
           removed = delete(urllib.parse.unquote(parts[2]))
@@ -278,6 +288,10 @@ def make_handler(database: Database):
       path = urllib.parse.urlparse(self.path).path
       try:
         payload = self._body()
+        if path.startswith("/api/notes/") and len(path.split("/")) == 4:
+          note = database.save_note(payload, urllib.parse.unquote(path.split("/")[-1]))
+          self._json(note if note else {"error": "메모를 찾을 수 없습니다."}, 200 if note else 404)
+          return
         if path == "/api/settings/tag-color":
           self._json(database.set_tag_color(payload["tag"], payload.get("color", "")))
           return

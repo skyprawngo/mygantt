@@ -36,7 +36,7 @@ test('a rejected save does not block the next correction',async()=>{
   assert.equal(h.state.data.projects[0].tasks[0].actual_finish,'');
 });
 test('Backspace and Delete clear full dates; only optional actual dates save empty',async()=>{
- for(const key of ['Backspace','Delete']) for(const edge of ['start','finish']) for(const required of [false,true]){
+ for(const key of ['Escape','Backspace','Delete']) for(const edge of ['start','finish']) for(const required of [false,true]){
   const events={},patches=[];
   const input={id:`ins-task-${required?'planned':'actual'}-${edge}`,type:'date',tagName:'INPUT',value:'2026-10-04',required,checked:false,addEventListener(k,fn){events[k]=fn;},checkValidity(){return !required||!!this.value;},dispatchEvent(){},removeAttribute(){},setAttribute(){}};
   const status={textContent:'',classList:{toggle(){}}},form={isConnected:false,addEventListener(){}};
@@ -70,4 +70,23 @@ test('owner Enter allows native selection before saving the accepted value',asyn
  events.keydown({key:'Enter',isComposing:false,preventDefault(){prevented=true;}});
  assert.equal(prevented,false);assert.equal(patches.length,0);
  input.value='에스엠티에스';frame();await new Promise(resolve=>setImmediate(resolve));assert.equal(patches[0].owner,'에스엠티에스');
+});
+
+test('Escape then Enter clears actual dates despite WebKit checkValidity false',async()=>{
+ for(const edge of ['start','finish']) for(const valid of [true,false]) {
+  const events={},patches=[];
+  const input={id:`ins-task-actual-${edge}`,type:'date',tagName:'INPUT',value:'2026-10-04',required:false,validity:{valid},
+   addEventListener(k,fn){events[k]=fn;},checkValidity(){return false;},dispatchEvent(){},removeAttribute(){},setAttribute(){},blur(){events.blur();}};
+  const status={classList:{toggle(){}}},form={addEventListener(){}};
+  const c={ChartEditing:require('../web/editing.js'),chartMutations:{resolveId:id=>id},document:{activeElement:input},$$:()=>[input],$:()=>status,
+   state:{cascadeDependents:false,data:{projects:[]}},Event,saveTaskFields:async(id,fields)=>patches.push(fields),toast(){}};
+  withI18n(vm.createContext(c));
+  vm.runInContext(source.slice(source.indexOf('function bindInspectorProjection('),source.indexOf('function bindProjectAutoSave(')),c);
+  vm.runInContext(source.slice(source.indexOf('function bindTaskAutoSave('),source.indexOf('async function completeTask(')),c);
+  c.bindTaskAutoSave(form,{id:'t'});
+  for(const key of ['Escape','Enter']) events.keydown({key,isComposing:false,preventDefault(){},stopPropagation(){}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(input.value,'');assert.equal(patches.length,valid?1:0);
+  if(valid) assert.equal(patches[0][`actual_${edge}`],'');
+ }
 });

@@ -1,52 +1,454 @@
 [
-{"textID":"timeline.search_filter_active","KR":"검색 필터 적용 중","US":"Search filter active","JP":"検索フィルター適用中"},
-{"textID": "timeline.hide_chart_tools", "KR": "조정 도구·설명 숨기기", "US": "Hide chart controls and legend", "JP": "調整ツール・説明を隠す"},
-{"textID": "timeline.show_chart_tools", "KR": "조정 도구·설명 표시", "US": "Show chart controls and legend", "JP": "調整ツール・説明を表示"},
-
-{"textID": "settings.display", "KR": "화면 표시", "US": "Display", "JP": "画面表示"},
-{"textID": "settings.text_scale", "KR": "전체 텍스트 크기", "US": "Global text size", "JP": "全体の文字サイズ"},
-{"textID": "settings.text_scale_description", "KR": "전체 텍스트와 함께 간트 바·행, 날짜 셀, 속성 패널의 크기를 조절합니다. 이 브라우저에 자동 저장됩니다.", "US": "Scale all text together with Gantt bars and rows, date cells, and property panels. Saved automatically in this browser.", "JP": "全体の文字とともに、ガントバーと行、日付セル、プロパティパネルのサイズを調整します。このブラウザーに自動保存されます。"},
-{"textID": "settings.text_scale_reset", "KR": "기본 크기 (100%)", "US": "Default size (100%)", "JP": "標準サイズ (100%)"},
-
-{"textID":"timeline.compact","KR":"축약","US":"Compact rows","JP":"行の集約"},
-{"textID":"timeline.compact_none","KR":"축약 안 함","US":"No grouping","JP":"集約なし"},
-{"textID":"task.create_same","KR":"동일 작업 생성","US":"Create same task","JP":"同じ作業を作成"},
-{"textID": "timeline.previous_half_year", "KR": "이전 6개월", "US": "Previous 6 months", "JP": "前の6か月"},
-{"textID": "timeline.next_half_year", "KR": "다음 6개월", "US": "Next 6 months", "JP": "次の6か月"},
-
-{"textID": "timeline.day_view", "KR": "일 간트", "US": "Daily Gantt", "JP": "日別ガント"},
-{"textID": "timeline.month_view", "KR": "월 간트 · 프로젝트 연간 보기", "US": "Monthly Gantt · Yearly projects", "JP": "月別ガント・年間プロジェクト"},
-{"textID": "timeline.previous_year", "KR": "이전 연도", "US": "Previous year", "JP": "前年"},
-{"textID": "timeline.next_year", "KR": "다음 연도", "US": "Next year", "JP": "翌年"},
-{"textID": "timeline.no_projects", "KR": "표시할 프로젝트가 없습니다.", "US": "No projects to display.", "JP": "表示するプロジェクトはありません。"},
-
-{"textID":"inspector.select_project","KR":"프로젝트 선택","US":"Select project","JP":"プロジェクトを選択"},
-{"textID":"inspector.toggle","KR":"속성 열기/닫기","US":"Toggle properties","JP":"プロパティを開く／閉じる"},
-{"textID":"task.numbered_label","KR":"작업{p0}","US":"Task {p0}","JP":"作業{p0}"},
-{"textID":"task.add_same_row","KR":"같은 행에 작업 추가","US":"Add task to this row","JP":"同じ行に作業を追加"},
-{"textID":"task.numbered_properties","KR":"작업{p0} 속성","US":"Task {p0} properties","JP":"作業{p0}のプロパティ"},
-{"textID": "relations.title", "KR": "연결", "US": "Connections", "JP": "接続"},
-{"textID": "relations.add_external", "KR": "다른 프로젝트 작업 추가", "US": "Add task from another project", "JP": "他のプロジェクトの作業を追加"},
-{"textID": "relations.choose_direction", "KR": "추가한 행에서 선행 또는 후행을 선택하세요.", "US": "Choose predecessor or successor in the added row.", "JP": "追加した行で先行または後続を選択してください。"},
-{"textID": "relations.no_external", "KR": "추가할 다른 프로젝트 작업이 없습니다.", "US": "No other project tasks to add.", "JP": "追加できる他のプロジェクトの作業はありません。"},
-{"textID": "relations.add_row", "KR": "추가", "US": "Add", "JP": "追加"},
-
-{"textID":"undo.in_progress","KR":"실행취소 중","US":"Undoing","JP":"取り消し中"},
-{"textID":"undo.completed","KR":"변경사항을 취소했습니다.","US":"Change undone.","JP":"変更を取り消しました。"},
-{"textID":"undo.empty","KR":"취소할 변경사항이 없습니다.","US":"No changes to undo.","JP":"取り消す変更はありません。"},
-{"textID":"navigation.toggle_sidebar","KR":"사이드바 열기/닫기","US":"Toggle sidebar","JP":"サイドバーを開く／閉じる"},
-{"textID":"template.duration_days","KR":"기간(일)","US":"Duration (days)","JP":"期間（日）"},
-{"textID": "settings.timezone", "KR": "시간대", "US": "Time zone", "JP": "タイムゾーン"},
-{"textID": "settings.server_timezone", "KR": "서버 시간대 (기본)", "US": "Server time zone (default)", "JP": "サーバーのタイムゾーン（既定）"},
-{"textID": "settings.timezone_help", "KR": "이 기기에만 적용됩니다. 일정의 시작일·종료일과 공휴일 국가는 바뀌지 않습니다.", "US": "Applies only to this device. Schedule dates and the holiday country stay unchanged.", "JP": "この端末にのみ適用されます。予定の日付や祝日の国は変更されません。"},
-{"textID": "tags.add_hint", "KR": "태그 입력 후 쉼표 또는 Enter", "US": "Type a tag, then comma or Enter", "JP": "タグを入力し、カンマまたはEnter"},
-{"textID": "tags.remove", "KR": "태그 제거", "US": "Remove tag", "JP": "タグを削除"},
-{"textID": "tags.color", "KR": "태그 색상", "US": "Tag color", "JP": "タグの色"},
-{"textID": "tags.color_help", "KR": "색상이 지정된 첫 태그가 랜덤 색상의 기준입니다.", "US": "The first colored tag determines the random color family.", "JP": "色が設定された最初のタグをランダム色の基準にします。"},
-  {"textID":"clipboard.copied","KR":"행을 복사했습니다.","US":"Row copied.","JP":"行をコピーしました。"},
-  {"textID":"clipboard.pasted","KR":"행을 붙여넣었습니다.","US":"Row pasted.","JP":"行を貼り付けました。"},
-  {"textID":"inspector.valid_project_order","KR":"프로젝트 개수 이내의 양의 정수를 입력하세요.","US":"Enter a positive integer within the project count.","JP":"プロジェクト数以内の正の整数を入力してください。"},
-  {"textID":"directory.drag_project","KR":"드래그하여 프로젝트 순서 변경 (기본 정렬)","US":"Drag to reorder projects (manual order)","JP":"ドラッグしてプロジェクトの順序を変更（手動順）"},
+  {
+    "textID": "shortcuts.title",
+    "KR": "단축키",
+    "US": "Keyboard shortcuts",
+    "JP": "キーボードショートカット"
+  },
+  {
+    "textID": "shortcuts.show",
+    "KR": "단축키 보기",
+    "US": "View shortcuts",
+    "JP": "ショートカットを見る"
+  },
+  {
+    "textID": "shortcuts.close",
+    "KR": "닫기",
+    "US": "Close",
+    "JP": "閉じる"
+  },
+  {
+    "textID": "shortcuts.description",
+    "KR": "키를 눌러 변경하거나 추가할 수 있습니다. 같은 상황에서 겹치는 조합은 등록할 수 없습니다. 변경은 이 브라우저에 자동 저장됩니다.",
+    "US": "Click a binding to record a new key. Conflicts in the same context are rejected. Changes are saved in this browser.",
+    "JP": "キーをクリックして変更できます。同じ操作範囲の競合は登録できません。このブラウザーに自動保存されます。"
+  },
+  {
+    "textID": "shortcuts.system_note",
+    "KR": "⌘H는 macOS 앱 숨기기, Ctrl+H는 브라우저 방문 기록과 겹칠 수 있습니다. 운영체제가 먼저 처리하는 키는 다른 조합으로 변경하세요. 입력창의 기본 텍스트 편집과 Tab 포커스 이동은 브라우저 동작을 따릅니다.",
+    "US": "⌘H may hide the macOS app; Ctrl+H may open browser history. Use another binding if the system intercepts it. Native text editing and Tab focus navigation remain browser controls.",
+    "JP": "⌘HはmacOSの非表示、Ctrl+Hは履歴と競合する場合があります。システムに予約されたキーは変更してください。文字編集とTab移動はブラウザーの動作です。"
+  },
+  {
+    "textID": "shortcuts.add",
+    "KR": "키 추가",
+    "US": "Add key",
+    "JP": "キー追加"
+  },
+  {
+    "textID": "shortcuts.remove",
+    "KR": "삭제",
+    "US": "Remove",
+    "JP": "削除"
+  },
+  {
+    "textID": "shortcuts.disabled",
+    "KR": "미지정",
+    "US": "Unassigned",
+    "JP": "未設定"
+  },
+  {
+    "textID": "shortcuts.reset",
+    "KR": "전체 기본값 복원",
+    "US": "Restore all defaults",
+    "JP": "すべて初期設定に戻す"
+  },
+  {
+    "textID": "shortcuts.cancel_recording",
+    "KR": "키 입력 취소",
+    "US": "Cancel recording",
+    "JP": "キー入力を中止"
+  },
+  {
+    "textID": "shortcuts.saved",
+    "KR": "저장되었습니다.",
+    "US": "Saved.",
+    "JP": "保存しました。"
+  },
+  {
+    "textID": "shortcuts.save_error",
+    "KR": "저장할 수 없습니다. 다른 키를 선택하거나 브라우저 저장 설정을 확인하세요.",
+    "US": "Cannot save. Choose another key or check browser storage settings.",
+    "JP": "保存できません。別のキーまたはブラウザーの保存設定を確認してください。"
+  },
+  {
+    "textID": "shortcuts.press_key",
+    "KR": "{p0}: 사용할 키 조합을 누르세요.",
+    "US": "{p0}: press the new key combination.",
+    "JP": "{p0}: 新しいキーを押してください。"
+  },
+  {
+    "textID": "shortcuts.conflict",
+    "KR": "{p0} 단축키와 겹칩니다. 다른 키를 눌러 주세요.",
+    "US": "Conflicts with {p0}. Press another key.",
+    "JP": "{p0} と競合します。別のキーを押してください。"
+  },
+  {
+    "textID": "shortcuts.category.navigation",
+    "KR": "이동 · 메뉴",
+    "US": "Navigation and menus",
+    "JP": "移動・メニュー"
+  },
+  {
+    "textID": "shortcuts.category.editing",
+    "KR": "행 편집",
+    "US": "Row editing",
+    "JP": "行の編集"
+  },
+  {
+    "textID": "shortcuts.category.input",
+    "KR": "입력 · 창",
+    "US": "Inputs and windows",
+    "JP": "入力・ウィンドウ"
+  },
+  {
+    "textID": "shortcuts.category.progress",
+    "KR": "진행률",
+    "US": "Progress",
+    "JP": "進捗"
+  },
+  {
+    "textID": "navigation.template_plus",
+    "KR": "템플릿+",
+    "US": "Template+",
+    "JP": "テンプレート+"
+  },
+  {
+    "textID": "timeline.search_filter_active",
+    "KR": "검색 필터 적용 중",
+    "US": "Search filter active",
+    "JP": "検索フィルター適用中"
+  },
+  {
+    "textID": "notes.delete",
+    "KR": "메모 삭제",
+    "US": "Delete note",
+    "JP": "メモを削除"
+  },
+  {
+    "textID": "notes.delete_failed",
+    "KR": "삭제 실패 · X 버튼을 눌러 다시 시도하세요",
+    "US": "Delete failed · Click X to retry",
+    "JP": "削除失敗 · Xボタンで再試行してください"
+  },
+  {
+    "textID": "notes.label",
+    "KR": "메모",
+    "US": "Notes",
+    "JP": "メモ"
+  },
+  {
+    "textID": "notes.add",
+    "KR": "메모 추가",
+    "US": "Add note",
+    "JP": "メモを追加"
+  },
+  {
+    "textID": "notes.new",
+    "KR": "새 메모",
+    "US": "New note",
+    "JP": "新しいメモ"
+  },
+  {
+    "textID": "notes.title",
+    "KR": "메모 제목",
+    "US": "Note title",
+    "JP": "メモのタイトル"
+  },
+  {
+    "textID": "notes.content",
+    "KR": "메모를 입력하세요…",
+    "US": "Write a note…",
+    "JP": "メモを入力…"
+  },
+  {
+    "textID": "notes.close",
+    "KR": "접기",
+    "US": "Collapse",
+    "JP": "折りたたむ"
+  },
+  {
+    "textID": "notes.saved",
+    "KR": "저장됨",
+    "US": "Saved",
+    "JP": "保存済み"
+  },
+  {
+    "textID": "notes.saving",
+    "KR": "저장 중…",
+    "US": "Saving…",
+    "JP": "保存中…"
+  },
+  {
+    "textID": "notes.dirty",
+    "KR": "저장 대기",
+    "US": "Unsaved changes",
+    "JP": "未保存"
+  },
+  {
+    "textID": "notes.retry",
+    "KR": "저장 실패 · 다시 시도",
+    "US": "Save failed · Retry",
+    "JP": "保存失敗 · 再試行"
+  },
+  {
+    "textID": "notes.load",
+    "KR": "메모 불러오기 재시도",
+    "US": "Retry loading notes",
+    "JP": "メモの読み込みを再試行"
+  },
+  {
+    "textID": "timeline.hide_chart_tools",
+    "KR": "조정 도구·설명 숨기기",
+    "US": "Hide chart controls and legend",
+    "JP": "調整ツール・説明を隠す"
+  },
+  {
+    "textID": "timeline.show_chart_tools",
+    "KR": "조정 도구·설명 표시",
+    "US": "Show chart controls and legend",
+    "JP": "調整ツール・説明を表示"
+  },
+  {
+    "textID": "settings.display",
+    "KR": "화면 표시",
+    "US": "Display",
+    "JP": "画面表示"
+  },
+  {
+    "textID": "settings.text_scale",
+    "KR": "전체 텍스트 크기",
+    "US": "Global text size",
+    "JP": "全体の文字サイズ"
+  },
+  {
+    "textID": "settings.text_scale_description",
+    "KR": "전체 텍스트와 함께 간트 바·행, 날짜 셀, 속성 패널의 크기를 조절합니다. 이 브라우저에 자동 저장됩니다.",
+    "US": "Scale all text together with Gantt bars and rows, date cells, and property panels. Saved automatically in this browser.",
+    "JP": "全体の文字とともに、ガントバーと行、日付セル、プロパティパネルのサイズを調整します。このブラウザーに自動保存されます。"
+  },
+  {
+    "textID": "settings.text_scale_reset",
+    "KR": "기본 크기 (100%)",
+    "US": "Default size (100%)",
+    "JP": "標準サイズ (100%)"
+  },
+  {
+    "textID": "timeline.compact",
+    "KR": "축약",
+    "US": "Compact rows",
+    "JP": "行の集約"
+  },
+  {
+    "textID": "timeline.compact_none",
+    "KR": "축약 안 함",
+    "US": "No grouping",
+    "JP": "集約なし"
+  },
+  {
+    "textID": "task.create_same",
+    "KR": "동일 작업 생성",
+    "US": "Create same task",
+    "JP": "同じ作業を作成"
+  },
+  {
+    "textID": "timeline.previous_half_year",
+    "KR": "이전 6개월",
+    "US": "Previous 6 months",
+    "JP": "前の6か月"
+  },
+  {
+    "textID": "timeline.next_half_year",
+    "KR": "다음 6개월",
+    "US": "Next 6 months",
+    "JP": "次の6か月"
+  },
+  {
+    "textID": "timeline.day_view",
+    "KR": "일 간트",
+    "US": "Daily Gantt",
+    "JP": "日別ガント"
+  },
+  {
+    "textID": "timeline.month_view",
+    "KR": "월 간트 · 프로젝트 연간 보기",
+    "US": "Monthly Gantt · Yearly projects",
+    "JP": "月別ガント・年間プロジェクト"
+  },
+  {
+    "textID": "timeline.previous_year",
+    "KR": "이전 연도",
+    "US": "Previous year",
+    "JP": "前年"
+  },
+  {
+    "textID": "timeline.next_year",
+    "KR": "다음 연도",
+    "US": "Next year",
+    "JP": "翌年"
+  },
+  {
+    "textID": "timeline.no_projects",
+    "KR": "표시할 프로젝트가 없습니다.",
+    "US": "No projects to display.",
+    "JP": "表示するプロジェクトはありません。"
+  },
+  {
+    "textID": "inspector.select_project",
+    "KR": "프로젝트 선택",
+    "US": "Select project",
+    "JP": "プロジェクトを選択"
+  },
+  {
+    "textID": "inspector.toggle",
+    "KR": "속성 열기/닫기",
+    "US": "Toggle properties",
+    "JP": "プロパティを開く／閉じる"
+  },
+  {
+    "textID": "task.numbered_label",
+    "KR": "작업{p0}",
+    "US": "Task {p0}",
+    "JP": "作業{p0}"
+  },
+  {
+    "textID": "task.add_same_row",
+    "KR": "같은 행에 작업 추가",
+    "US": "Add task to this row",
+    "JP": "同じ行に作業を追加"
+  },
+  {
+    "textID": "task.numbered_properties",
+    "KR": "작업{p0} 속성",
+    "US": "Task {p0} properties",
+    "JP": "作業{p0}のプロパティ"
+  },
+  {
+    "textID": "relations.title",
+    "KR": "연결",
+    "US": "Connections",
+    "JP": "接続"
+  },
+  {
+    "textID": "relations.add_external",
+    "KR": "다른 프로젝트 작업 추가",
+    "US": "Add task from another project",
+    "JP": "他のプロジェクトの作業を追加"
+  },
+  {
+    "textID": "relations.choose_direction",
+    "KR": "추가한 행에서 선행 또는 후행을 선택하세요.",
+    "US": "Choose predecessor or successor in the added row.",
+    "JP": "追加した行で先行または後続を選択してください。"
+  },
+  {
+    "textID": "relations.no_external",
+    "KR": "추가할 다른 프로젝트 작업이 없습니다.",
+    "US": "No other project tasks to add.",
+    "JP": "追加できる他のプロジェクトの作業はありません。"
+  },
+  {
+    "textID": "relations.add_row",
+    "KR": "추가",
+    "US": "Add",
+    "JP": "追加"
+  },
+  {
+    "textID": "undo.in_progress",
+    "KR": "실행취소 중",
+    "US": "Undoing",
+    "JP": "取り消し中"
+  },
+  {
+    "textID": "undo.completed",
+    "KR": "변경사항을 취소했습니다.",
+    "US": "Change undone.",
+    "JP": "変更を取り消しました。"
+  },
+  {
+    "textID": "undo.empty",
+    "KR": "취소할 변경사항이 없습니다.",
+    "US": "No changes to undo.",
+    "JP": "取り消す変更はありません。"
+  },
+  {
+    "textID": "navigation.toggle_sidebar",
+    "KR": "사이드바 열기/닫기",
+    "US": "Toggle sidebar",
+    "JP": "サイドバーを開く／閉じる"
+  },
+  {
+    "textID": "template.duration_days",
+    "KR": "기간(일)",
+    "US": "Duration (days)",
+    "JP": "期間（日）"
+  },
+  {
+    "textID": "settings.timezone",
+    "KR": "시간대",
+    "US": "Time zone",
+    "JP": "タイムゾーン"
+  },
+  {
+    "textID": "settings.server_timezone",
+    "KR": "서버 시간대 (기본)",
+    "US": "Server time zone (default)",
+    "JP": "サーバーのタイムゾーン（既定）"
+  },
+  {
+    "textID": "settings.timezone_help",
+    "KR": "이 기기에만 적용됩니다. 일정의 시작일·종료일과 공휴일 국가는 바뀌지 않습니다.",
+    "US": "Applies only to this device. Schedule dates and the holiday country stay unchanged.",
+    "JP": "この端末にのみ適用されます。予定の日付や祝日の国は変更されません。"
+  },
+  {
+    "textID": "tags.add_hint",
+    "KR": "태그 입력 후 쉼표 또는 Enter",
+    "US": "Type a tag, then comma or Enter",
+    "JP": "タグを入力し、カンマまたはEnter"
+  },
+  {
+    "textID": "tags.remove",
+    "KR": "태그 제거",
+    "US": "Remove tag",
+    "JP": "タグを削除"
+  },
+  {
+    "textID": "tags.color",
+    "KR": "태그 색상",
+    "US": "Tag color",
+    "JP": "タグの色"
+  },
+  {
+    "textID": "tags.color_help",
+    "KR": "색상이 지정된 첫 태그가 랜덤 색상의 기준입니다.",
+    "US": "The first colored tag determines the random color family.",
+    "JP": "色が設定された最初のタグをランダム色の基準にします。"
+  },
+  {
+    "textID": "clipboard.copied",
+    "KR": "행을 복사했습니다.",
+    "US": "Row copied.",
+    "JP": "行をコピーしました。"
+  },
+  {
+    "textID": "clipboard.pasted",
+    "KR": "행을 붙여넣었습니다.",
+    "US": "Row pasted.",
+    "JP": "行を貼り付けました。"
+  },
+  {
+    "textID": "inspector.valid_project_order",
+    "KR": "프로젝트 개수 이내의 양의 정수를 입력하세요.",
+    "US": "Enter a positive integer within the project count.",
+    "JP": "プロジェクト数以内の正の整数を入力してください。"
+  },
+  {
+    "textID": "directory.drag_project",
+    "KR": "드래그하여 프로젝트 순서 변경 (기본 정렬)",
+    "US": "Drag to reorder projects (manual order)",
+    "JP": "ドラッグしてプロジェクトの順序を変更（手動順）"
+  },
   {
     "textID": "status.planned",
     "KR": "예정",
@@ -2650,5 +3052,143 @@
     "KR": "랜덤 색상 적용",
     "US": "Apply random color",
     "JP": "ランダムな色を適用"
+  },
+  {
+    "textID": "shortcuts.action.today",
+    "KR": "오늘 날짜로 이동",
+    "US": "Go to today",
+    "JP": "今日へ移動"
+  },
+  {
+    "textID": "shortcuts.action.undo",
+    "KR": "일정 실행 취소",
+    "US": "Undo schedule change",
+    "JP": "予定の変更を元に戻す"
+  },
+  {
+    "textID": "shortcuts.action.rename",
+    "KR": "선택한 행 이름 변경",
+    "US": "Rename selected row",
+    "JP": "選択行の名前変更"
+  },
+  {
+    "textID": "shortcuts.action.copy",
+    "KR": "선택한 행 복사",
+    "US": "Copy selected row",
+    "JP": "選択行をコピー"
+  },
+  {
+    "textID": "shortcuts.action.paste",
+    "KR": "복사한 행 붙여넣기",
+    "US": "Paste copied row",
+    "JP": "行を貼り付け"
+  },
+  {
+    "textID": "shortcuts.action.previous",
+    "KR": "이전 월 범위",
+    "US": "Previous month range",
+    "JP": "前の月範囲"
+  },
+  {
+    "textID": "shortcuts.action.next",
+    "KR": "다음 월 범위",
+    "US": "Next month range",
+    "JP": "次の月範囲"
+  },
+  {
+    "textID": "shortcuts.action.confirm",
+    "KR": "입력 확정",
+    "US": "Confirm input",
+    "JP": "入力を確定"
+  },
+  {
+    "textID": "shortcuts.action.close",
+    "KR": "접기 · 닫기 / 행 이름 확정",
+    "US": "Collapse / close / confirm row name",
+    "JP": "折りたたむ・閉じる・行名確定"
+  },
+  {
+    "textID": "shortcuts.action.clearDate",
+    "KR": "날짜 전체 지우기",
+    "US": "Clear full date",
+    "JP": "日付を消去"
+  },
+  {
+    "textID": "shortcuts.action.tagAdd",
+    "KR": "태그 확정",
+    "US": "Confirm tag",
+    "JP": "タグ確定"
+  },
+  {
+    "textID": "shortcuts.action.tagRemove",
+    "KR": "빈 입력에서 마지막 태그 삭제",
+    "US": "Remove last tag in empty input",
+    "JP": "空入力で最後のタグ削除"
+  },
+  {
+    "textID": "shortcuts.action.increase",
+    "KR": "진행률 10% 증가",
+    "US": "Increase progress by 10%",
+    "JP": "進捗を10%増加"
+  },
+  {
+    "textID": "shortcuts.action.decrease",
+    "KR": "진행률 10% 감소",
+    "US": "Decrease progress by 10%",
+    "JP": "進捗を10%減少"
+  },
+  {
+    "textID": "shortcuts.action.minimum",
+    "KR": "진행률 0%",
+    "US": "Set progress to 0%",
+    "JP": "進捗0%"
+  },
+  {
+    "textID": "shortcuts.action.maximum",
+    "KR": "진행률 100%",
+    "US": "Set progress to 100%",
+    "JP": "進捗100%"
+  },
+  {
+    "textID": "shortcuts.action.stop",
+    "KR": "중지 상태 전환",
+    "US": "Toggle stopped state",
+    "JP": "停止状態切替"
+  },
+  {
+    "textID": "shortcuts.action.help",
+    "KR": "상태 도움말",
+    "US": "Status help",
+    "JP": "状態のヘルプ"
+  },
+  {
+    "textID": "shortcuts.action.activate",
+    "KR": "연결선의 작업 선택",
+    "US": "Select connected task",
+    "JP": "接続されたタスクを選択"
+  },
+  {
+    "textID": "shortcuts.action.menuDown",
+    "KR": "메뉴 다음 항목",
+    "US": "Next menu item",
+    "JP": "次のメニュー項目"
+  },
+  {
+    "textID": "shortcuts.action.menuUp",
+    "KR": "메뉴 이전 항목",
+    "US": "Previous menu item",
+    "JP": "前のメニュー項目"
+  },
+  {
+    "textID": "shortcuts.action.revealDelete",
+    "KR": "사이드바 행 삭제 버튼 표시",
+    "US": "Reveal sidebar row delete button",
+    "JP": "サイドバー行の削除ボタン表示"
+  },
+  {
+    "textID": "shortcuts.action.hideDelete",
+    "KR": "사이드바 행 삭제 버튼 숨기기",
+    "US": "Hide sidebar row delete button",
+    "JP": "サイドバー行の削除ボタン非表示"
   }
 ]

@@ -23,7 +23,7 @@ test('tag tokens append, trim and deduplicate comma-separated names',()=>{
 });
 test('tag popover random selection has no family restriction and persists through the API',()=>{
  const ui=src.slice(src.indexOf('function bindTagColors('),src.indexOf('// A manual choice'));
- assert.ok(ui.includes("event.key===',' || event.key==='Enter'"));
+ assert.ok(ui.includes("Shortcuts.matches(event,'tagAdd')"));
  assert.ok(ui.includes('event.isComposing || event.keyCode===229'));
  assert.ok(ui.includes("setAttribute('popover','auto')"));
  assert.ok(ui.includes('selectColor(newProjectColor('));

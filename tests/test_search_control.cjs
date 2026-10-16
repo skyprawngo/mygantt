@@ -9,7 +9,7 @@ function setup(){
   const classes=new Set();
   nodes['#'+id]={id,value:'',hidden:true,handlers:{},attrs:{},textContent:'',classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle:(c,on)=>on?classes.add(c):classes.delete(c)},addEventListener(n,f){this.handlers[n]=f;},setAttribute(k,v){this.attrs[k]=v;},focus(){document.activeElement=this;},dispatchEvent(e){this.handlers[e.type]?.(e);},contains(n){return n===this||n===nodes['#search-filter']||n===nodes['#search-toggle']||n===nodes['#search-clear'];}};
  }
- const context={document,$:s=>nodes[s],t:()=> 'Search filter active',Event:class{constructor(type){this.type=type;}}};vm.createContext(context);
+ const context={document,$:s=>nodes[s],t:()=> 'Search filter active',Event:class{constructor(type){this.type=type;}}};context.Shortcuts=require('../web/shortcuts.js').create({device:context.navigator || {}});vm.createContext(context);
  vm.runInContext(source.slice(source.indexOf('function syncTimelineSearch()'),source.indexOf('function bindMobileSearch()')),context);context.bindTimelineSearch();
  return {nodes,document,box:nodes['#timeline-search'],input:nodes['#search-filter'],toggle:nodes['#search-toggle'],clear:nodes['#search-clear']};
 }

@@ -5,9 +5,9 @@ const fs = require('node:fs');
 const source = fs.readFileSync('web/app.js','utf8');
 test('mobile inspector follows active page, isolates hidden panels, and closes on desktop',()=>{
  let focused = 0, narrow = true;
- const make = () => ({inert:false,getBoundingClientRect(){},querySelector:()=>({focus(){focused++;}})});
+ const make = () => ({prepend(node){node.parentElement=this;},inert:false,getBoundingClientRect(){},querySelector:()=>({focus(){focused++;}})});
  const sidebar=make(), schedule=make(), template=make(), backdrop={}, toggle={setAttribute(){}};
- const nodes={'.sidebar':sidebar,'#mobile-inspector':schedule,'#template-inspector':template,'#drawer-backdrop':backdrop,'#mobile-menu-toggle':toggle};
+ const nodes={'.app-shell':make(),'.sidebar':sidebar,'#mobile-inspector':schedule,'#template-inspector':template,'#drawer-backdrop':backdrop,'#mobile-menu-toggle':toggle};
  const classes=new Set();
  const c={state:{view:'templates'},mobileLayout:()=>narrow,$:s=>nodes[s],$$:()=>[schedule,template],document:{activeElement:null,body:{classList:{contains:k=>classes.has(k),toggle(k,v){v?classes.add(k):classes.delete(k);}}}}};
  vm.createContext(c);vm.runInContext(source.slice(source.indexOf('function activeMobileInspector('),source.indexOf('function bindMobileMenuSwipe(')),c);

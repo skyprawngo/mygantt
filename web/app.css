@@ -594,7 +594,6 @@
  #timeline-view .zoom-slider-control{flex:none;margin-left:auto;gap:2px}
  #timeline-view .zoom-slider-control input{width:48px}
  #timeline-view .zoom-slider-control output{min-width:28px;font-size:calc(10px * var(--text-scale, 1))}
- #timeline-view #today-button{flex:none;padding:6px;font-size:calc(11px * var(--text-scale, 1))}
  #timeline-view .mobile-chart-info{flex:none}
 }
 
@@ -1003,7 +1002,7 @@ button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap
 /* Shared sizing for the schedule toolbar; control width follows its purpose. */
 #timeline-view .toolbar{--toolbar-control-height:32px;--toolbar-control-radius:7px;--toolbar-control-gap:6px;align-items:center;gap:var(--toolbar-control-gap)}
 #timeline-view .toolbar-left,#timeline-view .toolbar-right{align-items:center;gap:var(--toolbar-control-gap)}
-#timeline-view .toolbar :is(.segmented,.search-box,.select-control,.cascade-toggle,.zoom-slider-control,#today-button,#mobile-layout-toggle,#mobile-search-button){height:var(--toolbar-control-height);min-height:var(--toolbar-control-height);border-radius:var(--toolbar-control-radius);font-size:calc(11px * var(--text-scale, 1));line-height:1.2}
+#timeline-view .toolbar :is(.segmented,.search-box,.select-control,.cascade-toggle,.zoom-slider-control,#mobile-layout-toggle,#mobile-search-button){height:var(--toolbar-control-height);min-height:var(--toolbar-control-height);border-radius:var(--toolbar-control-radius);font-size:calc(11px * var(--text-scale, 1));line-height:1.2}
 #timeline-view .toolbar .segmented{padding:2px;gap:2px;align-items:center;flex:none}
 #timeline-view .toolbar .segmented button{width:32px;min-width:32px;height:26px;padding:0;line-height:1;border-radius:4px}
 #timeline-view .toolbar .search-box{width:180px;min-width:150px;flex:1 1 180px;padding:0 8px;gap:6px}
@@ -1013,14 +1012,12 @@ button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap
 #timeline-view .toolbar .cascade-toggle{padding:0 8px;gap:5px}
 #timeline-view .toolbar .zoom-slider-control{gap:5px;padding:0 2px}
 #timeline-view .toolbar .zoom-label,#timeline-view .toolbar .zoom-slider-control output{font-size:calc(11px * var(--text-scale, 1))}
-#timeline-view .toolbar #today-button{min-width:48px;padding:0 10px;justify-content:center;white-space:nowrap}
 #timeline-view .toolbar #mobile-layout-toggle,#timeline-view .toolbar #mobile-search-button{width:32px;min-width:32px;flex:0 0 32px;padding:0;align-items:center;justify-content:center}
 @media(max-width:760px){
  #timeline-view .toolbar{gap:var(--toolbar-control-gap)}
  #timeline-view .toolbar #status-filter,#timeline-view .toolbar #sort-select,#timeline-view .toolbar #compact-select{width:76px;min-width:76px;max-width:76px;flex:0 0 76px;padding:0 6px}
  #timeline-view .toolbar .cascade-toggle{padding:0 6px;gap:4px}
  #timeline-view .toolbar .zoom-slider-control{gap:3px;padding:0}
- #timeline-view .toolbar #today-button{min-width:42px;padding:0 8px}
 }
 
 #timeline-view .toolbar #compact-select:disabled{opacity:.5;cursor:default}
@@ -1086,8 +1083,8 @@ html[data-large-text] .settings-details dt{flex-shrink:0;width:auto;min-width:90
 .inspector-relations{max-height:calc(220px * var(--text-scale,1))}
 .property-grid .inspector-relations{max-height:calc(220px * var(--text-scale,1))}
 /* Shared controls and legends also need space for their enlarged labels. */
-#timeline-view .toolbar{--toolbar-control-height:calc(32px * var(--text-scale,1));flex-wrap:wrap}
-#timeline-view .toolbar .segmented button{height:calc(26px * var(--text-scale,1));width:calc(32px * var(--text-scale,1))}
+#timeline-view .toolbar{--toolbar-control-height:calc(32px * var(--text-scale,1));min-height:calc(40px * var(--text-scale,1));padding-top:calc(4px * var(--text-scale,1));padding-bottom:calc(4px * var(--text-scale,1));flex-wrap:wrap}
+#timeline-view .toolbar .segmented button{height:calc(var(--toolbar-control-height) - 6px);width:calc(32px * var(--text-scale,1));min-width:calc(32px * var(--text-scale,1))}
 #timeline-view .toolbar .select-control{max-width:calc(130px * var(--text-scale,1))}
 #timeline-view .toolbar .search-box{min-width:calc(176px * var(--text-scale,1))}
 .schedule-legend{height:auto;min-height:calc(31px * var(--text-scale,1));padding-top:6px;padding-bottom:6px;flex-wrap:wrap;line-height:1.4}
@@ -1121,6 +1118,40 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
 .chart-tools-hidden .schedule-card>.schedule-legend{display:none!important}
 .chart-tools-hidden .chart-tools-toggle svg{transform:rotate(180deg)}
 
+/* Bookmarks and editors float above the chart without reserving layout space. */
+.main-area{position:relative}
+.notes-dock{position:absolute;bottom:0;left:0;right:0;z-index:15;padding:0 22px;background:transparent;pointer-events:none}
+.notes-bookmarks{display:flex;align-items:stretch;gap:6px;min-height:28px;padding-top:3px;padding-bottom:env(safe-area-inset-bottom);background:transparent;pointer-events:none}
+.notes-tabs{display:flex;gap:5px;overflow-x:auto;min-width:0;max-width:calc(100% - 48px)}
+.note-bookmark{pointer-events:auto;box-shadow:0 -2px 10px #24314712;flex-shrink:0;max-width:180px;min-width:42px;padding:4px 16px;line-height:16px;border:1px solid #dce2ed;border-bottom:0;border-radius:8px 8px 0 0;background:var(--note-color,#f2f4f8);color:#536176;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:calc(12px * var(--text-scale,1))}
+.note-bookmark[aria-expanded="true"]{background:var(--note-color,#f2f4f8);color:#34425a;box-shadow:inset 0 3px #34425a55}
+.note-bookmark:hover{filter:brightness(.97)}
+.note-panel{width:min(560px,100%);height:min(340px,55dvh);background:var(--note-color,#fff4c2);border:1px solid #dce2ed;border-radius:12px 12px 0 0;box-shadow:0 -10px 32px #2431471c;display:flex;flex-direction:column;pointer-events:auto}
+.note-panel[hidden]{display:none}
+.note-heading{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid #edf0f4}
+.note-heading input{min-width:0;flex:1;border:0;background:transparent;font:inherit;font-weight:650;color:#34425a;padding:6px}
+.note-panel textarea{flex:1;min-height:0;width:100%;resize:none;border:0;border-radius:0;background:transparent;padding:16px 22px;color:#34425a;font:inherit;font-size:calc(14px * var(--text-scale,1));line-height:1.7}
+.note-save{border:0;background:transparent;color:#596de6;font-size:calc(11px * var(--text-scale,1));cursor:pointer}
+.note-save:disabled{color:#8792a2;cursor:default}
+.note-panel:focus,.note-panel :focus{outline:none}
+.note-bookmark:focus-visible{outline:2px solid #6679dd;outline-offset:-2px}
+#notes-message{pointer-events:auto;align-self:center;font-size:12px;color:#b85962}
+@media(max-width:760px){
+ .notes-dock{position:fixed;padding:0 8px}
+ .note-heading{gap:5px;padding:8px}.note-bookmark{max-width:140px;padding:4px 12px}
+ .note-panel textarea{padding:12px 14px}.note-heading input{width:80px}
+}
+
+.note-delete{width:30px;height:30px;flex-shrink:0;border:0;border-radius:6px;background:transparent;color:#536176;font-size:24px;line-height:1;cursor:pointer}
+.note-delete:hover{background:#ffffff70;color:#ac3441}
+.notes-tabs{pointer-events:auto}
+
+/* Both surfaces share the bottom edge, so hiding bookmarks leaves no empty strip. */
+.note-panel{position:absolute;bottom:env(safe-area-inset-bottom,0px);left:22px;max-width:calc(100% - 44px)}
+.notes-bookmarks[hidden]{display:none}
+.notes-bookmarks[inert],.notes-bookmarks[inert] *,.note-panel[inert],.note-panel[inert] *{pointer-events:none!important}
+@media(max-width:760px){.note-panel{left:8px;max-width:calc(100% - 16px)}}
+
 /* Expanding search keeps its filter value when focus leaves the control. */
 #timeline-view .toolbar #mobile-search-button{display:none}
 #timeline-view .toolbar .timeline-search{display:flex;align-items:center;flex:0 1 auto;width:32px;min-width:32px;max-width:100%;height:32px;border:1px solid var(--line);border-radius:7px;background:#fff;overflow:hidden;transition:width .2s ease}
@@ -1140,3 +1171,54 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
 
 /* Reserve the floating chart-tools control even at mobile breakpoints. */
 #timeline-view .schedule-card>.toolbar{padding-right:52px}
+
+/* Compact toolbar and a footer legend share the display-size preference. */
+#timeline-view .toolbar #mobile-layout-toggle,#timeline-view .toolbar #mobile-search-button{width:var(--toolbar-control-height);min-width:var(--toolbar-control-height);flex-basis:var(--toolbar-control-height)}
+#timeline-view .schedule-card>.chart-tools-toggle{width:calc(32px * var(--text-scale,1));height:calc(32px * var(--text-scale,1));top:calc(4px * var(--text-scale,1))}
+#timeline-view .schedule-card>.toolbar{padding-right:calc(32px * var(--text-scale,1) + 20px)}
+#timeline-view .schedule-card>.schedule-legend{display:flex;border-top:1px solid var(--line);border-bottom:0;min-height:calc(28px * var(--text-scale,1));padding:calc(5px * var(--text-scale,1)) 12px;gap:calc(10px * var(--text-scale,1))}
+#timeline-view .schedule-info .info-tip-text{top:auto;bottom:calc(100% + 6px)}
+
+#timeline-view .toolbar .timeline-search{height:var(--toolbar-control-height);min-width:var(--toolbar-control-height);width:var(--toolbar-control-height)}
+#timeline-view .toolbar .timeline-search.expanded{width:calc(240px * var(--text-scale,1))}
+#timeline-view .toolbar .timeline-search button{height:calc(var(--toolbar-control-height) - 2px);width:calc(var(--toolbar-control-height) - 2px);flex-basis:calc(var(--toolbar-control-height) - 2px)}
+
+/* Header-free workspace and an overlay toggle owned by the navigation drawer. */
+.main-area{padding-top:0}
+:is(#timeline-view,#templates-view){height:100vh;height:100dvh}
+.sidebar{position:relative}
+.sidebar .brand{padding-right:32px}
+#mobile-menu-toggle.sidebar-toggle{position:absolute;top:22px;right:10px;left:auto;margin:0;z-index:85;width:32px;height:32px;border-radius:50%;border:1px solid #d7deef;background:#fff;color:var(--blue);box-shadow:0 2px 8px #18223020;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.app-shell>#mobile-menu-toggle.sidebar-toggle{position:fixed;top:12px;left:8px;right:auto}
+body.sidebar-collapsed .view-panel{padding-left:52px!important}
+#new-project-side.sidebar-template-add{width:auto;height:auto;padding:5px 8px;border-radius:6px;background:#e9edff;border:1px solid #d7def9;color:#4056c5;font-size:calc(10px * var(--text-scale,1));white-space:nowrap}
+#new-project-side.sidebar-template-add:hover{background:#dce3ff}
+#sidebar-template-section>#import-project-template{width:100%;margin:4px 0 12px;font-size:calc(10px * var(--text-scale,1));white-space:normal}
+@media(max-width:760px){
+ .sidebar{position:fixed;padding-top:18px}
+ .main-area{padding-top:0}
+ .view-panel,#timeline-view.view-panel,#templates-view.view-panel{height:100dvh;padding-left:48px}
+ .sidebar #mobile-menu-toggle.sidebar-toggle{top:20px}
+}
+
+/* Month boundaries remain aligned with daily columns at every display scale. */
+#gantt .date-header.month-boundary,#gantt .date-shade.month-boundary{border-left:calc(2px * var(--text-scale,1)) solid #9aa8c2}
+
+/* Stop vertical edge bounce, scroll chaining and pull-to-refresh. */
+html,body{overscroll-behavior-y:none}
+.gantt-wrap,.template-gantt,.list-wrap,.sidebar,.inspector,.view-panel,.note-panel textarea,.modal{overscroll-behavior-y:none}
+
+.shortcuts-dialog{width:min(760px,calc(100vw - 24px));max-height:85dvh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:20px;background:white;color:var(--ink);box-shadow:var(--shadow)}
+.shortcuts-dialog::backdrop{background:#18223066}
+.shortcuts-dialog header,.shortcuts-dialog footer{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.shortcuts-dialog h2{margin:0;font-size:calc(18px * var(--text-scale,1))}
+.shortcuts-dialog h3{font-size:calc(13px * var(--text-scale,1));margin:20px 0 6px;color:var(--blue)}
+.shortcuts-dialog p{line-height:1.6}.shortcuts-hint{color:var(--muted);font-size:calc(11px * var(--text-scale,1))}
+#shortcut-status{color:#ad4953;min-height:1.6em}
+.shortcut-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.shortcut-keys{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.shortcut-key{display:inline-flex;border:1px solid #d8deec;border-radius:6px;background:#f6f8fc}
+.shortcut-key button{background:transparent;border:0;padding:6px 9px;color:var(--ink)}
+.shortcut-key button+button{border-left:1px solid #d8deec;color:var(--muted)}
+.shortcuts-dialog footer{margin-top:18px}.shortcuts-dialog button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:600px){.shortcut-row{align-items:flex-start;flex-direction:column}.shortcut-keys{justify-content:flex-start}.shortcuts-dialog{padding:14px}}

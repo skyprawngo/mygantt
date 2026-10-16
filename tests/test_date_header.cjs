@@ -37,3 +37,14 @@ test('Thursday assigns boundary weeks to the correct month', () => {
     assert.equal(c.dateColumns(date,1,46)[0].periodText,label,date);
   }
 });
+
+test('month boundary marks only the first day, including year rollover and row shading',()=>{
+ const c=setup();
+ vm.runInContext(source.slice(source.indexOf('function calendarShadingMarkup('),source.indexOf('function calendarShadingMarkup(')+source.slice(source.indexOf('function calendarShadingMarkup(')).indexOf('\n}')+2),c);
+ const dates=c.dateColumns('2026-12-31',3,46);
+ for(const markup of [c.calendarHeaderMarkup(dates,46),c.calendarShadingMarkup(dates,46)]) {
+  assert.equal((markup.match(/month-boundary/g)||[]).length,1);
+ }
+ assert.match(c.calendarHeaderMarkup(dates,46),/data-date="2027-01-01"[^>]*class="date-header month-boundary/);
+ assert.match(c.calendarShadingMarkup(dates,46),/class="date-shade month-boundary[^>]*left:46px/);
+});
