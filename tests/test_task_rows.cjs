@@ -95,6 +95,14 @@ test('actual labels stay inside the rectangular portion at every display scale',
  }
 });
 
+test('label footprints split non-overlapping dates into lanes until all text fits',()=>{
+ const tasks=[task('a','01','03'),task('b','07','09')];
+ const crowded=c.groupedTaskRows(tasks,'',1,(item)=>item.id==='a'?{start:0,end:220}:{start:200,end:300});
+ assert.equal(crowded[0].offsets.get('b'),36);assert.equal(crowded[0].height,72);
+ const clear=c.groupedTaskRows(tasks,'',2,(item)=>item.id==='a'?{start:0,end:220}:{start:230,end:330});
+ assert.equal(clear[0].offsets.get('b'),0);assert.equal(clear[0].height,72);
+});
+
 test('inspector follows visual compaction, filters, order and project boundaries',()=>{
  const a=task('a','01','03',{owner:'Vendor',sort_order:1}),b=task('b','07','09',{owner:'Vendor',sort_order:2}),cTask=task('c','10','11',{owner:'Vendor',gantt_row_id:'c',sort_order:3}),other=task('other','12','13',{owner:'Other',gantt_row_id:'other'});
  const p={id:'p',tasks:[a,b,cTask,other]},q={id:'q',tasks:[task('foreign','01','03',{owner:'Vendor'})]};

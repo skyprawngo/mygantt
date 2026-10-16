@@ -90,6 +90,7 @@ function createProjectMotion({getState, render, persist}) {
           font,lineHeight,letterSpacing,color});
         body.append(copy);snapshots.push(copy);
         const frames=projectTextFrames(own,follows,height,color,foldedColor);
+        if (own) frames.folded.transform=`translateY(${-5*summaryHeight/23}px)`;
         motion(copy,frames.folded,frames.expanded);
         remember(text);text.style.visibility='hidden';
       }
@@ -111,14 +112,14 @@ function createProjectMotion({getState, render, persist}) {
       for (const later of bands.filter(el=>parseFloat(el.style.top)>=bottom-0.5 && el!==band)) {
         motion(later,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
       }
-      if (band) {
-        remember(band);band.style.transformOrigin='0 0';
-        const folded={transform:`translateY(${summaryTop}px) scaleY(${summaryHeight/bandHeight})`};
-        const expanded={transform:'translateY(0px) scaleY(1)'};
-        motion(band,folded,expanded);
+      if (band && summary) {
+        const scale=summaryHeight/23;
         const cover=band.cloneNode(false);cover.removeAttribute('data-project-band');
-        cover.classList.add('project-morph-cover');band.after(cover);snapshots.push(cover);
-        motion(cover,{...folded,opacity:1},{...expanded,opacity:0});
+        cover.classList.add('project-morph-cover');
+        Object.assign(cover.style,{top:`${headerTop+summaryTop}px`,height:`${summaryHeight}px`,transformOrigin:'0 0'});
+        band.after(cover);snapshots.push(cover);
+        summary.classList.add('project-header-animating');
+        motion(cover,{transform:'scaleY(1)'},{transform:`scaleY(${3*scale/summaryHeight})`});
       }
       // Three vector regions share the rows' native timing. Labels retain
       // their sticky opaque surface; the SVG stays behind the HTML handles.
@@ -168,6 +169,7 @@ function createProjectMotion({getState, render, persist}) {
       for(const animation of animations) animation.cancel();
       for(const [el,cssText] of saved) el.style.cssText=cssText;
       for(const snapshot of snapshots) snapshot.remove();
+      summary?.classList.remove('project-header-animating');
       body.classList.remove('project-fold-animating');
     }
   }

@@ -1,0 +1,24 @@
+/* Shared typography for project bars, task names and endpoint date labels.
+   Keep sizing in CSS so chart geometry and typography scale independently. */
+:root {
+  --gantt-label-font-size: calc(11px * var(--text-scale, 1));
+  --gantt-date-font-size: calc(10px * var(--text-scale, 1));
+  --gantt-label-line-height: 1.2;
+  --gantt-label-font-weight: 600;
+}
+:is(#gantt, #template-gantt) .bar-text,
+:is(#gantt, #template-gantt) .external-bar-label .bar-text,
+:is(#gantt, #template-gantt) .project-summary-bar > span {
+  font-family: inherit;
+  font-size: var(--gantt-label-font-size);
+  font-weight: var(--gantt-label-font-weight);
+  line-height: var(--gantt-label-line-height);
+}
+
+/* Endpoint dates are quieter than task and project names. */
+:is(#gantt, #template-gantt) .external-bar-label .bar-date {
+  background: transparent;
+  font-size: var(--gantt-date-font-size);
+}
+
+:is(#gantt, #template-gantt) .external-bar-label .bar-task-name {background:transparent}

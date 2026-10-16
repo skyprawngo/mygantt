@@ -14,7 +14,7 @@ function setup(narrow) {
     projectMotion:{toggle:id=>calls.push(`toggle:${id}`)},
     selectItem:(type,id)=>calls.push(`select:${type}:${id}`)};
   vm.runInNewContext(source.slice(source.indexOf("  $('#gantt').addEventListener('click',"),source.indexOf("  $('#project-accordion').addEventListener('click',")),context);
-  return {state,calls,click:selector=>click({target:{closest:s=>s===selector?{dataset:{collapse:'p',projectSelect:'p',taskSelect:'t'}}:null}})};
+  return {state,calls,clickRow:row=>click({target:{closest:s=>s==='.gantt-row'?row:null}}),click:selector=>click({target:{closest:s=>s===selector?{dataset:{collapse:'p',projectSelect:'p',taskSelect:'t'}}:null}})};
 }
 test('narrow project cell only toggles expansion and preserves inspector selection',()=>{
   const h=setup(true);
@@ -69,4 +69,19 @@ test('detached bars and switching to monthly view cancel delayed selection',()=>
   const h=gestures();h.handlers.click(h.event(1));if(mode==='detached')h.bar.isConnected=false;else h.state.layout='month';h.flush();assert.equal(h.calls.length,0);
  }
  const h=gestures();h.state.layout='month';h.handlers.dblclick(h.event(2));assert.equal(h.calls.length,0);
+});
+
+for(const narrow of [false,true]) test(`blank task row selects its project with collapsed properties: narrow=${narrow}`,()=>{
+ const h=setup(narrow);
+ const row={dataset:{},querySelector:()=>({dataset:{project:'owner-project'}})};
+ h.clickRow(row);
+ assert.equal(h.state.selection.type,'project');assert.equal(h.state.selection.id,'owner-project');
+ assert.equal(h.state.inspectorOpen,'');
+ assert(h.calls.includes('timeline'));
+ if(narrow) assert(h.calls.includes('drawer:inspector'));
+ h.state.selection=null;h.clickRow(row);assert.equal(h.state.selection.id,'owner-project');
+});
+test('blank project header uses its own project identity',()=>{
+ const h=setup(false);h.clickRow({dataset:{projectBoundary:'header-project'}});
+ assert.equal(h.state.selection.id,'header-project');assert.equal(h.state.inspectorOpen,'');
 });

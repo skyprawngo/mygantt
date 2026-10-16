@@ -142,9 +142,10 @@
 .holiday-status{display:block;min-width:0;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(8px * var(--text-scale, 1))}
 .holiday-status[data-status="stale"],.holiday-status[data-status="unavailable"]{color:#b16859}
 .holiday-status[data-substitute-warning="true"]{color:#a75445;font-weight:600}
-.date-header.saturday{background:#eef5ff}
+.date-header.saturday{background:#f6f9ff}
 .date-header.saturday small{color:#6381aa}
-.date-header.sunday,.date-header.holiday{background:#fff1f0}
+.date-header.sunday{background:#fff8f7}
+.date-header.holiday{background:#fff1f0}
 .date-header.sunday small{color:#a96363}
 .date-header.holiday b,.date-header.holiday small{color:#a84d4b}
 .gantt-row.project-row,.gantt-row.task-row{background:var(--project-surface)}
@@ -156,8 +157,8 @@
 .gantt-right.project-timeline{background-color:var(--project-surface);background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--day-width,46px) - 1px),rgba(218,225,235,.66) calc(var(--day-width,46px) - 1px),rgba(218,225,235,.66) var(--day-width,46px));overflow:visible}
 .row-date-shading{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
 .row-date-shading .date-shade{top:0;bottom:0;z-index:1}
-.row-date-shading .date-shade.weekend-shade.weekend-saturday:not(.holiday-shade){background-color:rgba(165,202,246,.30)}
-.row-date-shading .date-shade.weekend-shade.weekend-sunday,
+.row-date-shading .date-shade.weekend-shade.weekend-saturday:not(.holiday-shade){background-color:rgba(165,202,246,.13)}
+.row-date-shading .date-shade.weekend-shade.weekend-sunday{background:rgba(239,173,173,.12)}
 .row-date-shading .date-shade.holiday-shade{background:rgba(239,173,173,.29)}
 .project-timeline>.today-line{left:0;top:0;bottom:0;width:2px;z-index:3;opacity:.82}
 .project-timeline>.today-line:before{content:none}
@@ -190,8 +191,8 @@
 .gantt-right.project-timeline{background-color:transparent}
 .project-duration-band{position:absolute;z-index:0;overflow:hidden;pointer-events:none;border:1px solid var(--bar-border);border-radius:5px;background:var(--bar-surface)}
 .project-duration-band:before{content:'';position:absolute;inset:0 auto 0 0;width:var(--progress);background:var(--bar-light)}
-.project-summary-bar.expanded-project-label{background:transparent!important;color:var(--bar-dark);box-shadow:none;border-left:3px solid var(--bar-color);border-radius:0;padding-left:4px;overflow:visible}
-.project-summary-bar.expanded-project-label>i{display:none}
+.project-summary-bar.expanded-project-label{color:var(--bar-ink)}
+.project-summary-bar.expanded-project-label>i{display:block;background:var(--bar-progress)}
 .project-summary-bar.expanded-project-label>span{color:inherit;text-shadow:none}
 .task-bar{touch-action:none}
 .resize-handle{position:absolute;top:0;bottom:0;width:9px;z-index:5;cursor:ew-resize;touch-action:none;opacity:.45}
@@ -1102,7 +1103,7 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
 
 /* Chart labels are one step larger than the shared UI typography. */
 :is(#gantt,#template-gantt) .bar-text,
-:is(#gantt,#template-gantt) .project-summary-bar>span{font-size:calc(9px * var(--text-scale,1));line-height:1.3}
+:is(#gantt,#template-gantt) .project-summary-bar>span{font-size:var(--gantt-label-font-size);line-height:var(--gantt-label-line-height)}
 :is(#gantt,#template-gantt) .project-name{font-size:calc(11px * var(--text-scale,1))}
 :is(#gantt,#template-gantt) .task-name{font-size:calc(10px * var(--text-scale,1))}
 :is(#gantt,#template-gantt) .task-owner{font-size:calc(9px * var(--text-scale,1))}
@@ -1152,6 +1153,52 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
 .notes-bookmarks[inert],.notes-bookmarks[inert] *,.note-panel[inert],.note-panel[inert] *{pointer-events:none!important}
 @media(max-width:760px){.note-panel{left:8px;max-width:calc(100% - 16px)}}
 
+/* External label geometry follows its text; each label is centered on the bar. */
+.external-bar-label{width:max-content;height:auto;color:var(--ink);padding:0;gap:calc(8px * var(--text-scale,1));transform:translateY(-50%)}
+.bar-start-date{transform:translate(-100%,-50%)}
+:is(#gantt,#template-gantt) .external-bar-label .bar-text{
+ position:static;left:auto;margin:0;visibility:visible;display:block;
+ width:max-content;height:auto;box-sizing:border-box;padding:0;
+ background:rgba(255,255,255,.9);border-radius:3px;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+:is(#gantt,#template-gantt) .external-bar-label .bar-date{flex-shrink:0;color:var(--muted);font-variant-numeric:tabular-nums}
+:is(#gantt,#template-gantt) .external-bar-label .bar-task-name{min-width:0}
+
+.schedule-swatch{display:inline-block;float:right;width:12px;height:12px;margin:2px 0 2px 4px;border:1px solid #0002;border-radius:2px}
+.schedule-swatch.actual-swatch{background-image:repeating-linear-gradient(135deg,transparent 0 3px,rgba(255,255,255,.6) 3px 4.5px,transparent 4.5px 6px)}
+
+/* Duration bands retain geometry for transitions, without painting over task rows. */
+.project-duration-band:not(.project-band-morphing):not(.project-morph-cover){background:transparent;border-color:transparent}
+.project-duration-band:not(.project-band-morphing):not(.project-morph-cover):before{display:none}
+
+/* Expanded projects use a progress rule with a plain caption below it. */
+:is(#gantt,#template-gantt) .project-summary-bar.expanded-project-label{
+ background:transparent;box-shadow:none;border:0;border-radius:0;
+ color:var(--bar-dark);overflow:visible;
+}
+.project-summary-bar.expanded-project-label:before{
+ content:'';position:absolute;left:0;right:0;top:0;
+ height:calc(3px * var(--text-scale,1));background:var(--bar-color);border-radius:2px;
+}
+.project-summary-bar.expanded-project-label>i{
+ height:calc(3px * var(--text-scale,1));bottom:auto;border-radius:2px;
+}
+:is(#gantt,#template-gantt) .project-summary-bar.expanded-project-label>span{transform:translateY(calc(5px * var(--text-scale,1)));background:transparent}
+.project-summary-bar.project-header-animating:before,.project-summary-bar.project-header-animating>i{visibility:hidden}
+
+.selected-row .project-summary-bar.expanded-project-label{outline:none}
+
+/* Two-tier day calendar: merged Sunday-to-Saturday weeks, compact daily cells. */
+#gantt:not(.month-gantt){--chart-head:calc(44px * var(--text-scale,1))}
+#gantt:not(.month-gantt) .date-axis{display:flex;flex-direction:column}
+.calendar-week-row,.calendar-day-row{display:flex;flex:none;width:max-content}
+.calendar-week-row{height:calc(16px * var(--text-scale,1));background:#f5f7fb;border-bottom:1px solid var(--line)}
+.calendar-week-cell{flex:none;display:flex;align-items:center;justify-content:center;border-left:1px solid #dce3ec;overflow:hidden;white-space:nowrap;font-size:calc(9px * var(--text-scale,1));font-weight:600;color:#637086}
+.calendar-day-row{height:calc(28px * var(--text-scale,1))}
+#gantt .calendar-day-row .date-header{height:100%;padding:0;flex-direction:column;justify-content:center;gap:0}
+#gantt .calendar-day-row .date-header b,#gantt .calendar-day-row .date-header small{height:auto;flex:0 1 auto;margin:0;line-height:1.2}
+#gantt .calendar-day-row .date-header small{font-size:calc(8px * var(--text-scale,1))}
 /* Expanding search keeps its filter value when focus leaves the control. */
 #timeline-view .toolbar #mobile-search-button{display:none}
 #timeline-view .toolbar .timeline-search{display:flex;align-items:center;flex:0 1 auto;width:32px;min-width:32px;max-width:100%;height:32px;border:1px solid var(--line);border-radius:7px;background:#fff;overflow:hidden;transition:width .2s ease}

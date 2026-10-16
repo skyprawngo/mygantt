@@ -33,6 +33,7 @@ function harness({ actual = false, below = true, gap = true, openSide = '', barW
       borderBottomRightRadius: b.classes.has('dependency-join-right') ? '0px' : '4px' }) };
   withI18n(vm.createContext(context));
   vm.runInContext(source.slice(source.indexOf('function actualTaskRange('), source.indexOf('function renderTimeline(')), context);
+  context.taskLabelFootprints=()=>null; // Geometry fixtures omit browser font measurement.
   vm.runInContext(source.slice(source.indexOf('const paletteCache'),source.indexOf('function esc('))+source.slice(source.indexOf('function taskProgress('),source.indexOf('function bindTaskProgress(')),context);
   context.renderDependencyLinks();
   return { context, body, allBars, sourceBar: actual ? recorded : planned, target, origin };

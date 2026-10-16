@@ -4,22 +4,25 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('web/app.js', 'utf8');
 function setup() {
-  const c = {state:{holidays:{}}, I18n:{systemText:()=>''}, browserClockParts:()=>({date:'2026-11-01'}), t:(id,p)=>p?`${p.p0}주`:id, esc:s=>String(s)};
+  const c = {state:{holidays:{}}, I18n:{systemText:()=>''}, browserClockParts:()=>({date:'2026-11-01'}), t:(id,p)=>p?`${p.p0}${id==='calendar.month_number'?'월':'주'}`:id, esc:s=>String(s)};
   vm.createContext(c);
   for (const [start,end] of [['function dateFrom(', 'function fmtDate('], ['const weekdayIDs =', 'function renderHolidayStatus('], ['function calendarHeaderMarkup(', 'function calendarShadingMarkup(']]) {
     vm.runInContext(source.slice(source.indexOf(start), source.indexOf(end)), c);
   }
   return c;
 }
-test('month and week labels occupy a separate slot above every day', () => {
+test('month and week labels share merged weekly cells above compact days', () => {
   const c=setup(), dates=c.dateColumns('2026-11-01',30,24);
   assert.equal(dates[0].dateText,'1');
   assert.equal(dates[0].periodText,'11.');
   for (const [day,label] of [[2,''],[8,'2주'],[15,'3주'],[22,'4주'],[29,'1주']]) assert.equal(dates[day-1].periodText,label);
   const html=c.calendarHeaderMarkup(dates,24);
-  assert.equal((html.match(/class="date-period(?: date-month)?"/g)||[]).length,30);
-  assert.match(html, /class="date-period date-month">11\.<\/span><b>1<\/b>/);
-  assert.match(html, /class="date-period"><\/span><b>2<\/b>/);
+  assert.equal((html.match(/class="calendar-week-cell"/g)||[]).length,5);
+  assert.match(html,/width:168px" data-week-start="2026-11-01">11월 · 1주/);
+  assert.match(html,/width:48px" data-week-start="2026-11-29">12월 · 1주/);
+  assert.equal((html.match(/data-date="/g)||[]).length,30);
+  assert.doesNotMatch(html,/class="date-period/);
+  assert.match(html,/<b>2<\/b><small>/);
 });
 test('week numbering resets monthly and remains stable for partial calendar ranges', () => {
   const c=setup();
@@ -47,4 +50,10 @@ test('month boundary marks only the first day, including year rollover and row s
  }
  assert.match(c.calendarHeaderMarkup(dates,46),/data-date="2027-01-01"[^>]*class="date-header month-boundary/);
  assert.match(c.calendarShadingMarkup(dates,46),/class="date-shade month-boundary[^>]*left:46px/);
+});
+
+test('partial edge weeks preserve Sunday alignment across month and year boundaries',()=>{
+ const c=setup(),html=c.calendarHeaderMarkup(c.dateColumns('2026-12-31',10,30),30);
+ assert.match(html,/width:90px" data-week-start="2026-12-27">12월 · 5주/);
+ assert.match(html,/width:210px" data-week-start="2027-01-03">1월 · 1주/);
 });

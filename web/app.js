@@ -485,7 +485,20 @@ function timelineCalendarRange() {
   return state.calendarRange;
 }
 function calendarHeaderMarkup(dates, pxPerDay) {
-  return dates.map((item) => `<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><span class="date-period${item.isMonthLabel ? ' date-month' : ''}">${esc(item.periodText)}</span><b>${esc(item.dateText)}</b><small>${item.weekday}</small>${item.holiday ? `<i>${esc(item.holiday)}</i>` : ''}</div>`).join('');
+  const weeks=[];
+  for (const item of dates) {
+    const date=dateFrom(item.key), sunday=new Date(date);
+    sunday.setDate(date.getDate()-date.getDay());
+    const key=dateKey(sunday);
+    if (weeks.at(-1)?.key!==key) {
+      const thursday=new Date(sunday);thursday.setDate(sunday.getDate()+4);
+      weeks.push({key,days:0,label:`${t('calendar.month_number',{p0:thursday.getMonth()+1})} · ${t('calendar.week_number',{p0:Math.ceil(thursday.getDate()/7)})}`});
+    }
+    weeks.at(-1).days++;
+  }
+  const periods=weeks.map(week=>`<div class="calendar-week-cell" style="width:${week.days*pxPerDay}px" data-week-start="${week.key}">${esc(week.label)}</div>`).join('');
+  const days=dates.map(item=>`<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small></div>`).join('');
+  return `<div class="calendar-week-row">${periods}</div><div class="calendar-day-row">${days}</div>`;
 }
 function calendarShadingMarkup(dates, pxPerDay) {
   return dates.map((item) => `<div class="date-shade ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
@@ -504,7 +517,7 @@ function extendTimelineCalendar(oldStart, oldEnd) {
   $$('.gantt-right',chart).forEach(node => { node.style.width=`${width}px`; });
   const label = parseFloat(chart.style.getPropertyValue('--label-width'));
   $('.gantt-body',chart).style.width=`${width+label}px`;
-  $('.date-axis',chart).insertAdjacentHTML(prepend?'afterbegin':'beforeend',calendarHeaderMarkup(added,px));
+  $('.date-axis',chart).innerHTML=calendarHeaderMarkup(dateColumns(range.start,dayDiff(range.start,range.end)+1,px),px);
   $$('.row-date-shading',chart).forEach(node => node.insertAdjacentHTML('beforeend',calendarShadingMarkup(added,px)));
   chart.dataset.todayOffset=dayDiff(range.start,browserClockParts().date);
   $('#range-label').textContent=dateRangeLabel(range.start,range.end);
@@ -855,12 +868,14 @@ function unifiedTaskPaint(task, plannedBar, actualBar, origin, index, attachment
       return [[start, r.left + 2], [end, r.right - 4]].filter(([visible]) => visible)
         .map(([, x]) => `<line class="unified-task-grip" x1="${x+1}" x2="${x+1}" y1="${r.top+6}" y2="${r.bottom-6}" stroke="${palette.ink}" stroke-width="2" stroke-linecap="round" opacity=".45" pointer-events="none"/>`);
     }).join('');
-  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}" style="mask-type:alpha">${maskMarkup}</mask></defs><path class="unified-task-paint" data-unified-task="${esc(task.id)}" d="${shape.path}" fill="${progress === 100 ? palette.progress : palette.base}" pointer-events="none"/><path class="unified-task-progress" d="${shape.path}" fill="${palette.progress}" mask="url(#${id})" pointer-events="none"/>${grips}${task.status === 'blocked' ? `<path class="blocked-task-outline" d="${shape.path}"/>` : ''}`;
+  const actualRect=actualBar.getBoundingClientRect();
+  const hatch=`<defs><pattern id="${id}-actual-hatch" patternUnits="userSpaceOnUse" width="6" height="6"><path d="M-1 1 1 -1 M0 6 6 0 M5 7 7 5" stroke="white" stroke-opacity=".6" stroke-width="1.5"/></pattern><clipPath id="${id}-actual-clip"><path d="${shape.path}"/></clipPath></defs><rect class="actual-hatch" x="${actualRect.left-origin.left}" y="${actualRect.top-origin.top}" width="${actualRect.width}" height="${actualRect.bottom-actualRect.top}" fill="url(#${id}-actual-hatch)" clip-path="url(#${id}-actual-clip)" pointer-events="none"/>`;
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" x="${shape.left}" y="${shape.top}" width="${width}" height="${height}" style="mask-type:alpha">${maskMarkup}</mask></defs><path class="unified-task-paint" data-unified-task="${esc(task.id)}" d="${shape.path}" fill="${progress === 100 ? palette.progress : palette.base}" pointer-events="none"/><path class="unified-task-progress" d="${shape.path}" fill="${palette.progress}" mask="url(#${id})" pointer-events="none"/>${hatch}${grips}${task.status === 'blocked' ? `<path class="blocked-task-outline" d="${shape.path}"/>` : ''}`;
 }
 
 // Reconstruct a folded task in its expanded coordinate space without rendering it.
-function foldedTaskGeometry(project, task, actual, bounds, above, reference, px, origin, scale = 1) {
-  const rows = groupedTaskRows(project.tasks, '', scale);
+function foldedTaskGeometry(project, task, actual, bounds, above, reference, px, origin, scale = 1, footprint = null) {
+  const rows = groupedTaskRows(project.tasks, '', scale, footprint);
   const total = 38 * scale + rows.reduce((sum,row)=>sum + row.height,0);
   const top = above ? bounds.bottom-total : bounds.top;
   const index = rows.findIndex(row=>row.offsets.has(task.id));
@@ -905,7 +920,7 @@ function foldedDependencyMarkup(projects,bars,actualBars,extents,origin,bodyWidt
     const referenceTask=sourceVisible?predecessor:task;
     const reference={left:referenceBar.getBoundingClientRect().left,date:referenceTask.planned_start};
     const folded=foldedTaskGeometry(hiddenProject,sourceVisible?task:predecessor,!sourceVisible&&actual,
-      sourceVisible?targetBounds:sourceBounds,sourceVisible?!below:below,reference,state.zoom*((state.textScale || 100)/100),origin,(state.textScale || 100)/100);
+      sourceVisible?targetBounds:sourceBounds,sourceVisible?!below:below,reference,state.zoom*((state.textScale || 100)/100),origin,(state.textScale || 100)/100,taskLabelFootprints(hiddenProject,state.zoom*((state.textScale || 100)/100),(state.textScale || 100)/100));
     const source=sourceVisible?visibleRect:folded.rect, target=targetVisible?visibleRect:folded.rect;
     if (sourceVisible) targetBounds=folded.bounds; else sourceBounds=folded.bounds;
     const flare=Math.min(source.height,target.height)*1.5;
@@ -1077,7 +1092,7 @@ function renderDependencyLinks(options = null) {
   }
   const foldedMarkup = options ? '' : foldedDependencyMarkup(projects,bars,actualBars,projectExtents,origin,body.scrollWidth,projectGeometry);
   const selectedBars = [...bars.values()].filter(bar => bar.dataset.taskSelect === selectedTaskId);
-  if (!edges.length && !actualBars.size && !selectedBars.length && !foldedMarkup) return;
+  // Even isolated tasks need their external labels rendered.
   // Resolve corners after every edge marks its square joining sides.
   // A single exterior contour has no internal edges to antialias separately.
   const geometry = new Map([...connectedBars].map((bar) => [bar,
@@ -1150,29 +1165,36 @@ function renderDependencyLinks(options = null) {
   }).join('');
   body.insertAdjacentHTML('beforeend', `<svg class="dependency-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-label="${t("timeline.predecessor_and_successor_connections")}"><defs>${gradients.join('')}</defs>${markup}${unifiedMarkup}${blockedMarkup}${foldedMarkup}</svg>${hiddenMarkup || boundaryMarkup ? `<svg class="dependency-hidden-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${hiddenMarkup}${boundaryMarkup}</svg>` : ''}${selectionMarkup ? `<svg class="task-selection-layer" width="${body.scrollWidth}" height="${body.offsetHeight}" aria-hidden="true">${selectionMarkup}</svg>` : ''}`);
   connectedBars.forEach((bar) => bar.classList.add('svg-backed'));
-  if (hiddenMarkup || [...actualBars.values()].some(bar => bar.classList.contains('partial-actual'))) {
-    // Read all styles before inserting overlays: no per-label layout flushes.
-    const labels=[...bars.values(),...actualBars.values()].filter(bar=>crossingTaskIds.has(bar.dataset.taskSelect) || bar.classList.contains('partial-actual')).flatMap(bar=>{
-      const text=$('.bar-text',bar);if (!text) return [];
-      const style=getComputedStyle(bar),textStyle=getComputedStyle(text);
-      const properties={};
-      for (const key of ['left','top','width','height','paddingLeft','paddingRight','color','fontSize','borderRadius']) properties[key]=style[key];
-      // Paint labels outside the SVG/HTML silhouette clipping. Reserve the whole
-      // curved end so sticky text never slides into the narrowing actual tail.
-      const side = style.getPropertyValue('--actual-open-side').trim();
-      if (side === 'left' || side === 'right') {
-        const bounds = actualLabelBounds(parseFloat(properties.width), side);
-        properties.left = `${parseFloat(properties.left) + bounds.left}px`;
-        properties.width = `${bounds.width}px`;
-      }
-      return [{bar,text,properties,marginLeft:side?'0px':textStyle.marginLeft,marginRight:side?'0px':textStyle.marginRight}];
-    });
-    for (const {bar,text,properties,marginLeft,marginRight} of labels) {
-      const label=document.createElement('div');label.className='bar-label-overlay';label.setAttribute('aria-hidden','true');
-      Object.assign(label.style,properties);
-      const copy=text.cloneNode(true);Object.assign(copy.style,{marginLeft,marginRight});
-      label.append(copy);bar.insertAdjacentElement('afterend',label);bar.classList.add('has-label-overlay');
+  // Labels live beside the bars, independently of SVG silhouette clipping.
+  const allBars=[...bars.values(),...actualBars.values()];
+  const labels=allBars.flatMap(bar=>{
+    const text=$('.bar-text',bar);if (!text) return [];
+    const style=getComputedStyle(bar), gap=6*((state.textScale || 100)/100);
+    const left=parseFloat(style.left)+parseFloat(style.width)+gap;
+    const top=parseFloat(style.top), height=parseFloat(style.height);
+    const next=allBars.filter(other=>other!==bar && other.parentElement===bar.parentElement)
+      .map(other=>({left:parseFloat(other.style.left),top:parseFloat(other.style.top)}))
+      .filter(other=>Math.abs(other.top-top)<height && other.left>=left-gap)
+      .reduce((edge,other)=>Math.min(edge,other.left-gap),bar.parentElement.clientWidth);
+    return [{bar,text,left,top,height,startEdge:parseFloat(style.left)-gap,width:Math.max(0,next-left)}];
+  });
+  for (const {bar,text,left,top,height,startEdge,width} of labels) {
+    const content=text.textContent, separator=content.lastIndexOf(' · ');
+    const dates=separator<0?[]:content.slice(separator+3).split('–').map(value=>value.trim());
+    const name=dates.length===2?content.slice(0,separator):content;
+    const label=document.createElement('div');label.className='bar-label-overlay external-bar-label';label.setAttribute('aria-hidden','true');
+    Object.assign(label.style,{left:`${left}px`,top:`${top+height/2}px`,maxWidth:`${width}px`});
+    if (dates.length===2) {
+      const start=document.createElement('div');start.className='bar-label-overlay external-bar-label bar-start-date';start.setAttribute('aria-hidden','true');
+      Object.assign(start.style,{left:`${Math.max(0,startEdge)}px`,top:`${top+height/2}px`,maxWidth:`${Math.max(0,startEdge)}px`});
+      const startText=document.createElement('span');startText.className='bar-text bar-date';startText.textContent=dates[0];
+      start.append(startText);bar.insertAdjacentElement('afterend',start);
+      const finish=document.createElement('span');finish.className='bar-text bar-date bar-finish-date';finish.textContent=dates[1];label.append(finish);
     }
+    if (!bar.classList.contains('actual-task-bar')) {
+      const title=document.createElement('span');title.className='bar-text bar-task-name';title.textContent=name;label.append(title);
+    }
+    bar.insertAdjacentElement('afterend',label);bar.classList.add('has-label-overlay');
   }
 
 
@@ -1329,7 +1351,27 @@ function taskRelationDetails(project, task) {
   const dates = task.gantt_row_id ? [task.planned_start, task.planned_finish].filter(Boolean).join(' – ') : '';
   return {relationTaskName:name, relationTaskDates:dates, relationTaskLabel:dates ? `${name} · ${dates}` : name};
 }
-function groupedTaskRows(tasks, compactBy = '', scale = 1) {
+// Measure using the same shared typography as the painted labels.
+function taskLabelFootprints(project, px, scale) {
+  const canvas=document.createElement('canvas'), context=canvas.getContext('2d');
+  const style=getComputedStyle($('#gantt'));
+  const family=style.fontFamily, weight=style.getPropertyValue('--gantt-label-font-weight').trim() || '600';
+  const measure=(text,size)=>{context.font=`${weight} ${size}px ${family}`;return context.measureText(text).width;};
+  const sample=document.createElement('span');sample.className='bar-text';
+  // Shared CSS tokens are calc expressions; resolve them on a detached-size probe.
+  sample.style.cssText='position:absolute;visibility:hidden;font-size:var(--gantt-label-font-size)';
+  $('#gantt').append(sample);const nameSize=parseFloat(getComputedStyle(sample).fontSize);
+  sample.style.fontSize='var(--gantt-date-font-size)';const dateSize=parseFloat(getComputedStyle(sample).fontSize);sample.remove();
+  const day=value=>Date.parse(value+'T00:00:00Z')/86400000*px;
+  return (task,start,finish)=>{
+    const title=`${taskInstanceName(project,task)} · ${taskProgress(task)}%${task.status==='blocked'?t('timeline.stopped'):''}`;
+    const dateWidth=measure('2026-12-30',dateSize), gap=6*scale;
+    return {start:day(start)-dateWidth-gap,end:Math.max(
+      day(task.planned_finish)+px+gap+dateWidth+8*scale+measure(title,nameSize),
+      day(finish)+px+gap+dateWidth)+gap};
+  };
+}
+function groupedTaskRows(tasks, compactBy = '', scale = 1, footprint = null) {
   const tagsFor = task => [...new Set((task.tags || []).map(tag=>String(tag).normalize('NFKC').trim()).filter(Boolean))].sort();
   const labelFor = task => {
     if (compactBy === 'tags') return tagsFor(task).join(', ');
@@ -1349,9 +1391,10 @@ function groupedTaskRows(tasks, compactBy = '', scale = 1) {
       const actual = actualTaskRange(task);
       const start = [task.planned_start, actual?.start].filter(Boolean).sort()[0] || '';
       const finish = [task.planned_finish, actual?.finish].filter(Boolean).sort().at(-1) || start;
-      let lane = ends.findIndex(end=>end < start);
+      const occupied=footprint?footprint(task,start,finish):{start,end:finish};
+      let lane = ends.findIndex(end=>end < occupied.start);
       if (lane < 0) lane = ends.length;
-      ends[lane] = finish;
+      ends[lane] = occupied.end;
       offsets.set(task.id, lane * tierHeight);
     }
     return {tasks: members, label:labelFor(members[0]), height: Math.max(1, ends.length) * tierHeight, offsets};
@@ -1366,9 +1409,9 @@ function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
   const actualX = actual ? dayDiff(start, actual.start) * pxPerDay : 0;
   const actualWidth = actual ? Math.max(pxPerDay, (dayDiff(actual.start, actual.finish) + 1) * pxPerDay) : 0;
   const actualTitle = actual ? `${displayName} · ${actual.label} · ${fmtDate(task.actual_start || task.actual_finish, true)}${actual.partial ? '' : `–${fmtDate(actual.finish, true)}`}` : '';
-  const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${29 * ((state.textScale || 100)/100) + offset}px;left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth, 20*((state.textScale || 100)/100))}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(displayName)}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
+  const actualMarkup = actual ? `<button data-date-period="actual" class="actual-task-bar${actual.partial ? ` partial-actual open-${actual.openSide}` : ''}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${29 * ((state.textScale || 100)/100) + offset}px;left:${actualX}px;width:${actualWidth}px;${paletteStyle(task.color, 'bar')};${actualOpenStyle(actual, actualWidth, 20*((state.textScale || 100)/100))}" title="${esc(actualTitle)}" aria-label="${esc(actualTitle)}">${task.actual_start ? `<span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_start")}"></span>` : ''}<i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(actual.label)} · ${esc(displayName)} · ${esc(task.actual_start || "—")} – ${esc(task.actual_finish || "—")}</span>${task.actual_finish ? `<span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_actual_finish")}"></span>` : ''}</button>` : '';
   const status = task.status;
-  return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 * ((state.textScale || 100)/100) + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${actual ? t("timeline.planned_2") : ''}${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
+  return `<button class="task-bar ${status}" type="button" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}" style="top:${7 * ((state.textScale || 100)/100) + offset}px;left:${startX}px;width:${width}px;${paletteStyle(task.color, 'bar')}" title="${esc(displayName)} ${t("timeline.planned")} ${fmtDate(task.planned_start, true)}–${fmtDate(task.planned_finish, true)}"><span class="resize-handle resize-start" data-resize-edge="start" aria-label="${esc(displayName)} ${t("timeline.adjust_start_date")}"></span><i class="bar-progress task-progress-completed" style="width:${taskProgress(task)}%"></i><span class="bar-text">${esc(displayName)} · ${taskProgress(task)}%${status === 'blocked' ? t("timeline.stopped") : ''} · ${esc(task.planned_start)} – ${esc(task.planned_finish)}</span><span class="resize-handle resize-end" data-resize-edge="end" aria-label="${esc(displayName)} ${t("timeline.adjust_finish_date")}"></span></button>${actualMarkup}`;
 }
 
 function monthCalendar(year, firstMonth = 0) {
@@ -1559,7 +1602,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
       bodyHeight += 30 * scale;
     }
     for (const project of projectGroup.projects) {
-    const taskRows = groupedTaskRows(project.tasks, state.compactBy, scale);
+    const taskRows = groupedTaskRows(project.tasks, state.compactBy, scale, taskLabelFootprints(project,pxPerDay,scale));
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
@@ -1641,11 +1684,12 @@ function renderTimeline({ preserveInspector = false } = {}) {
   bindTimelineCalendarScroll();
 }
 
-function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish) {
+function taskDateGrid(plannedStart, plannedFinish, actualStart, actualFinish, color) {
+  const swatch = `<i class="schedule-swatch" style="background-color:${colorPalette(color).base}" aria-hidden="true"></i>`;
   return `<table class="task-date-grid" aria-label="${t("inspector.task_schedule")}"><colgroup><col class="date-row-label"><col><col></colgroup>
     <thead><tr><th scope="col">${t("inspector.dates")}</th><th scope="col">${t("inspector.start_date")}</th><th scope="col">${t("inspector.finish_date")}</th></tr></thead>
-    <tbody><tr><th scope="row">${t("inspector.planned_dates")}</th><td>${plannedStart}</td><td>${plannedFinish}</td></tr>
-    ${actualStart != null ? `<tr><th scope="row">${t("inspector.actual_dates")}</th><td>${actualStart}</td><td>${actualFinish}</td></tr>` : ''}</tbody></table>`;
+    <tbody><tr><th scope="row">${t("inspector.planned_dates")}${swatch}</th><td>${plannedStart}</td><td>${plannedFinish}</td></tr>
+    ${actualStart != null ? `<tr><th scope="row">${t("inspector.actual_dates")}${swatch.replace('schedule-swatch','schedule-swatch actual-swatch')}</th><td>${actualStart}</td><td>${actualFinish}</td></tr>` : ''}</tbody></table>`;
 }
 
 function rowTaskSectionTitle(index) {
@@ -1838,7 +1882,7 @@ function renderInspector() {
         <div class="property-grid">
         <div class="inspector-field task-name-order"><span><label for="ins-task-name">${t("timeline.task_name")}</label></span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required><input id="ins-task-order" class="text-input" type="number" min="1" max="${project.tasks.length}" step="1" aria-label="${t("timeline.default_order")}" title="${t("timeline.default_order")}" value="${task.sort_order ?? ''}" required></div>
         <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code>${randomColorButton()}</div></div>
-        ${taskDateGrid(`<input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required>`, `<input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required>`, `<input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}">`, `<input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}">`)}
+        ${taskDateGrid(`<input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required>`, `<input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required>`, `<input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}">`, `<input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}">`, task.color)}
         <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.group_placeholder")}"></label>
         <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.owner_placeholder")}"></label>
         <div class="inspector-field task-status-help" data-hover-help="${esc(t("help.progress_knob_stop"))}"><span><button type="button" class="status-help-trigger" aria-describedby="floating-help">${t("calendar.status")}</button></span><div class="task-progress-control" style="${paletteStyle(task.color)}"><div class="task-progress-track"><div class="task-progress-fill"></div><button type="button" id="task-progress-knob" aria-describedby="floating-help" class="task-progress-knob" role="slider" aria-label="${t("inspector.task_progress")}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${taskProgress(task)}"></button></div><output id="task-progress-label"></output></div></div>
@@ -3974,6 +4018,12 @@ function attachEvents() {
       const shape = actualOpenStyle(display, displayWidth, 20*((state.textScale || 100)/100)).match(/clip-path:([^;]+);/);
       drag.bar.style.clipPath = shape[1];
     }
+    const preview={...original,...candidate.fields};
+    const labelText=$('.bar-text',drag.bar);
+    if (labelText && typeof labelText.textContent === 'string') {
+      const period=drag.period==='actual'?'actual':'planned';
+      labelText.textContent=labelText.textContent.replace(/ · (?:\d{4}-\d{2}-\d{2}|—) – (?:\d{4}-\d{2}-\d{2}|—)$/, ` · ${preview[`${period}_start`] || '—'} – ${preview[`${period}_finish`] || '—'}`);
+    }
     renderDependencyLinks();
     drag.bar.title = `${drag.period === 'actual' ? t("timeline.actual") : t("status.planned")} · ${fmtDate(candidate.start, true)}–${fmtDate(candidate.finish, true)}`;
   });
@@ -4035,9 +4085,20 @@ function attachEvents() {
     if (selectedProject) { selectItem('project', selectedProject.dataset.projectSelect); return; }
     const selectedTask = event.target.closest('[data-task-select]');
     if (selectedTask) { selectItem('task', selectedTask.dataset.taskSelect); return; }
-    // Blank chart cells and the date axis clear selection; controls retain
-    // their own actions (including add, help, and inline name editing).
-    if (event.target.closest('button,input,textarea,select,[contenteditable],[role="button"]') || state.drag || !state.selection) return;
+    // Blank project/task rows retain project context with both sections closed.
+    if (event.target.closest('button,input,textarea,select,[contenteditable],[role="button"]') || state.drag) return;
+    const row = event.target.closest('.gantt-row');
+    const projectId = row?.dataset.projectBoundary || row?.querySelector('[data-project]')?.dataset.project;
+    if (projectId) {
+      state.selection = {type:'project',id:projectId};
+      state.inspectorOpen = '';
+      persistUi();
+      renderSidebar();
+      renderTimeline();
+      if (mobileLayout()) setMobileDrawer('inspector');
+      return;
+    }
+    if (!state.selection) return;
     state.selection = null;
     state.inspectorOpen = '';
     persistUi();

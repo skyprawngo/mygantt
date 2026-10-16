@@ -128,7 +128,8 @@ test('unified progress uses solid color and avoids a base-color halo at completi
   const fill=markup.match(/class="unified-task-paint"[^>]*fill="([^"]+)"/)[1];
   assert.equal(fill,c.colorPalette('#27897f')[progress===100?'progress':'base']);
   assert.ok(markup.includes(`class="unified-task-progress" d="${markup.match(/class="unified-task-paint"[^>]*d="([^"]+)"/)[1]}" fill="${c.colorPalette('#27897f').progress}"`));
-  assert.doesNotMatch(markup, /<pattern/);
+  assert.match(markup, /class="actual-hatch" x="0" y="29" width="80" height="20"/);
+  assert.match(markup, /clip-path="url\(#unified-task-progress-0-actual-clip\)"/);
  }
 });
 
