@@ -57,3 +57,13 @@ test('partial edge weeks preserve Sunday alignment across month and year boundar
  assert.match(html,/width:90px" data-week-start="2026-12-27">12월 · 5주/);
  assert.match(html,/width:210px" data-week-start="2027-01-03">1월 · 1주/);
 });
+
+test('month rules align to calendar days inside partial weeks at fractional scales',()=>{
+ const c=setup();
+ for(const px of [30,46,57.5]) {
+  const dates=c.dateColumns('2026-12-29',8,px),lines=c.calendarMonthLines(dates,px);
+  assert.equal((lines.match(/data-month-start=/g)||[]).length,1);
+  assert.match(lines,new RegExp(`data-month-start="2027-01-01" style="left:${3*px}px"`));
+  assert.ok(c.calendarHeaderMarkup(dates,px).includes(lines));
+ }
+});

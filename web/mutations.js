@@ -1,6 +1,7 @@
 /* Shared optimistic state for every chart write. No DOM or transport dependencies. */
 (function(root) {
   'use strict';
+  const CompactOrder = typeof module!=='undefined' && module.exports ? require('./compact-order.js') : root.CompactOrder;
   // LAN HTTP pages do not expose randomUUID in Safari. getRandomValues
   // remains available there and supplies the same random UUID v4 bytes.
   function randomUUID() {
@@ -180,6 +181,7 @@
         }
       }
     } else if(kind === 'settings' && id === 'tag-color') data.tag_colors={...data.tag_colors,[groupKey(f.tag)]:f.color};
+    else if(kind === 'settings' && id === 'compact-order') CompactOrder.apply(data,f);
     else if(kind === 'settings' && id === 'holiday-calendar') data.holiday_country=f.holiday_country;
     return summarize(data);
   }
@@ -219,6 +221,7 @@
         if(index>=0)predicted.projects[index]=copy(affected);
       }
       if(result?.key && own(result,'color')) predicted.tag_colors={...predicted.tag_colors,[result.key]:result.color};
+      if(result?.compact_orders) predicted.compact_orders=copy(result.compact_orders);
       base=predicted;
     }
     function mutate(path,options={}) {

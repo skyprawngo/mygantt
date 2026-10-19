@@ -8,6 +8,22 @@ function projectTextFrames(isFoldingProject, followsProject, height, expandedCol
     expanded:{transform:'translateY(0px)',color:expandedColor,opacity:1},
   };
 }
+// Compose layout alignment (for example endpoint translateX(-100%)) after
+// row motion, so the row offset never replaces an element's resting pose.
+function projectPaintFrames(base, offset, collapseRow) {
+  const alignment = base && base !== 'none' ? ` ${base}` : '';
+  return {
+    folded:{transform:`translateY(${-offset}px)${collapseRow?' scaleY(0)':''}${alignment}`},
+    expanded:{transform:`translateY(0px)${collapseRow?' scaleY(1)':''}${alignment}`},
+  };
+}
+// Membership follows document order, not rounded layout pixels. The first
+// following project header sits exactly on the last task's fractional edge.
+function projectFollowingRows(allRows, foldingRows) {
+  const folding = new Set(foldingRows);
+  const last = allRows.reduce((index,row,i) => folding.has(row) ? i : index, -1);
+  return last < 0 ? [] : allRows.slice(last + 1);
+}
 /* Presentation-only transitions. Task dates and records are never changed here. */
 function createProjectMotion({getState, render, persist}) {
   const completed = new Map(), running = new Set();
@@ -52,22 +68,38 @@ function createProjectMotion({getState, render, persist}) {
     const summary = projectRow?.querySelector('.project-summary-bar');
     const headerTop = top-(projectRow?.getBoundingClientRect?.().height || 38);
     const summaryTop = summary?.offsetTop ?? 7, summaryHeight = summary?.offsetHeight ?? 23;
-    const layers = [...body.querySelectorAll('.dependency-layer, .dependency-hidden-layer, .task-selection-layer')]
+    const layers = [...body.querySelectorAll('.dependency-layer, .dependency-hidden-layer, .task-selection-layer, .calendar-month-lines')]
       .map(layer=>({layer,height:layer.getBoundingClientRect().height}));
     // Read geometry and copy computed styles before any animation/DOM writes.
-    const followingRows = [...body.querySelectorAll(':scope > .gantt-row')]
-      .filter(row=>row.offsetTop>=bottom-.5 && !rows.includes(row));
+    const followingRows = projectFollowingRows([...body.querySelectorAll(':scope > .gantt-row')],rows);
+    const followingRowSet = new Set(followingRows);
     const bodyRect=body.getBoundingClientRect();
     const labels=[...body.querySelectorAll('.project-summary-bar')].flatMap(bar=>{
       const text=bar.querySelector('span');
       if (!text) return [];
       const rect=text.getBoundingClientRect(), barRect=bar.getBoundingClientRect();
-      const own=bar===summary, follows=barRect.top-origin>=bottom-.5;
+      const own=bar===summary, follows=followingRowSet.has(bar.closest('.gantt-row'));
       if (!own && !follows) return [];
       const style=getComputedStyle(text), barStyle=getComputedStyle(bar);
       return [{text,rect,barRect,own,follows,font:style.font,lineHeight:style.lineHeight,
         letterSpacing:style.letterSpacing,color:style.color,
         foldedColor:barStyle.getPropertyValue('--bar-ink').trim() || style.color}];
+    });
+    const paintElements = row => [...row.children].flatMap(cell =>
+      cell.classList.contains('gantt-left') ? [cell] : [...cell.children]);
+    const restingTransforms = new Map([...rows,...followingRows].flatMap(paintElements)
+      .map(element => [element,getComputedStyle(element).transform]));
+    // Cell backgrounds and bottom borders belong to the stationary layout
+    // containers. Capture them as paint children so they share row keyframes.
+    const backgroundPaint = [...rows,...followingRows].flatMap(row => {
+      const cell=[...row.children].find(el=>el.classList.contains('gantt-right'));
+      if (!cell) return [];
+      const style=getComputedStyle(cell), rowStyle=getComputedStyle(row), rect=cell.getBoundingClientRect();
+      return [{row,cell,style:{position:'absolute',left:'0',top:'0',width:`${rect.width}px`,height:`${rect.height}px`,
+        backgroundColor:style.backgroundColor==='rgba(0, 0, 0, 0)'?rowStyle.backgroundColor:style.backgroundColor,
+        backgroundImage:style.backgroundImage,backgroundSize:style.backgroundSize,
+        backgroundPosition:style.backgroundPosition,backgroundRepeat:style.backgroundRepeat,
+        borderBottom:style.borderBottom,boxSizing:'border-box',pointerEvents:'none',zIndex:'0'}}];
     });
     const saved = new Map(), animations = [], snapshots = [], effects = [];
     const remember = el => {if (!saved.has(el)) saved.set(el,el.style.cssText);};
@@ -79,6 +111,12 @@ function createProjectMotion({getState, render, persist}) {
       // Keep layout fixed during the compositor animation. Translate individual
       // paint elements rather than their parent, preserving SVG/text stacking.
       body.classList.add('project-fold-animating');
+      for (const {row,cell,style} of backgroundPaint) {
+        const copy=document.createElement('div');
+        copy.className='project-motion-background';copy.setAttribute('aria-hidden','true');
+        Object.assign(copy.style,style);cell.prepend(copy);snapshots.push(copy);
+        row.classList.add('project-row-paint-animating');
+      }
       // Sticky summary labels get their own paint layer, above the changing
       // project fill and SVG. Preserve the text until the final DOM replaces it.
       for (const {text,rect,barRect,own,follows,font,lineHeight,letterSpacing,color,foldedColor} of labels) {
@@ -97,17 +135,17 @@ function createProjectMotion({getState, render, persist}) {
 
       for (const {row,rect} of geometry) {
         const offset=rect.top-origin-top;
-        for (const cell of row.children) {
-          const elements=cell.classList.contains('gantt-left')?[cell]:[...cell.children];
-          for (const element of elements) {
-            remember(element);element.style.transformOrigin='0 0';
-            motion(element,{transform:`translateY(${-offset}px) scaleY(0)`},{transform:'translateY(0px) scaleY(1)'});
-          }
+        for (const element of paintElements(row)) {
+          remember(element);element.style.transformOrigin='0 0';
+          const frames=projectPaintFrames(restingTransforms.get(element),offset,true);
+          motion(element,frames.folded,frames.expanded);
         }
       }
       for (const row of followingRows) {
-        for (const cell of row.children) for (const element of cell.classList.contains('gantt-left')?[cell]:[...cell.children])
-          motion(element,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
+        for (const element of paintElements(row)) {
+          const frames=projectPaintFrames(restingTransforms.get(element),height,false);
+          motion(element,frames.folded,frames.expanded);
+        }
       }
       for (const later of bands.filter(el=>parseFloat(el.style.top)>=bottom-0.5 && el!==band)) {
         motion(later,{transform:`translateY(${-height}px)`},{transform:'translateY(0px)'});
@@ -125,6 +163,13 @@ function createProjectMotion({getState, render, persist}) {
       // their sticky opaque surface; the SVG stays behind the HTML handles.
       for (const {layer,height:layerHeight} of layers) {
         remember(layer);
+        if (layer.classList.contains('calendar-month-lines')) {
+          // Continuous vertical rules need only their bottom edge to follow
+          // the changing body height; keep the header edge and width fixed.
+          layer.style.transformOrigin='0 0';
+          motion(layer,{transform:`scaleY(${Math.max(0,layerHeight-height)/layerHeight})`},{transform:'scaleY(1)'});
+          continue;
+        }
         const middle=cloneLayer(layer),after=cloneLayer(layer);snapshots.push(middle,after);
         const owned=[...layer.querySelectorAll('[data-connection-source], .dependency-boundary-marker')]
           .some(node=>isProjectHeaderConnection(node.dataset,id));
@@ -169,6 +214,7 @@ function createProjectMotion({getState, render, persist}) {
       for(const animation of animations) animation.cancel();
       for(const [el,cssText] of saved) el.style.cssText=cssText;
       for(const snapshot of snapshots) snapshot.remove();
+      for (const {row} of backgroundPaint) row.classList.remove('project-row-paint-animating');
       summary?.classList.remove('project-header-animating');
       body.classList.remove('project-fold-animating');
     }

@@ -395,6 +395,7 @@ function filteredProjects({forSidebar=false} = {}) {
   projects.forEach(project => project.tasks.sort((a,b) => sort === 'name' ? a.name.localeCompare(b.name,I18n.locale) : sort === 'progress' ? taskProgress(b)-taskProgress(a) : sort === 'start' ? a.planned_start.localeCompare(b.planned_start) : (a.sort_order || 0)-(b.sort_order || 0)));
   if (sort === 'manual') projects.sort((a,b) => (a.sort_order || 0)-(b.sort_order || 0));
   if (sort !== 'manual') projects.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, I18n.locale) : sort === 'progress' ? b.progress - a.progress : (a.tasks[0]?.planned_start || a.start_date).localeCompare(b.tasks[0]?.planned_start || b.start_date));
+  if (!forSidebar && sort==='manual' && state.layout==='gantt' && state.compactBy) projects=CompactOrder.sort(projects,state.data.compact_orders?.[state.compactBy]?.projects);
   return projects;
 }
 function flatten(projects) { return projects.flatMap((project) => project.tasks.map((task) => ({ ...task, projectName: project.name, projectId: project.id }))); }
@@ -498,7 +499,11 @@ function calendarHeaderMarkup(dates, pxPerDay) {
   }
   const periods=weeks.map(week=>`<div class="calendar-week-cell" style="width:${week.days*pxPerDay}px" data-week-start="${week.key}">${esc(week.label)}</div>`).join('');
   const days=dates.map(item=>`<div data-date="${item.key}" data-date-title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}" class="date-header ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.saturday ? 'saturday' : ''} ${item.sunday ? 'sunday' : ''} ${item.holiday ? 'holiday' : ''} ${item.today ? 'today' : ''}" style="width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : ''}"><b>${esc(item.dateText)}</b><small>${item.weekday}</small></div>`).join('');
-  return `<div class="calendar-week-row">${periods}</div><div class="calendar-day-row">${days}</div>`;
+  return `<div class="calendar-week-row">${periods}</div><div class="calendar-day-row">${days}</div><div class="calendar-header-month-lines" aria-hidden="true">${calendarMonthLines(dates,pxPerDay)}</div>`;
+}
+function calendarMonthLines(dates, pxPerDay) {
+  return dates.flatMap((item,index) => item.key.endsWith('-01')
+    ? [`<i class="calendar-month-line" data-month-start="${item.key}" style="left:${index*pxPerDay}px" aria-hidden="true"></i>`] : []).join('');
 }
 function calendarShadingMarkup(dates, pxPerDay) {
   return dates.map((item) => `<div class="date-shade ${item.key.endsWith('-01') ? 'month-boundary' : ''} ${item.isWeekend ? 'weekend-shade' : ''} ${item.saturday ? 'weekend-saturday' : ''} ${item.sunday ? 'weekend-sunday' : ''} ${item.holiday ? 'holiday-shade' : ''}" style="left:${item.x}px;width:${pxPerDay}px" title="${item.key}${item.holiday ? ` · ${esc(item.holiday)}` : item.isWeekend ? t("timeline.weekend") : ''}"></div>`).join('');
@@ -518,6 +523,7 @@ function extendTimelineCalendar(oldStart, oldEnd) {
   const label = parseFloat(chart.style.getPropertyValue('--label-width'));
   $('.gantt-body',chart).style.width=`${width+label}px`;
   $('.date-axis',chart).innerHTML=calendarHeaderMarkup(dateColumns(range.start,dayDiff(range.start,range.end)+1,px),px);
+  $('.calendar-month-lines',chart).innerHTML=calendarMonthLines(dateColumns(range.start,dayDiff(range.start,range.end)+1,px),px);
   $$('.row-date-shading',chart).forEach(node => node.insertAdjacentHTML('beforeend',calendarShadingMarkup(added,px)));
   chart.dataset.todayOffset=dayDiff(range.start,browserClockParts().date);
   $('#range-label').textContent=dateRangeLabel(range.start,range.end);
@@ -1384,7 +1390,7 @@ function groupedTaskRows(tasks, compactBy = '', scale = 1, footprint = null) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   }
-  return [...groups.values()].map(members => {
+  return [...groups.entries()].map(([key,members]) => {
     const tierHeight = Math.max(...members.map(task => taskRowHeight(task, scale)));
     const ends = [], offsets = new Map();
     for (const task of [...members].sort((a,b)=>(a.planned_start || '').localeCompare(b.planned_start || ''))) {
@@ -1397,7 +1403,7 @@ function groupedTaskRows(tasks, compactBy = '', scale = 1, footprint = null) {
       ends[lane] = occupied.end;
       offsets.set(task.id, lane * tierHeight);
     }
-    return {tasks: members, label:labelFor(members[0]), height: Math.max(1, ends.length) * tierHeight, offsets};
+    return {key,tasks: members, label:labelFor(members[0]), height: Math.max(1, ends.length) * tierHeight, offsets};
   });
 }
 function taskBarsMarkup(task, project, start, pxPerDay, offset = 0) {
@@ -1602,7 +1608,8 @@ function renderTimeline({ preserveInspector = false } = {}) {
       bodyHeight += 30 * scale;
     }
     for (const project of projectGroup.projects) {
-    const taskRows = groupedTaskRows(project.tasks, state.compactBy, scale, taskLabelFootprints(project,pxPerDay,scale));
+    let taskRows = groupedTaskRows(project.tasks, state.compactBy, scale, taskLabelFootprints(project,pxPerDay,scale));
+    if(state.compactBy && $('#sort-select').value==='manual') taskRows=CompactOrder.sort(taskRows,state.data.compact_orders?.[state.compactBy]?.tasks?.[project.id],row=>row.key);
     const collapsed = !project.is_unassigned && state.collapsedProjects.has(project.id);
     if (!project.is_unassigned) {
     const projectStart = project.tasks.map((task) => task.planned_start).filter(Boolean).sort()[0] || project.start_date;
@@ -1616,9 +1623,9 @@ function renderTimeline({ preserveInspector = false } = {}) {
     const summaryClass = collapsed ? '' : ' expanded-project-label';
       rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row project-row ${isProjectSelected ? 'selected-row' : ''}" style="${paletteStyle(project.color, 'project')}">
       <div class="gantt-left project-left" data-drop-project="${esc(project.id)}" data-directory-id="project:${esc(project.id)}">
-        <button class="project-select" type="button" draggable="${!project.is_unassigned && $('#sort-select').value === 'manual'}" title="${t("directory.drag_project")}" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot project-order" style="background:${colorPalette(project.color).base}" aria-label="${t("timeline.default_order")} ${project.sort_order ?? ''}">${project.sort_order ?? ''}</i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
+        <button class="project-select" type="button" draggable="${!project.is_unassigned && (!!state.compactBy || $('#sort-select').value === 'manual')}" title="${t("directory.drag_project")}" data-collapse="${esc(project.id)}" aria-expanded="${!collapsed}" aria-label="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} ${collapsed ? t("timeline.expand") : t("timeline.collapse")}"><i class="group-dot project-order" style="background:${colorPalette(project.color).base}" aria-label="${t("timeline.default_order")} ${project.sort_order ?? ''}">${project.sort_order ?? ''}</i><span class="project-name" title="${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}">${esc(project.is_unassigned ? t("inspector.no_project") : project.name)}</span><span class="project-meta">${project.progress}%</span></button>
       </div>
-      <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="${t("timeline.project_duration")} ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><i style="width:${project.progress}%"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} · ${project.progress}%</span></button></div>
+      <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div><button class="project-summary-bar${summaryClass}" type="button" data-project-select="${esc(project.id)}" style="left:${projectX}px;width:${projectBarWidth}px;${paletteStyle(project.color, 'bar')}" title="${t("timeline.project_duration")} ${fmtDate(projectStart, true)} — ${fmtDate(projectFinish, true)}"><b class="project-summary-rule" aria-hidden="true"></b><i style="width:${project.progress}%"></i><span>${esc(project.is_unassigned ? t("inspector.no_project") : project.name)} · ${project.progress}%</span></button></div>
     </div>`;
     bodyHeight += 38 * scale;
     }
@@ -1631,7 +1638,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
       const status = task.status;
       const isSelected = state.selection?.type === 'task' && row.tasks.some(item=>item.id === state.selection.id);
       rows += `<div data-project-boundary="${esc(project.id)}" class="gantt-row task-row${project.is_unassigned ? ' unassigned-task-row' : ''}${actual ? ' has-actual' : ''} ${isSelected ? 'selected-row' : ''}" style="height:${row.height}px;${paletteStyle(project.color, 'project')}">
-        <div class="gantt-left task-left"><button type="button" class="task-dot-add" data-add-same-row="${esc(task.id)}" style="${paletteStyle(task.color, 'task')}" title="${t("task.add_same_row")}" aria-label="${t("task.add_same_row")}"><span aria-hidden="true">＋</span></button><button class="task-label" type="button" draggable="${!row.label}" ${row.label?'data-compact-row="true"':''} title="${esc(row.label ? rowTitle : t("directory.drag_task"))}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-name" title="${esc(rowTitle)}">${esc(rowName)}</span><span class="task-owner">${esc(row.label ? row.tasks.length : task.owner || t("timeline.unassigned"))}</span></button></div>
+        <div class="gantt-left task-left"><button type="button" class="task-dot-add" data-add-same-row="${esc(task.id)}" style="${paletteStyle(task.color, 'task')}" title="${t("task.add_same_row")}" aria-label="${t("task.add_same_row")}"><span aria-hidden="true">＋</span></button><button class="task-label" type="button" draggable="true" data-compact-key="${esc(row.key)}" ${row.label?'data-compact-row="true"':''} title="${esc(row.label ? rowTitle : t("directory.drag_task"))}" data-task-select="${esc(task.id)}" data-project="${esc(project.id)}"><span class="task-name" title="${esc(rowTitle)}">${esc(rowName)}</span><span class="task-owner">${esc(row.label ? row.tasks.length : task.owner || t("timeline.unassigned"))}</span></button></div>
         <div class="gantt-right project-timeline" style="width:${timelineWidth}px;${timelineCellStyle}"><div class="row-date-shading">${rowShading}</div><div class="today-line" style="left:${nowOffset * pxPerDay}px"></div>${row.tasks.map(member=>taskBarsMarkup(member, project, start, pxPerDay, row.offsets.get(member.id))).join('')}</div>
       </div>`;
       bodyHeight += row.height;
@@ -1643,7 +1650,7 @@ function renderTimeline({ preserveInspector = false } = {}) {
   bodyHeight += 76 * scale;
   const headerDates = calendarHeaderMarkup(dates,pxPerDay);
   const projectBandMarkup = projectBands.map((band) => `<div class="project-duration-band" data-project-band="${esc(band.project.id)}" aria-hidden="true" style="left:${band.left}px;top:${band.top}px;width:${band.width}px;height:${band.height}px;${paletteStyle(band.project.color, 'bar')};--progress:${band.project.progress}%"></div>`).join('');
-  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${`<button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")} ${labelsExpanded ? t("timeline.collapse_2") : t("timeline.expand_2")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button>`}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}</div>`;
+  $('#gantt').innerHTML = `<div class="gantt-head"><div class="gantt-left gantt-head-left" style="width:${labelWidth}px">${`<button type="button" class="gantt-label-toggle" aria-expanded="${labelsExpanded}" aria-label="${t("timeline.project_task_column")} ${labelsExpanded ? t("timeline.collapse_2") : t("timeline.expand_2")}"><span class="gantt-label-title">${t("timeline.project_task")}</span><span aria-hidden="true">${labelsExpanded ? '‹' : '›'}</span></button>`}${$('#chart-info-template').innerHTML}</div><div class="gantt-right gantt-head-right" style="width:${timelineWidth}px"><div class="date-axis">${headerDates}</div></div></div><div class="gantt-body" style="width:${labelWidth + timelineWidth}px;min-height:${bodyHeight}px">${projectBandMarkup}${rows}<div class="calendar-month-lines" aria-hidden="true">${calendarMonthLines(dates,pxPerDay)}</div></div>`;
   if (mobileLayout() && state.mobileLabelsExpanded) {
     const textWidth = node => {
       const range = document.createRange();
@@ -3294,16 +3301,16 @@ function bindTaskReordering() {
   function stop() { clearPreview(); $$('.task-order-dragging',chart).forEach(row=>row.classList.remove('task-order-dragging')); dragged = null; }
   chart.addEventListener('dragstart',event=>{
     const projectLabel = event.target.closest('.project-select[data-collapse]');
-    if (projectLabel && $('#sort-select').value === 'manual') {
-      dragged = {id:projectLabel.dataset.collapse,type:'project'};
+    if (projectLabel && (state.compactBy || $('#sort-select').value === 'manual')) {
+      dragged = {id:projectLabel.dataset.collapse,type:'project',mode:state.compactBy};
       event.dataTransfer.effectAllowed='move';
       event.dataTransfer.setData('text/plain',dragged.id);
       projectLabel.closest('.project-row').classList.add('task-order-dragging');
       return;
     }
     const label = event.target.closest('.task-label[data-task-select]');
-    if (!label || label.dataset.compactRow) {event.preventDefault();return;}
-    dragged = {id:label.dataset.taskSelect,projectId:label.dataset.project};
+    if (!label) {event.preventDefault();return;}
+    dragged = {id:label.dataset.taskSelect,projectId:label.dataset.project,mode:state.compactBy,rowKey:label.dataset.compactKey};
     event.dataTransfer.effectAllowed='move';
     event.dataTransfer.setData('text/plain',dragged.id);
     label.closest('.task-row').classList.add('task-order-dragging');
@@ -3313,12 +3320,12 @@ function bindTaskReordering() {
     clearPreview();
     const cell = event.target.closest('.gantt-left');
     const label = cell?.querySelector('.task-label[data-task-select]');
-    if (label?.dataset.compactRow) return;
+    if (label?.dataset.compactRow && !dragged.mode) return;
     const folderId = cell?.dataset.dropProject;
     const row = cell?.closest('.gantt-row');
     const rect = row?.getBoundingClientRect();
     const target = label ? {projectId:label.dataset.project,taskId:label.dataset.taskSelect,after:event.clientY > rect.top+rect.height/2} : folderId ? {projectId:folderId} : null;
-    const manual = $('#sort-select').value === 'manual';
+    const manual = !!dragged.mode || $('#sort-select').value === 'manual';
     if (dragged.type === 'project') {
       if (!manual || !folderId || folderId === dragged.id || folderId === '__unassigned__') return;
       insertion = {anchor_id:folderId,after:event.clientY > rect.top+rect.height/2};
@@ -3327,6 +3334,16 @@ function bindTaskReordering() {
       const wrap=$('#gantt-wrap'), bounds=wrap.getBoundingClientRect();
       if(event.clientY>bounds.bottom-45) wrap.scrollTop+=15;
       else if(event.clientY<bounds.top+90) wrap.scrollTop-=15;
+      return;
+    }
+    if(dragged.mode) {
+      if(!label || label.dataset.project!==dragged.projectId || label.dataset.compactKey===dragged.rowKey)return;
+      insertion={anchor_id:label.dataset.compactKey,after:target.after};
+      event.preventDefault();event.dataTransfer.dropEffect='move';
+      row.classList.add(insertion.after?'task-insert-after':'task-insert-before');
+      const wrap=$('#gantt-wrap'),bounds=wrap.getBoundingClientRect();
+      if(event.clientY>bounds.bottom-45)wrap.scrollTop+=15;
+      else if(event.clientY<bounds.top+90)wrap.scrollTop-=15;
       return;
     }
     insertion = taskDropPlacement(dragged,target,manual);
@@ -3345,9 +3362,14 @@ function bindTaskReordering() {
   chart.addEventListener('drop',async event=>{
     if (!dragged || !insertion) {stop();return;}
     event.preventDefault();
-    const taskId=dragged.id, fields=insertion, isProject=dragged.type === 'project';
+    const taskId=dragged.id, fields=insertion, isProject=dragged.type === 'project', compact=dragged.mode ? {mode:dragged.mode,project_id:dragged.type==='project'?null:dragged.projectId,row_id:dragged.type==='project'?dragged.id:dragged.rowKey,...insertion}:null;
     stop();
     const request=(async()=>{
+      if(compact){
+        $('#sort-select').value='manual';
+        await api('/api/settings/compact-order',{method:'PATCH',body:JSON.stringify(compact)});
+        return;
+      }
       if (isProject) {
         await api(`/api/projects/${encodeURIComponent(taskId)}/order`,{method:'PATCH',body:JSON.stringify(fields)});
         return;

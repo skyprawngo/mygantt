@@ -36,14 +36,14 @@
 .date-header.weekend{background:#f2f4f7}
 .date-header.weekend small{color:#7d91ae}
 .date-header:first-child .none{display:none}
-.date-header.holiday{background:#fff1f0}
+.date-header.holiday{background:#fff8f7}
 .date-header.holiday b,.date-header.holiday small{color:#a84d4b}
 .date-header.today{box-shadow:inset 0 0 0 2px #6d7fe2;z-index:1}
 .gantt-body{position:relative}
 .calendar-shading{position:absolute;top:0;bottom:0;z-index:0;pointer-events:none;border-left:1px solid #e7ebf1;background-image:repeating-linear-gradient(to right,transparent 0,transparent calc(var(--day-width, 46px) - 1px),#e7ebf1 calc(var(--day-width, 46px) - 1px),#e7ebf1 var(--day-width, 46px))}
 .date-shade{position:absolute;top:0;bottom:0;border-left:1px solid rgba(205,212,222,.18)}
 .date-shade.weekend-shade{background:rgba(235,239,245,.64)}
-.date-shade.holiday-shade{background:rgba(239,173,173,.29)}
+.date-shade.holiday-shade{background:rgba(239,173,173,.12)}
 .calendar-shading .today-line{position:absolute;top:0;bottom:0;width:2px;background:#6679dd;opacity:.85;z-index:4}
 .gantt-row{position:relative;display:flex;height:36px;border-bottom:1px solid #e9edf2;z-index:1}
 .gantt-row.project-row{height:38px;background:rgba(250,251,253,.84)}
@@ -138,14 +138,14 @@
 .schedule-legend{gap:10px}
 .saturday-swatch{background:#eaf3ff;border-color:#c9ddf8}
 .sunday-swatch{background:#fff0ef;border-color:#efc8c5}
-.holiday-swatch{background:#ffe2dc;border-color:#e6aaa6}
+.holiday-swatch{background:#fff0ef;border-color:#e6aaa6}
 .holiday-status{display:block;min-width:0;max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:calc(8px * var(--text-scale, 1))}
 .holiday-status[data-status="stale"],.holiday-status[data-status="unavailable"]{color:#b16859}
 .holiday-status[data-substitute-warning="true"]{color:#a75445;font-weight:600}
 .date-header.saturday{background:#f6f9ff}
 .date-header.saturday small{color:#6381aa}
 .date-header.sunday{background:#fff8f7}
-.date-header.holiday{background:#fff1f0}
+.date-header.holiday{background:#fff8f7}
 .date-header.sunday small{color:#a96363}
 .date-header.holiday b,.date-header.holiday small{color:#a84d4b}
 .gantt-row.project-row,.gantt-row.task-row{background:var(--project-surface)}
@@ -159,7 +159,7 @@
 .row-date-shading .date-shade{top:0;bottom:0;z-index:1}
 .row-date-shading .date-shade.weekend-shade.weekend-saturday:not(.holiday-shade){background-color:rgba(165,202,246,.13)}
 .row-date-shading .date-shade.weekend-shade.weekend-sunday{background:rgba(239,173,173,.12)}
-.row-date-shading .date-shade.holiday-shade{background:rgba(239,173,173,.29)}
+.row-date-shading .date-shade.holiday-shade{background:rgba(239,173,173,.12)}
 .project-timeline>.today-line{left:0;top:0;bottom:0;width:2px;z-index:3;opacity:.82}
 .project-timeline>.today-line:before{content:none}
 .project-timeline .project-summary-bar,.project-timeline .task-bar{z-index:4}
@@ -698,7 +698,7 @@ input:is(:not([type]),[type="text"],[type="search"],[type="url"],[type="tel"],[t
 
 /* Fade a solid cover above the calendar without changing the real band stacking. */
 .gantt-row.project-row.project-row-morphing{z-index:auto}
-.project-duration-band.project-morph-cover{z-index:2;background:var(--bar-color)}
+.project-duration-band.project-morph-cover{z-index:4;border:0;border-radius:2px;background:var(--bar-color)}
 .project-duration-band.project-morph-cover:before{background:var(--bar-progress)}
 .gantt-left.project-motion-label{min-height:0;height:100%;overflow:clip;opacity:1;transform:none}
 
@@ -890,7 +890,8 @@ button.colored-tag{background:white;cursor:pointer;text-align:left;overflow-wrap
 }
 
 /* Native transform transitions retain opaque sticky labels above SVG. */
-.project-fold-animating > .gantt-row{background:transparent!important;border-bottom-color:transparent}
+.project-row-paint-animating{background:transparent!important}
+#gantt .gantt-body>.project-row-paint-animating>.gantt-right{background:transparent;border-bottom-color:transparent}
 
 @media(min-width:761px){.main-area{overflow:clip}}
 
@@ -1177,15 +1178,16 @@ html[data-large-text] .property-grid .tag-entry{font-size:calc(9px * var(--text-
  background:transparent;box-shadow:none;border:0;border-radius:0;
  color:var(--bar-dark);overflow:visible;
 }
-.project-summary-bar.expanded-project-label:before{
- content:'';position:absolute;left:0;right:0;top:0;
+.project-summary-rule{display:none}
+.project-summary-bar.expanded-project-label>.project-summary-rule{
+ display:block;position:absolute;left:0;right:0;top:0;
  height:calc(3px * var(--text-scale,1));background:var(--bar-color);border-radius:2px;
 }
 .project-summary-bar.expanded-project-label>i{
  height:calc(3px * var(--text-scale,1));bottom:auto;border-radius:2px;
 }
 :is(#gantt,#template-gantt) .project-summary-bar.expanded-project-label>span{transform:translateY(calc(5px * var(--text-scale,1)));background:transparent}
-.project-summary-bar.project-header-animating:before,.project-summary-bar.project-header-animating>i{visibility:hidden}
+.project-summary-bar.project-header-animating>.project-summary-rule,.project-summary-bar.project-header-animating>i{visibility:hidden}
 
 .selected-row .project-summary-bar.expanded-project-label{outline:none}
 
@@ -1249,7 +1251,7 @@ body.sidebar-collapsed .view-panel{padding-left:52px!important}
 }
 
 /* Month boundaries remain aligned with daily columns at every display scale. */
-#gantt .date-header.month-boundary,#gantt .date-shade.month-boundary{border-left:calc(2px * var(--text-scale,1)) solid #9aa8c2}
+#gantt .date-header.month-boundary{border-left-color:transparent}
 
 /* Stop vertical edge bounce, scroll chaining and pull-to-refresh. */
 html,body{overscroll-behavior-y:none}
@@ -1269,3 +1271,9 @@ html,body{overscroll-behavior-y:none}
 .shortcut-key button+button{border-left:1px solid #d8deec;color:var(--muted)}
 .shortcuts-dialog footer{margin-top:18px}.shortcuts-dialog button:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(max-width:600px){.shortcut-row{align-items:flex-start;flex-direction:column}.shortcut-keys{justify-content:flex-start}.shortcuts-dialog{padding:14px}}
+
+/* One continuous body rule avoids gaps at row borders and project spacing. */
+#gantt:not(.month-gantt) .date-axis{position:relative}
+.calendar-header-month-lines{position:absolute;inset:0;z-index:2;pointer-events:none}
+.calendar-month-lines{position:absolute;left:var(--label-width);right:0;top:0;bottom:0;z-index:2;pointer-events:none}
+.calendar-month-line{position:absolute;top:0;bottom:0;width:calc(2px * var(--text-scale,1));transform:translateX(-50%);background:#9aa8c2;pointer-events:none}

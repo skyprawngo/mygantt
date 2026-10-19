@@ -49,7 +49,7 @@ for(const collapsed of [false,true])test(`native project ${collapsed?'expansion'
  body.querySelectorAll=s=>s==='.project-summary-bar'?[]:s.includes('project-duration')?[band,later]:[svg];
  const control={dataset:{collapse:'p'},closest:()=>({querySelector:()=>({offsetTop:7,offsetHeight:23,classList:{add(){},remove(){}}})})};
  const state={collapsedProjects:new Set(collapsed?['p']:[])};let renders=0;
- const c={matchMedia:()=>({matches:false}),requestAnimationFrame(fn){frames.push(fn)},CustomEvent:class{},document:{timeline:{currentTime:1250},querySelectorAll:s=>s.includes('task-row')?[row]:[control],dispatchEvent(){}}};
+ const c={getComputedStyle:()=>({transform:'none'}),matchMedia:()=>({matches:false}),requestAnimationFrame(fn){frames.push(fn)},CustomEvent:class{},document:{timeline:{currentTime:1250},querySelectorAll:s=>s.includes('task-row')?[row]:[control],dispatchEvent(){}}};
  vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
  const motion=c.createProjectMotion({getState:()=>state,render(){renders++},persist(){},redraw(){throw Error('unexpected SVG rebuild')}});
  const pending=motion.toggle('p');await tick();assert.equal(animations.length,5);
@@ -89,4 +89,27 @@ test('project text stays opaque while its position and folded contrast animate',
  assert.equal(following.folded.transform,'translateY(-108px)');
  assert.equal(following.folded.color,following.expanded.color);
  assert.equal(following.folded.opacity,1);
+});
+
+for(const collapsing of [true,false])test(`row paint preserves endpoint alignment, collapse row = ${collapsing}`,()=>{
+ const c={};vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
+ const base='matrix(1, 0, 0, 1, -64, -6)';
+ const frames=c.projectPaintFrames(base,108,collapsing);
+ assert.equal(frames.expanded.transform,`translateY(0px)${collapsing?' scaleY(1)':''} ${base}`);
+ assert.equal(frames.folded.transform,`translateY(-108px)${collapsing?' scaleY(0)':''} ${base}`);
+ const rule=c.projectPaintFrames('none',108,false);
+ assert.equal(rule.folded.transform,'translateY(-108px)');
+ assert.equal(rule.expanded.transform,'translateY(0px)');
+});
+
+// Browser zoom can leave offsetTop on the other side of a fractional DOMRect
+// boundary. Only the immediately following header was excluded by that test.
+test('following project header and tasks share membership at fractional boundaries',()=>{
+ const c={};vm.createContext(c);vm.runInContext(fs.readFileSync('web/project-motion.js','utf8'),c);
+ const previous={},second={},task={bottom:526.625},third={offsetTop:526},thirdTask={offsetTop:564},add={};
+ const all=[previous,second,task,third,thirdTask,add];
+ assert(third.offsetTop < task.bottom-.5);
+ assert.deepEqual(Array.from(c.projectFollowingRows(all,[task])),[third,thirdTask,add]);
+ assert.deepEqual(Array.from(c.projectFollowingRows(all,[])),[]);
+ assert.deepEqual(Array.from(c.projectFollowingRows(all,[second,task])),[third,thirdTask,add]);
 });

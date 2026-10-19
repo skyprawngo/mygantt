@@ -556,7 +556,55 @@ class Database:
     with self.connection() as db:
       templates = [self._template(db, row[0]) for row in db.execute("SELECT id FROM templates ORDER BY name")]
       projects = [self._project(db, row[0]) for row in db.execute("SELECT id FROM projects ORDER BY sort_order, id")]
-      return {"tag_colors": {row[0][10:]: row[1] for row in db.execute("SELECT key,value FROM app_settings WHERE key LIKE 'tag_color:%'")}, "templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
+      return {"compact_orders": self._compact_orders(db), "tag_colors": {row[0][10:]: row[1] for row in db.execute("SELECT key,value FROM app_settings WHERE key LIKE 'tag_color:%'")}, "templates": templates, "projects": [p for p in projects if not p["is_unassigned"] or p["tasks"]], "directory": [dict(row) for row in db.execute("SELECT * FROM directory_entries ORDER BY parent_id,sort_order,id")]}
+
+  def _compact_orders(self, db):
+    return {row[0].split(":", 1)[1]: json.loads(row[1]) for row in db.execute(
+      "SELECT key,value FROM app_settings WHERE key IN ('compact_order:owner','compact_order:group','compact_order:tags')")}
+
+  @staticmethod
+  def _compact_row_key(task, mode):
+    clean = lambda value: unicodedata.normalize("NFKC", str(value or "")).strip()
+    tags = sorted(set(filter(None, map(clean, task["tags"]))), key=lambda value: value.encode('utf-16-be'))
+    label = ", ".join(tags) if mode == "tags" else clean(task["owner"] if mode == "owner" else task["group_name"])
+    parts = ["compact", tags if mode == "tags" else label] if label else ["row", task.get("gantt_row_id") or task["id"]]
+    return json.dumps(parts, ensure_ascii=False, separators=(",", ":"))
+
+  def reorder_compact(self, payload):
+    if (set(payload) != {"mode", "project_id", "row_id", "anchor_id", "after"}
+        or payload["mode"] not in ("owner", "group", "tags")
+        or not isinstance(payload["row_id"], str) or not isinstance(payload["anchor_id"], str)
+        or type(payload["after"]) is not bool
+        or (payload["project_id"] is not None and not isinstance(payload["project_id"], str))):
+      raise ScheduleError("축약 행의 순서와 범주가 올바르지 않습니다.")
+    mode, project_id = payload["mode"], payload["project_id"]
+    with self.connection() as db:
+      if not db.in_transaction:
+        db.execute("BEGIN IMMEDIATE")
+      orders = self._compact_orders(db)
+      view = orders.get(mode, {"projects": [], "tasks": {}})
+      if project_id is None:
+        available = [row[0] for row in db.execute("SELECT id FROM projects WHERE id!='__unassigned__' ORDER BY sort_order,id")]
+        saved = view["projects"]
+      else:
+        project = self._project(db, project_id)
+        if not project:
+          raise ScheduleError("프로젝트를 찾을 수 없습니다.")
+        available = list(dict.fromkeys(self._compact_row_key(task, mode) for task in project["tasks"]))
+        saved = view["tasks"].get(project_id, [])
+      source, anchor = payload["row_id"], payload["anchor_id"]
+      if source not in available or anchor not in available or source == anchor:
+        raise ScheduleError("같은 프로젝트의 서로 다른 축약 행에 순서를 지정하세요.")
+      order = list(dict.fromkeys([key for key in saved if key in available] + available))
+      order.remove(source)
+      order.insert(order.index(anchor) + int(payload["after"]), source)
+      if project_id is None:
+        view["projects"] = order
+      else:
+        view["tasks"][project_id] = order
+      db.execute("INSERT INTO app_settings(key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                 ("compact_order:" + mode, json.dumps(view, ensure_ascii=False)))
+      return {"compact_orders": self._compact_orders(db)}
 
   def set_tag_color(self, tag, color):
     key = " ".join(unicodedata.normalize("NFKC", str(tag)).split()).lower()

@@ -292,6 +292,9 @@ def make_handler(database: Database):
           note = database.save_note(payload, urllib.parse.unquote(path.split("/")[-1]))
           self._json(note if note else {"error": "메모를 찾을 수 없습니다."}, 200 if note else 404)
           return
+        if path == "/api/settings/compact-order":
+          self._json(database.reorder_compact(payload))
+          return
         if path == "/api/settings/tag-color":
           self._json(database.set_tag_color(payload["tag"], payload.get("color", "")))
           return
