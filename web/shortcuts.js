@@ -6,6 +6,8 @@
     ['rename','editing','선택한 행 이름 변경',null,['chart']],
     ['copy','editing','선택한 행 복사',['Mod+c'],['chart']],
     ['paste','editing','복사한 행 붙여넣기',['Mod+v'],['chart']],
+    ['inspectorCopy','input','속성 입력 내용 복사',['Mod+c'],['inspectorField']],
+    ['inspectorPaste','input','속성 입력 내용 붙여넣기',['Mod+v'],['inspectorField']],
     ['previous','navigation','이전 월 범위',['ArrowLeft'],['month']],
     ['next','navigation','다음 월 범위',['ArrowRight'],['month']],
     ['confirm','input','입력 확정',['Enter'],['field','inline','group']],

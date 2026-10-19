@@ -1277,3 +1277,14 @@ html,body{overscroll-behavior-y:none}
 .calendar-header-month-lines{position:absolute;inset:0;z-index:2;pointer-events:none}
 .calendar-month-lines{position:absolute;left:var(--label-width);right:0;top:0;bottom:0;z-index:2;pointer-events:none}
 .calendar-month-line{position:absolute;top:0;bottom:0;width:calc(2px * var(--text-scale,1));transform:translateX(-50%);background:#9aa8c2;pointer-events:none}
+
+/* One property cell: palette, borderless HEX editor, random color action. */
+.color-field.hex-color-field{height:100%;min-height:30px;box-sizing:border-box;display:flex;align-items:center;gap:6px;padding:0 6px;background:#fff;cursor:text}
+.color-field.hex-color-field:focus-within{outline:2px solid #8c9bec;outline-offset:-2px;background:#fafbff}
+.color-field.hex-color-field input[type="color"]{box-sizing:border-box;flex:0 0 22px;width:22px;height:22px;margin:0;padding:0;border:0;border-radius:4px;background:transparent;cursor:pointer;align-self:center}
+.color-field.hex-color-field input[type="color"]::-webkit-color-swatch-wrapper{padding:2px}
+.color-field.hex-color-field input[type="color"]::-webkit-color-swatch{border:1px solid #dfe4eb;border-radius:3px}
+.color-field.hex-color-field input[type="color"]::-moz-color-swatch{border:1px solid #dfe4eb;border-radius:3px}
+.color-field.hex-color-field input.color-hex-input{box-sizing:border-box;flex:1 1 0;width:0;min-width:0;height:30px;margin:0;padding:0 2px;border:0;border-radius:0;box-shadow:none;outline:0;background:transparent;font-family:inherit;font-size:calc(9px * var(--text-scale, 1));line-height:normal;color:inherit;align-self:center}
+.color-field.hex-color-field .random-color-button{box-sizing:border-box;flex:0 0 24px;width:24px;height:24px;margin:0;padding:0;align-self:center}
+.color-field.hex-color-field:has(input[aria-invalid="true"]){outline:2px solid #c74747;outline-offset:-2px}

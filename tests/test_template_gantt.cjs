@@ -82,7 +82,7 @@ test('invalid negative successor position rejects entire edit atomically',()=>{
 
 test('template inspector shares schedule date grid and disables execution-only fields',()=>{
   const c={esc:value=>String(value??''),taskColors:['#5872d9'],paletteStyle:()=>''};withI18n(vm.createContext(c));
-  vm.runInContext(block('const paletteCache', 'function esc(')+block('function randomColorButton(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateDurationDays(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
+  vm.runInContext(block('const paletteCache', 'function esc(')+block('function taskHexInput(', 'function bindRandomColorButtons(')+block('function taskDateGrid(', 'function renderInspector(')+block('function templateDurationDays(', 'function syncDraftFromEditor(')+block('function templateTaskProperties(', 'function attachTemplateDayFields('),c);
   const task={key:'a',name:'Template task',duration_value:2,duration_unit:'days',dependencies:[],handoff:'Keep this note'};
   const html=c.templateTaskProperties(task,0,[task]);
   assert.match(html,/class="task-date-grid"/);

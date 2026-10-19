@@ -3191,5 +3191,28 @@
     "US": "Hide sidebar row delete button",
     "JP": "サイドバー行の削除ボタン非表示"
   },
-  {"textID":"calendar.month_number","KR":"{p0}월","US":"Month {p0}","JP":"{p0}月"}
+  {
+    "textID": "calendar.month_number",
+    "KR": "{p0}월",
+    "US": "Month {p0}",
+    "JP": "{p0}月"
+  },
+  {
+    "textID": "shortcuts.action.inspectorCopy",
+    "KR": "속성 입력 내용 복사 (선택 없으면 전체)",
+    "US": "Copy inspector text (all if unselected)",
+    "JP": "属性の文字をコピー（未選択なら全体）"
+  },
+  {
+    "textID": "shortcuts.action.inspectorPaste",
+    "KR": "속성 입력 내용 붙여넣기",
+    "US": "Paste into inspector field",
+    "JP": "属性の入力欄に貼り付け"
+  },
+  {
+    "textID": "clipboard.inspector_error",
+    "KR": "클립보드에 접근할 수 없습니다. 브라우저의 클립보드 권한을 확인하세요.",
+    "US": "Cannot access the clipboard. Check browser clipboard permissions.",
+    "JP": "クリップボードにアクセスできません。ブラウザーの権限を確認してください。"
+  }
 ]

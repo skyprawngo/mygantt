@@ -20,9 +20,20 @@ test('project anchor uses parent project even while its task is selected',()=>{
 test('random events cannot overwrite manual anchor and new manual input persists',()=>{
  const c=context(),handlers={},stored=[];
  c.document={addEventListener:(event,fn)=>handlers[event]=fn};c.localStorage.setItem=(key,value)=>stored.push(JSON.parse(value));
+ c.syncTaskHex=()=>{};
  vm.runInContext(source.slice(source.indexOf('function bindRandomColorButtons()'),source.indexOf('function newProjectColor(')),c);c.bindRandomColorButtons();
  const input={id:'ins-task-color',value:'#cc3333',dataset:{},matches:()=>true};
  handlers.input({target:input});assert.equal(stored[0]['task:t'],'#cc3333');
  input.dataset.randomizing='true';input.value='#dd4444';handlers.input({target:input});assert.equal(stored.length,1);
  delete input.dataset.randomizing;input.value='#33cc33';handlers.input({target:input});assert.equal(stored[1]['task:t'],'#33cc33');
+});
+test('task color synchronization updates both schedule swatches without replacing focused HEX text',()=>{
+ const c=context(),hex={value:'#ABCDEF'},swatches=[{style:{}},{style:{}}];
+ c.document={activeElement:hex};c.colorPalette=value=>({base:value});
+ const color={value:'#abcdef',parentElement:{querySelector:()=>hex},closest:()=>({querySelectorAll:()=>swatches})};
+ c.syncTaskHex(color);
+ assert.equal(hex.value,'#ABCDEF');
+ assert.deepEqual(swatches.map(s=>s.style.backgroundColor),['#abcdef','#abcdef']);
+ c.document.activeElement=null;color.value='#123456';c.syncTaskHex(color);
+ assert.equal(hex.value,'#123456');assert.deepEqual(swatches.map(s=>s.style.backgroundColor),['#123456','#123456']);
 });

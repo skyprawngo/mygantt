@@ -395,7 +395,8 @@ function filteredProjects({forSidebar=false} = {}) {
   projects.forEach(project => project.tasks.sort((a,b) => sort === 'name' ? a.name.localeCompare(b.name,I18n.locale) : sort === 'progress' ? taskProgress(b)-taskProgress(a) : sort === 'start' ? a.planned_start.localeCompare(b.planned_start) : (a.sort_order || 0)-(b.sort_order || 0)));
   if (sort === 'manual') projects.sort((a,b) => (a.sort_order || 0)-(b.sort_order || 0));
   if (sort !== 'manual') projects.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name, I18n.locale) : sort === 'progress' ? b.progress - a.progress : (a.tasks[0]?.planned_start || a.start_date).localeCompare(b.tasks[0]?.planned_start || b.start_date));
-  if (!forSidebar && sort==='manual' && state.layout==='gantt' && state.compactBy) projects=CompactOrder.sort(projects,state.data.compact_orders?.[state.compactBy]?.projects);
+  if (sort==='manual' && state.layout==='gantt' && state.compactBy) projects=CompactOrder.sort(projects,state.data.compact_orders?.[state.compactBy]?.projects);
+  if (forSidebar) projects.sort((a,b)=>Number(Boolean(a.is_unassigned))-Number(Boolean(b.is_unassigned)));
   return projects;
 }
 function flatten(projects) { return projects.flatMap((project) => project.tasks.map((task) => ({ ...task, projectName: project.name, projectId: project.id }))); }
@@ -1772,7 +1773,7 @@ function syncInspectorProjection() {
     $('#ins-project-complete').disabled = !project.tasks.length;
   }
   if (taskForm) {
-    $('.color-field code',taskForm).textContent = $('#ins-task-color').value;
+    syncTaskHex($('#ins-task-color'));
     applyPalette($('.task-progress-control',taskForm),task.color,'bar');
     syncRelationRowOrder(project,task,taskForm);
   }
@@ -1888,7 +1889,7 @@ function renderInspector() {
       <form id="task-inspector-form" class="inspector-form">
         <div class="property-grid">
         <div class="inspector-field task-name-order"><span><label for="ins-task-name">${t("timeline.task_name")}</label></span><input id="ins-task-name" class="text-input" value="${esc(task.name)}" required><input id="ins-task-order" class="text-input" type="number" min="1" max="${project.tasks.length}" step="1" aria-label="${t("timeline.default_order")}" title="${t("timeline.default_order")}" value="${task.sort_order ?? ''}" required></div>
-        <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}"><code>${esc(task.color || project.color || '#5872d9')}</code>${randomColorButton()}</div></div>
+        <div class="inspector-field"><span><label for="ins-task-color">${t("inspector.task_color")}</label></span><div class="color-field hex-color-field"><input id="ins-task-color" type="color" value="${esc(task.color || project.color || '#5872d9')}">${taskHexInput(task.color || project.color || '#5872d9')}${randomColorButton()}</div></div>
         ${taskDateGrid(`<input id="ins-task-planned-start" aria-label="${t("timeline.planned_start")}" type="date" class="text-input" value="${esc(task.planned_start)}" required>`, `<input id="ins-task-planned-finish" aria-label="${t("timeline.planned_finish")}" type="date" class="text-input" value="${esc(task.planned_finish)}" required>`, `<input id="ins-task-actual-start" aria-label="${t("inspector.actual_start")}" type="date" class="text-input" value="${esc(task.actual_start || '')}">`, `<input id="ins-task-actual-finish" aria-label="${t("inspector.actual_finish")}" type="date" class="text-input" value="${esc(task.actual_finish || '')}">`, task.color)}
         <label class="inspector-field"><span>${t("inspector.group")}</span><input id="ins-task-group" class="text-input" value="${esc(task.group_name || '')}" placeholder="${t("inspector.group_placeholder")}"></label>
         <label class="inspector-field"><span>${t("timeline.owner_vendor")}</span><input id="ins-task-owner" class="text-input" value="${esc(task.owner || '')}" placeholder="${t("inspector.owner_placeholder")}"></label>
@@ -2168,7 +2169,7 @@ function saveTaskFields(taskId, fields) {
 function bindTaskAutoSave(form, task) {
   const names = { name:'name', order:'sort_order', color:'color', 'planned-start':'planned_start', 'planned-finish':'planned_finish', 'actual-start':'actual_start', 'actual-finish':'actual_finish', group:'group_name', tags:'tags', owner:'owner', status:'status', blocker:'blocker', notes:'notes' };
   form.entityId = task.id;
-  const inputs = $$('input, select, textarea', form), status = $('.task-autosave-state', form);
+  const inputs = $$('input:not([data-color-hex]), select, textarea', form), status = $('.task-autosave-state', form);
   const fields = bindInspectorProjection(form,inputs,input => {
     const current = state.data.projects.flatMap(project=>project.tasks).find(item=>item.id===chartMutations.resolveId(task.id));
     if (input.type === 'checkbox') {
@@ -2705,7 +2706,7 @@ function templateDurationDays(task, calendar = typeof state !== 'undefined' ? st
 function templateTaskRow(task, index, tasks) {
   const field = (label, content) => `<label class="inspector-field"><span>${label}</span>${content}</label>`;
   return `${field(t("timeline.task_name"),`<input class="text-input template-task-name" data-key="${esc(task.key)}" value="${esc(task.name)}">`)}
-    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}"><code>${esc(task.color || taskColors[index % taskColors.length])}</code>${randomColorButton()}</div></div>
+    <div class="inspector-field"><span>${t("inspector.task_color")}</span><div class="color-field hex-color-field"><input class="template-task-color" data-key="${esc(task.key)}" type="color" value="${esc(task.color || taskColors[index % taskColors.length])}" aria-label="${t("inspector.task_color")}">${taskHexInput(task.color || taskColors[index % taskColors.length])}${randomColorButton()}</div></div>
     ${taskDateGrid(`<div class="relative-day-input"><span aria-hidden="true">D+</span><input class="text-input template-start-day" type="number" min="0" max="9999" aria-label="${t("template.start_d")}" required></div>`, `<div class="relative-day-input"><span aria-hidden="true">D+</span><input class="text-input template-end-day" type="number" min="0" max="9999" aria-label="${t("template.finish_d")}" required></div>`, null, null)}
     <label class="inspector-field"><span>${t("template.duration_days")}</span><input class="text-input template-task-duration" data-key="${esc(task.key)}" type="number" min="1" step="1" max="3640" value="${esc(templateDurationDays(task))}" aria-label="${t("template.duration_days")}"></label>
     ${field(t("inspector.group"),`<input class="text-input template-task-group" data-key="${esc(task.key)}" value="${esc(task.group_name || '')}">`)}
@@ -2747,7 +2748,7 @@ function updateTemplateField(input) {
   try {
     if (input.classList.contains('template-task-duration')) updateTemplateSchedule(task.key, {start_day:templateSchedule(state.draft.tasks).find(row=>row.task.key===task.key).start, duration_value:Math.max(1, Number(input.value) || 1), duration_unit:'days'});
   } catch (error) { toast(error.message); renderTemplateEditor(); return; }
-  if (input.classList.contains('template-task-color')) { task.color = input.value; input.nextElementSibling.textContent = input.value; }
+  if (input.classList.contains('template-task-color')) { task.color = input.value; syncTaskHex(input); }
   if (input.classList.contains('template-task-owner')) task.owner = input.value;
   if (input.classList.contains('template-task-handoff')) task.handoff = input.value;
   renderTemplateGantt();
@@ -3105,6 +3106,17 @@ function manualColorVariant(anchor, excluded, seed) {
   }
   return anchor;
 }
+function taskHexInput(color) {
+  return `<input type="text" class="color-hex-input" data-color-hex value="${esc(color)}" aria-label="${t('inspector.task_color')} HEX" autocomplete="off" spellcheck="false" maxlength="7" pattern="#?[0-9a-fA-F]{6}" required>`;
+}
+function syncTaskHex(color) {
+  const input=color?.parentElement.querySelector('[data-color-hex]');
+  if(input && document.activeElement!==input) input.value=color.value;
+  const inspector=color?.closest('#task-inspector-form, #template-inspector');
+  inspector?.querySelectorAll('.task-date-grid .schedule-swatch').forEach(swatch=>{
+    swatch.style.backgroundColor=colorPalette(color.value).base;
+  });
+}
 function randomColorButton() {
   return `<button type="button" class="random-color-button" aria-label="${t('inspector.random_color')}" title="${t('inspector.random_color')}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7a8 8 0 0 0-14-1L3 9m0-6v6h6M4 17a8 8 0 0 0 14 1l3-3m0 6v-6h-6"/></svg></button>`;
 }
@@ -3112,6 +3124,7 @@ function bindRandomColorButtons() {
   document.addEventListener('input', event => {
     const input=event.target;
     if(!input.matches('input[type="color"]') || input.dataset.randomizing === 'true') return;
+    if(input.id==='ins-task-color' || input.classList.contains('template-task-color')) syncTaskHex(input);
     if(input.id==='project-color') { input.dataset.manualAnchor=input.value; return; }
     const key=colorAnchorKey(input);
     if(!key) return;
@@ -3129,7 +3142,8 @@ function bindRandomColorButtons() {
     const tagAnchor=firstTagColor(tagsInput?.value || '',state.data.tag_colors || {});
     const anchor=tagAnchor || manualColorAnchors[colorAnchorKey(input)];
     input.value = /^#[0-9a-f]{6}$/i.test(anchor || '') ? manualColorVariant(anchor,used,ChartMutations.randomUUID()) : newProjectColor(ChartMutations.randomUUID(),used);
-    input.nextElementSibling.textContent = input.value;
+    if(input.parentElement.querySelector('[data-color-hex]')) syncTaskHex(input);
+    else input.nextElementSibling.textContent = input.value;
     input.dataset.randomizing='true';
     try {
       input.dispatchEvent(new Event('input', {bubbles:true}));
@@ -3928,18 +3942,21 @@ function attachEvents() {
   $('#compact-select').addEventListener('change', event => {
     state.compactBy = event.target.value;
     persistUi();
+    renderSidebar();
     renderTimeline({preserveInspector:true});
     syncInspectorProjection();
   });
   $$('[data-layout]').forEach((button) => button.addEventListener('click', () => {
     state.layout = button.dataset.layout;
     syncLayoutToggle();
+    renderSidebar();
     renderTimeline();
     scrollTimelineToToday();
   }));
   $('#mobile-layout-toggle').addEventListener('click', () => {
     state.layout = state.layout === 'gantt' ? 'month' : 'gantt';
     syncLayoutToggle();
+    renderSidebar();
     renderTimeline();
     scrollTimelineToToday();
   });

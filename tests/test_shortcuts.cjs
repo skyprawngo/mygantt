@@ -35,7 +35,7 @@ test('every registered action has complete localized modal text',()=>{
  for(const d of create().definitions){const row=rows.find(r=>r.textID==='shortcuts.action.'+d.id);assert(row,d.id);for(const lang of ['KR','US','JP'])assert(row[lang],d.id+lang);}
 });
 test('today handler follows remapping, preserves focused inputs, and opens timeline',()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('web/app.js','utf8');
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('web/app.js','utf8').replace(/\r\n/g,'\n');
  const start=source.indexOf("document.addEventListener('keydown',event=>{\n  if(!Shortcuts.matches(event,'today')");
  assert(start>=0);let handler,moved=0,prevented=0;
  const Shortcuts=create();Shortcuts.set('today',['Mod+Shift+y']);
@@ -47,7 +47,7 @@ test('today handler follows remapping, preserves focused inputs, and opens timel
  handler(event('Y',{ctrlKey:true,shiftKey:true,target:{closest:()=>({})},preventDefault}));assert.equal(moved,1);
 });
 test('undo handler honors the configured binding and leaves native text undo untouched',async()=>{
- const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('web/app.js','utf8');
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync('web/app.js','utf8').replace(/\r\n/g,'\n');
  const start=source.indexOf("document.addEventListener('keydown', async event => {");const end=source.indexOf('\n});',start)+4;
  let handler,prevented=0;const Shortcuts=create();Shortcuts.set('undo',['Mod+Shift+u']);
  vm.runInNewContext(source.slice(start,end),{Shortcuts,undoBusy:true,document:{addEventListener:(n,fn)=>handler=fn}});
